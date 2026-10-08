@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.expo/
+.wrangler/
+package-lock.json
+docs/
+CLAUDE.md
