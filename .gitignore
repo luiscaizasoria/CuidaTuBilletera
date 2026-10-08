@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.expo/
+.wrangler/
+.env
+.env.*
+!.env.example
+.dev.vars
+*.log
+*.jks
+*.keystore
+.claude/settings.local.json
