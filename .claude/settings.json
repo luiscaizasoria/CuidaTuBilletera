@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run test)",
+      "Bash(npm run format)",
+      "PowerShell(npm run lint)",
+      "PowerShell(npm run typecheck)",
+      "PowerShell(npm run test)",
+      "PowerShell(npm run format)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "PowerShell(Remove-Item *-Recurse*)",
+      "PowerShell(Remove-Item * -r *)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./.dev.vars)"
+    ]
+  }
+}

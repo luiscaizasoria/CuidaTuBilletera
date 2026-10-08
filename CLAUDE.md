@@ -5,6 +5,8 @@ Instrucciones permanentes. El documento rector es `docs/CONSTITUCION.md`: léelo
 ## Proyecto
 App móvil Android de control de gastos e ingresos (cuentas, categorías, historial, calendario, reportes, exportación y conciliación). Login con Google. Monorepo: `/app` (React Native + Expo), `/api` (Cloudflare Worker con Hono y D1), `/docs`, `/.devcontainer`, `/.github/workflows`.
 
+Convenciones de nombres y ubicaciones: docs/CONVENCIONES.md.
+
 ## Reglas que siempre aplican
 - Simple primero: nada de funciones "por si acaso".
 - Toda la infraestructura dentro de las capas gratuitas de Cloudflare y GitHub.
