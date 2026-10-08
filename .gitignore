@@ -11,3 +11,5 @@ coverage/
 *.jks
 *.keystore
 .claude/settings.local.json
+CLAUDE.local.md
+.claude/worktrees/

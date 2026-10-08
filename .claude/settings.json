@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run test)",
+      "Bash(npm run format)"
+    ],
+    "deny": ["Bash(rm -rf *)", "Read(./.env)", "Read(./.env.*)", "Read(./.dev.vars)"]
+  }
+}
