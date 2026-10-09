@@ -225,7 +225,7 @@ Cada fase termina con pruebas en verde, CI exitoso y despliegue funcionando.
 
 ## 12. Cómo se trabaja con Claude Code
 
-- Este documento vive en `/docs/CONSTITUCION.md` y `CLAUDE.md` lo referencia y resume sus reglas permanentes.
+- Este documento vive en `/docs/001-CONSTITUCION.md` y `CLAUDE.md` lo referencia y resume sus reglas permanentes.
 - Cada fase se entrega a Claude Code como una tarea acotada, con las reglas detalladas de las pantallas y rutas que toca.
 - Claude Code debe: leer este documento antes de empezar, trabajar en una rama, escribir las pruebas junto con el código, ejecutar lint y pruebas antes de proponer el cambio y preguntar ante cualquier ambigüedad en lugar de inventar.
 - Si una decisión de diseño cambia, se actualiza primero esta constitución.

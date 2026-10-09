@@ -1,30 +1,121 @@
 # CLAUDE.md - App de Control de Gastos
 
-Instrucciones permanentes. El documento rector es `docs/CONSTITUCION.md`: léelo completo antes de empezar cualquier tarea. Si algo no está ahí, pregunta antes de inventarlo.
+## Propósito de este archivo
+
+Este archivo contiene las instrucciones permanentes para Claude Code dentro del proyecto.
+
+CLAUDE.md es el punto principal de entrada para Claude Code.
+
+Antes de realizar cualquier cambio:
+
+1. Leer este archivo.
+2. Consultar docs/001-CONSTITUCION.md para reglas del producto, alcance y arquitectura.
+3. Consultar docs/002-CONVENCIONES.md para estándares técnicos.
+4. Consultar docs/003-DECISIONES-FASE0.md para decisiones del proyecto.
+5. Si existe una ambigüedad, preguntar antes de decidir.
+
+---
 
 ## Proyecto
-App móvil Android de control de gastos e ingresos (cuentas, categorías, historial, calendario, reportes, exportación y conciliación). Login con Google. Monorepo: `/app` (React Native + Expo), `/api` (Cloudflare Worker con Hono y D1), `/docs`, `/.devcontainer`, `/.github/workflows`.
 
-Convenciones de nombres y ubicaciones: docs/CONVENCIONES.md.
+App móvil Android de control de gastos e ingresos.
 
-## Reglas que siempre aplican
-- Simple primero: nada de funciones "por si acaso".
-- Toda la infraestructura dentro de las capas gratuitas de Cloudflare y GitHub.
-- El servidor manda: toda regla de negocio se valida en la API.
-- Dinero: enteros en centavos, nunca decimales de punto flotante.
-- No se borra información, se archiva. La conciliación se registra como movimiento de tipo ajuste.
-- Toda consulta se filtra por el user_id del token, nunca por un id enviado por el cliente.
-- Secretos nunca en el repositorio (GitHub Secrets y secretos de Cloudflare).
-- TypeScript estricto, ESLint y Prettier.
+Funcionalidades principales:
+
+- Cuentas.
+- Categorías.
+- Movimientos.
+- Historial.
+- Calendario.
+- Reportes.
+- Exportación.
+- Conciliación.
+- Login con Google.
+
+Arquitectura:
+
+- /app: React Native + Expo + TypeScript.
+- /api: Cloudflare Worker + Hono + D1.
+- /docs: documentación del proyecto.
+- /.github/workflows: integración continua y despliegues.
+- /.devcontainer: entorno reproducible.
+
+---
+
+## Documentación del proyecto
+
+Documento de producto:
+
+- docs/001-CONSTITUCION.md
+
+Estándares técnicos:
+
+- docs/002-CONVENCIONES.md
+
+Historial de decisiones:
+
+- docs/003-DECISIONES-FASE0.md
+
+Los documentos anteriores son fuentes de verdad del proyecto según su responsabilidad.
+
+---
+
+## Reglas permanentes
+
+- Simple primero: no crear funcionalidades fuera del alcance.
+- La API es responsable de validar las reglas de negocio.
+- Los montos monetarios se manejan como enteros en centavos.
+- La información histórica no se elimina, se archiva.
+- Toda consulta debe estar aislada por usuario autenticado.
+- Los secretos nunca se almacenan en el repositorio.
+- TypeScript estricto.
+- ESLint y Prettier obligatorios.
+
+---
 
 ## Flujo de trabajo
-- Una rama corta por tarea: feat/..., fix/..., chore/.... Nunca trabajar directo en main.
-- Commits con Conventional Commits (feat:, fix:, chore:, test:, docs:).
-- Pruebas junto con el código. Ejecutar lint y pruebas antes de proponer el cambio.
-- Pull Request con descripción breve, pruebas incluidas y CI en verde.
-- Una tarea = un alcance acotado. Ante cualquier ambigüedad, preguntar.
-- Si una decisión de diseño cambia, se actualiza primero docs/CONSTITUCION.md.
+
+- Nunca trabajar directamente en main.
+- Usar ramas feat/, fix/ o chore/.
+- Usar Conventional Commits.
+- Crear Pull Request antes de integrar cambios.
+- Las pruebas acompañan al código.
+- Ejecutar validaciones antes de entregar cambios.
+- Los cambios arquitectónicos actualizan primero la documentación correspondiente.
+
+---
+
+## Claude Code Governance
+
+La configuración específica de Claude Code vive en:
+
+.claude/
+
+Estructura:
+
+- .claude/agents/
+  Agentes especializados.
+
+- .claude/rules/
+  Reglas técnicas específicas.
+
+- .claude/skills/
+  Procesos repetibles.
+
+- .claude/.mcp.json
+  Configuración MCP del proyecto.
+
+Los agentes se crean solamente cuando exista una responsabilidad clara.
+
+---
 
 ## Entorno
-- Windows con PowerShell. Responder en español.
-- Fase actual: 0.
+
+- Sistema operativo: Windows.
+- Shell: PowerShell.
+- Idioma de trabajo: español.
+- Código y nombres técnicos: según docs/002-CONVENCIONES.md.
+
+## Fase actual
+
+Fase 0 - Preparación del proyecto.

@@ -2,8 +2,8 @@
 
 App móvil Android de control de gastos e ingresos (React Native + Expo) con API en Cloudflare Workers (Hono + D1).
 
-- Documento rector: [docs/CONSTITUCION.md](docs/CONSTITUCION.md)
-- Convenciones: [docs/CONVENCIONES.md](docs/CONVENCIONES.md)
+- Documento rector: [docs/001-CONSTITUCION.md](docs/001-CONSTITUCION.md)
+- Convenciones: [docs/002-CONVENCIONES.md](docs/002-CONVENCIONES.md)
 
 ## Estructura
 
