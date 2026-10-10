@@ -43,8 +43,8 @@ Rules:
 ## Infraestructura base
 
 [ ] Validar estructura monorepo.
-[ ] Crear Worker mínimo.
-[ ] Configurar pruebas API.
+[x] Crear Worker mínimo.
+[x] Configurar pruebas API.
 [ ] Configurar CI/CD.
 [ ] Crear proyecto Expo base.
 [ ] Configurar Dev Container.
