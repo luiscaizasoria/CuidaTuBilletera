@@ -42,7 +42,7 @@ Rules:
 
 ## Infraestructura base
 
-[ ] Validar estructura monorepo.
+[x] Validar estructura monorepo.
 [x] Crear Worker mínimo.
 [x] Configurar pruebas API.
 [x] Configurar CI.
