@@ -47,7 +47,7 @@ Rules:
 [x] Configurar pruebas API.
 [x] Configurar CI.
 [ ] Configurar CD (despliegues).
-[ ] Crear proyecto Expo base.
+[x] Crear proyecto Expo base.
 [ ] Configurar Dev Container.
 
 ---
