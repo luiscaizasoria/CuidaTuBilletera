@@ -128,3 +128,48 @@ Reglas: sigue docs/002-CONVENCIONES.md. No toques docs/001-CONSTITUCION.md. Si a
 - Paquete de pruebas: `@cloudflare/vitest-plugin` 1.4.0 en lugar de `@cloudflare/vitest-pool-workers`, que npm marca como deprecado ("renombrado a @cloudflare/vitest-plugin; no recibirá más actualizaciones"). Cumple la misma función. La Constitución (sección de pruebas) sigue nombrando el paquete anterior y no se modificó.
 - Vitest 5.0.3 (no 4.1.x): npm 10.9.9 falla con un error interno (`Cannot read properties of null (reading 'edgesOut')`) al instalar Vitest 4.1.x, incluso en un directorio vacío; con Vitest 5.0.3 la instalación funciona. Compatibilidad verificada: el plugin declara `vitest ^4.1.0 || ^5.0.0` y depende de wrangler 4.149.0 (la versión instalada); Vitest 5.0.3 exige Node `^22.12.0 || ^24.0.0 || >=26.0.0` y el proyecto usa Node 22.
 - Los tipos del runtime se generan con `wrangler types` dentro del script `typecheck`; `worker-configuration.d.ts` no se versiona.
+
+## TAREA 4: Pull Request (c), proyecto Expo base
+
+Objetivo: dejar la aplicación Android base en `app/` con Expo, React Native y TypeScript, sin autenticación, navegación funcional, almacenamiento ni módulos de gastos.
+
+### Decisiones de la app
+
+- Expo SDK 57 estable (expo 57.0.27), con las versiones que fija Expo: React 19.2.3 y React Native 0.86.3. No se usa React Native 0.87.x aunque sea la última, porque no es la del SDK.
+- Nombre visible: `CuidaTuBilletera`. Slug: `cuida-tu-billetera`.
+- `android.package` queda pendiente. Debe definirse antes del Login con Google o de un build nativo que lo requiera.
+- Metro usa la configuración automática de Expo; no se creó `metro.config.js` porque no hizo falta.
+- Pruebas de la app con Jest, `jest-expo` y `@testing-library/react-native`, sin `react-test-renderer` como dependencia directa. `jest-expo` lo trae como dependencia propia (19.2.3) y RNTL 14 exige `test-renderer` como peer. Los tests se ejecutan con `jest --ci`.
+- El CI agrega el paso `npm run build --workspace controlgastos-app`, que genera el bundle Android con `expo export`, sin build remoto.
+
+### `overrides.react` en el `package.json` raíz
+
+- Motivo: varios paquetes de Expo declaran `react` como peer opcional con rango `*`, y npm instala entonces la última versión (19.3.0) en la raíz, junto a la 19.2.3 que pide la app. El resultado son dos copias de React.
+- Versión fijada: `19.2.3`, la que exige el SDK 57.
+- Revisión: debe revisarse y actualizarse con cada actualización del SDK de Expo, junto con las versiones de `react` y `react-native` de `app/package.json`.
+- Alternativas descartadas: declarar `react` en la raíz (agrega una dependencia espuria) y cambiar de gestor de paquetes (descartado en Herramientas).
+
+### Auditoría de dependencias del 10/10/2026
+
+- `npm audit` señala 59 paquetes (47 de severidad alta, 12 moderada y ninguno crítico). Provienen de cuatro familias de avisos; los demás paquetes aparecen solo por depender de ellas.
+
+| Familia | Severidad | Origen | Herramienta afectada |
+| --- | --- | --- | --- |
+| `braces` 3.0.3 y `micromatch` | Alta | Jest y Metro | Pruebas y empaquetado |
+| `node-forge` 1.4.0 | Alta | `@expo/cli` | CLI de Expo (firma de código) |
+| `sprintf-js` 1.0.3 | Moderada | Jest (`babel-plugin-istanbul`) | Pruebas |
+| `uuid` 7.0.3 | Moderada | `xcode`, vía `@expo/config-plugins` | Prebuild de iOS |
+
+- Ninguna es dependencia de runtime de la app ni de la API. La exposición se limita al entorno local de desarrollo y al CI.
+- No existe versión corregida de `braces`, `node-forge` ni `sprintf-js` en el registro: la última publicada coincide con el límite del rango afectado. Para `uuid` existe una corrección, pero implica forzar un salto de versión mayor sobre `xcode`.
+- Las correcciones que propone `npm audit` bajan Expo a 44, React Native a 0.72 o cambian de SDK, por lo que se descartan.
+- Decisión: aceptar los avisos de forma provisional, con seguimiento explícito. Esto no afirma que las dependencias sean completamente seguras.
+- No se ejecuta `npm audit fix` ni `--force`, y no se actualizan dependencias por este motivo. No se agrega `npm audit` como paso bloqueante del CI mientras no haya correcciones disponibles.
+- Seguimiento: reevaluar los avisos al actualizar dependencias o el SDK, y antes del APK de prueba (Fase 7).
+- Limitación: no se verificó exhaustivamente el contenido del bundle Android. La conclusión de que estos paquetes no están en runtime se basa en las rutas de dependencia.
+- `plugins: ["expo-status-bar"]` en `app.json` es válido pero innecesario por ahora. Se deja sin cambios y no bloquea.
+
+### Pendientes de validación
+
+- Prueba física en un dispositivo Android con Expo Go. El bundle generado solo demuestra que Metro compila. Tampoco se verificó que la versión de Expo Go de la Play Store soporte el SDK 57; si no lo hace, la alternativa es el SDK 56.
+- Ejecución del CI en GitHub, incluido el paso nuevo de `expo export`, cuando exista el Pull Request.

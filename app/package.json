@@ -1,0 +1,29 @@
+{
+  "name": "controlgastos-app",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --ci",
+    "build": "expo export --platform android --output-dir dist"
+  },
+  "jest": {
+    "preset": "jest-expo"
+  },
+  "dependencies": {
+    "expo": "~57.0.27",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@testing-library/react-native": "^14.1.0",
+    "@types/jest": "29.5.14",
+    "@types/react": "~19.2.2",
+    "jest": "~29.7.0",
+    "jest-expo": "~57.0.5"
+  }
+}
