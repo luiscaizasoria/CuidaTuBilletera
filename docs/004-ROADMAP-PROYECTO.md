@@ -30,6 +30,9 @@ MCP:
 Agents:
 - orchestrator
 - architect
+- backend-engineer
+- qa-engineer
+- devops-engineer
 
 Rules:
 - architecture
