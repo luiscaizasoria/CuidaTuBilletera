@@ -45,7 +45,8 @@ Rules:
 [ ] Validar estructura monorepo.
 [x] Crear Worker mínimo.
 [x] Configurar pruebas API.
-[ ] Configurar CI/CD.
+[x] Configurar CI.
+[ ] Configurar CD (despliegues).
 [ ] Crear proyecto Expo base.
 [ ] Configurar Dev Container.
 
