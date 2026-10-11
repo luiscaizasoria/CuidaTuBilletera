@@ -46,9 +46,11 @@ Rules:
 [x] Crear Worker mínimo.
 [x] Configurar pruebas API.
 [x] Configurar CI.
-[ ] Configurar CD (despliegues).
+[x] Configurar CD (despliegues).
 [x] Crear proyecto Expo base.
 [ ] Configurar Dev Container.
+
+Nota CD: validado con el workflow `Deploy API #2` (ejecución 38175964135), estado Success, rama `main`, commit `90ac2dd`. Publicó el Worker `controlgastos-api` en Cloudflare (versión `2657d6c3-e636-433f-89c8-85551d710f03`), con pruebas de la API 3/3 aprobadas y verificación automática de `GET /health` aprobada.
 
 Nota: configuración preparada (`.devcontainer/`, `docs/005-DEVCONTAINER.md`), pendiente de validación con Docker y VS Code Dev Containers.
 
