@@ -1,0 +1,42 @@
+// Dev Container de ControlGastos. Ver docs/005-DEVCONTAINER.md.
+// ESTADO: preparado pero NO probado (Docker no esta disponible en la maquina de desarrollo).
+{
+  "name": "ControlGastos",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "remoteUser": "node",
+
+  // Bind del repositorio; la ruta debe coincidir exactamente con workspaceFolder y con los targets de mounts.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/ControlGastos,type=bind",
+  "workspaceFolder": "/workspaces/ControlGastos",
+
+  // node_modules en volumenes nombrados: no se mezclan binarios de Windows con Linux.
+  "mounts": [
+    "source=controlgastos-node-modules-${devcontainerId},target=/workspaces/ControlGastos/node_modules,type=volume",
+    "source=controlgastos-api-node-modules-${devcontainerId},target=/workspaces/ControlGastos/api/node_modules,type=volume",
+    "source=controlgastos-app-node-modules-${devcontainerId},target=/workspaces/ControlGastos/app/node_modules,type=volume"
+  ],
+
+  // Solo al crear el contenedor. Los volumenes nuevos nacen root:root: chown NO recursivo
+  // sobre los 3 puntos de montaje y luego npm ci. No probado.
+  "postCreateCommand": "sudo chown node:node /workspaces/ControlGastos/node_modules /workspaces/ControlGastos/api/node_modules /workspaces/ControlGastos/app/node_modules && npm ci",
+
+  "forwardPorts": [8787, 8081],
+  "portsAttributes": {
+    "8787": { "label": "Wrangler", "onAutoForward": "silent" },
+    "8081": { "label": "Metro", "onAutoForward": "silent" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "editorconfig.editorconfig"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+      }
+    }
+  }
+}

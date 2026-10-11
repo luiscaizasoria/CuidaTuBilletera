@@ -50,6 +50,8 @@ Rules:
 [x] Crear proyecto Expo base.
 [ ] Configurar Dev Container.
 
+Nota: configuración preparada (`.devcontainer/`, `docs/005-DEVCONTAINER.md`), pendiente de validación con Docker y VS Code Dev Containers.
+
 ---
 
 # Fase 1 - Autenticación
