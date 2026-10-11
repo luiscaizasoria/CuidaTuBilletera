@@ -173,3 +173,27 @@ Objetivo: dejar la aplicación Android base en `app/` con Expo, React Native y T
 
 - Prueba física en un dispositivo Android con Expo Go. El bundle generado solo demuestra que Metro compila. Tampoco se verificó que la versión de Expo Go de la Play Store soporte el SDK 57; si no lo hace, la alternativa es el SDK 56.
 - Ejecución del CI en GitHub, incluido el paso nuevo de `expo export`, cuando exista el Pull Request.
+
+## TAREA 5: Pull Request (e), despliegue a Cloudflare (CD inicial)
+
+Esta tarea ajusta por fases la decisión de la sección Worker ("Producción se despliega al fusionar a main"). Guía operativa: docs/006-DESPLIEGUE.md.
+
+### Decisiones
+
+- El despliegue es **exclusivamente manual** (`workflow_dispatch`) y solo desde `main`. La activación automática al fusionar a `main` requiere una autorización futura y un nuevo registro aquí.
+- Workflow `.github/workflows/deploy.yml`, independiente del CI. `ci.yml` no se modifica.
+- Se usa Wrangler desde el lockfile (`npx --no-install wrangler`), sin `cloudflare/wrangler-action` ni otra herramienta.
+- `actions/checkout` (v7.0.1) y `actions/setup-node` (v7.1.0) fijadas por SHA completo, verificado con la API de GitHub.
+- GitHub Environment `production`, con revisor requerido y despliegue restringido a `main`. `CLOUDFLARE_API_TOKEN` es secreto del Environment; `CLOUDFLARE_ACCOUNT_ID` y `WORKER_URL` son variables del Environment.
+- El workflow comprueba que la ejecución corresponde a `main` y que el SHA es el vigente antes de publicar. Usa `concurrency` y `permissions: contents: read`.
+- `api/wrangler.jsonc`: `workers_dev: true` y `preview_urls: false` explícitos.
+- Solo existe el entorno `production`. El entorno `dev` y D1 se añaden en la Fase 2, con revisión arquitectónica previa.
+- La verificación de `GET /health` solo se ejecuta si `WORKER_URL` está configurada; si no, queda **pendiente** y no se considera aprobada.
+- Rollback manual documentado, no automatizado.
+- La tarea "Configurar CD (despliegues)" del Roadmap sigue sin marcar hasta que exista un despliegue exitoso y verificado.
+
+### Pendientes de validación
+
+- Ningún despliegue real se ha ejecutado: no hay cuenta, token ni Environment configurados.
+- El workflow no se ha ejecutado en GitHub; solo se revisó su sintaxis localmente.
+- Fijar por SHA las acciones de `ci.yml` queda como decisión aparte.
