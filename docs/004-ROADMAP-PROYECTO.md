@@ -68,10 +68,28 @@ Evidencias de validación del Dev Container:
 
 # Fase 1 - Autenticación
 
-[ ] Login Google.
-[ ] Validación token.
-[ ] Gestión sesión.
-[ ] Logout.
+Estado: los cuatro objetivos están validados funcionalmente en un teléfono Android real (development build, API `controlgastos-api-dev`) y cubiertos por pruebas automatizadas (API 42, app 56). Quedan pendientes de seguimiento, sin bloquear el cierre funcional: la causa del HTTP 401 previo a la renovación y la inspección directa de `iat`/`exp`. Implementación transitoria sin D1, ver `docs/003-DECISIONES-FASE0.md`.
+
+[x] Login Google.
+[x] Validación token.
+[x] Gestión sesión.
+[x] Logout.
+
+Evidencia en el teléfono (verificada manualmente):
+
+- **Login Google**: exitoso tras corregir la SHA-1 del cliente OAuth Android (ver `docs/003-DECISIONES-FASE0.md`).
+- **Validación token**: la API de pruebas validó el ID token de Google, emitió su JWT propio y la app mostró la sesión iniciada.
+- **Gestión sesión**:
+  - Cerrar y reabrir la app recuperó la sesión guardada.
+  - Tras 16 minutos (el JWT dura 15) la app siguió mostrando la sesión iniciada sin pedir login.
+  - Tras casi una hora sin usarla, al reabrir apareció directamente «Sesión iniciada» sin pulsar «Ingresar con Google». Cloudflare registró dos `POST /auth/google`: primero HTTP 401 y después HTTP 200. La renovación silenciosa quedó validada funcionalmente.
+- **Logout**: «Cerrar sesión» y reabrir desde Expo devolvió a la pantalla de login.
+
+Alcance de la validación de la renovación:
+
+- Es una validación **funcional**: la sesión se recuperó sin intervención y la API aceptó el intercambio (HTTP 200).
+- **No** se inspeccionaron directamente los claims `iat` y `exp` del JWT nuevo frente al anterior.
+- El HTTP 401 previo al 200 **tiene causa aún no determinada** (ver `docs/003-DECISIONES-FASE0.md`).
 
 ---
 

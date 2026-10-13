@@ -1,0 +1,11 @@
+# Copia este archivo a .dev.vars (ignorado por git) para `wrangler dev`.
+# En producción, GOOGLE_* son variables y JWT_SECRET es un secreto de Cloudflare
+# (`wrangler secret put JWT_SECRET`). Nunca guardes valores reales en este archivo.
+
+# ID de cliente OAuth tipo Web (público). Es la audiencia del ID token de Google.
+GOOGLE_WEB_CLIENT_ID=
+# ID de cliente OAuth tipo Android (público). Opcional: activa la política azp.
+GOOGLE_ANDROID_CLIENT_ID=
+# Clave de firma del JWT propio: mínimo 32 caracteres aleatorios.
+# Genérala con: node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+JWT_SECRET=
