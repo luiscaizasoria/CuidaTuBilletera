@@ -1,26 +1,57 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { AuthProvider, useAuth } from './hooks/use-auth';
+import { createAuthService, type AuthService } from './lib/auth-service';
+import { readConfig } from './lib/config';
+import { createGoogleProvider } from './lib/google-auth';
+import { createSessionApi } from './lib/session-api';
+import { secureSessionStorage } from './lib/session-storage';
+import ConfigMissingScreen from './screens/ConfigMissingScreen';
+import HomeScreen from './screens/HomeScreen';
+import LoginScreen from './screens/LoginScreen';
 
-export default function App() {
+function createDefaultService(): AuthService | null {
+  const config = readConfig();
+  if (!config) return null;
+  return createAuthService({
+    google: createGoogleProvider(config.googleWebClientId),
+    storage: secureSessionStorage,
+    api: createSessionApi(config.apiUrl),
+  });
+}
+
+function Root() {
+  const { status } = useAuth();
+
+  if (status === 'initializing') {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" testID="app-loading" />
+      </View>
+    );
+  }
+  return status === 'authenticated' ? <HomeScreen /> : <LoginScreen />;
+}
+
+// `service` solo se inyecta en pruebas; en la app se construye con la configuración real.
+export default function App({ service }: { service?: AuthService }) {
+  const resolved = useMemo(() => service ?? createDefaultService(), [service]);
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>CuidaTuBilletera</Text>
-      <Text>La aplicación está funcionando.</Text>
+    <>
+      {resolved ? (
+        <AuthProvider service={resolved}>
+          <Root />
+        </AuthProvider>
+      ) : (
+        <ConfigMissingScreen />
+      )}
       <StatusBar style="auto" />
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

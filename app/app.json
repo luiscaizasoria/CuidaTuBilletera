@@ -5,7 +5,15 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "plugins": ["expo-status-bar"],
-    "android": {}
+    "plugins": ["expo-status-bar", "expo-secure-store"],
+    "android": {
+      "package": "com.cuidatubilletera.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6ab04ef1-587d-489e-8cdf-b495f9088bf8"
+      }
+    },
+    "owner": "luiscaizasoria"
   }
 }

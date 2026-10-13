@@ -137,7 +137,7 @@ Objetivo: dejar la aplicación Android base en `app/` con Expo, React Native y T
 
 - Expo SDK 57 estable (expo 57.0.27), con las versiones que fija Expo: React 19.2.3 y React Native 0.86.3. No se usa React Native 0.87.x aunque sea la última, porque no es la del SDK.
 - Nombre visible: `CuidaTuBilletera`. Slug: `cuida-tu-billetera`.
-- `android.package` queda pendiente. Debe definirse antes del Login con Google o de un build nativo que lo requiera.
+- `android.package`: `com.cuidatubilletera.app`. Aprobado por el orquestador y el usuario antes de comenzar la Fase 1 — Autenticación. Plataforma inicial: Android.
 - Metro usa la configuración automática de Expo; no se creó `metro.config.js` porque no hizo falta.
 - Pruebas de la app con Jest, `jest-expo` y `@testing-library/react-native`, sin `react-test-renderer` como dependencia directa. `jest-expo` lo trae como dependencia propia (19.2.3) y RNTL 14 exige `test-renderer` como peer. Los tests se ejecutan con `jest --ci`.
 - El CI agrega el paso `npm run build --workspace controlgastos-app`, que genera el bundle Android con `expo export`, sin build remoto.
@@ -197,3 +197,49 @@ Esta tarea ajusta por fases la decisión de la sección Worker ("Producción se 
 - Ningún despliegue real se ha ejecutado: no hay cuenta, token ni Environment configurados.
 - El workflow no se ha ejecutado en GitHub; solo se revisó su sintaxis localmente.
 - Fijar por SHA las acciones de `ci.yml` queda como decisión aparte.
+
+## FASE 1: Autenticación con Google (implementación transitoria)
+
+Aprobado por el orquestador. Esta sección registra la excepción a la constitución §4 antes de escribir el código.
+
+### Excepción arquitectónica aprobada
+
+- **No se implementa todavía**: D1, tabla `users`, tabla `refresh_tokens`, `POST /auth/refresh`, `POST /auth/logout` ni revocación centralizada. Corresponden a la fase con D1 (Fase 2).
+- Esta solución es **transitoria**. No es el modelo definitivo de producción. El diseño objetivo sigue siendo el de la constitución §4.
+- **Limitación explícita**: un JWT emitido sigue siendo válido hasta su expiración (15 minutos), incluso después del logout local, porque el servidor no puede revocarlo.
+- La identidad del usuario es el claim `sub` de Google. No se persiste nada en el servidor; `GET /me` devuelve los claims del JWT propio.
+
+### Decisiones
+
+- **Google Sign-In**: `@react-native-google-signin/google-signin` 16.x, API **Original** (`GoogleSignin`). Sin `GoogleOneTapSignIn` ni licencia comercial. Limitación: la API Original usa el Google Sign-In heredado de Android (Google Play Services), no Credential Manager.
+- **Plugin de Expo del módulo de Google: no se usa.** Sin opciones, el plugin aplica la configuración de Firebase (`google-services`) y rompería el build Android sin `google-services.json`; con `iosUrlScheme` solo configura iOS. Para Android sin Firebase el módulo se enlaza por autolinking y no necesita plugin. Se vuelve a evaluar si se añade iOS o Firebase.
+- **Clientes OAuth**: el cliente **Web** es el `webClientId` de la app y la audiencia (`aud`) que valida la API. El cliente **Android** solo se registra en Google Cloud (paquete + SHA-1 del keystore de EAS); en la API se usa únicamente para la política `azp` (ver abajo). El Client Secret no se usa.
+- **Validación del ID token** (API, `jose` + JWKS de Google): firma RS256 únicamente, emisor `https://accounts.google.com` o `accounts.google.com`, audiencia = `GOOGLE_WEB_CLIENT_ID`, vigencia, `sub` presente y `email_verified === true`.
+- **Política `azp`**: si el claim `azp` está presente y existe `GOOGLE_ANDROID_CLIENT_ID` configurado, se acepta `azp` igual al cliente Android o al cliente Web; cualquier otro valor se rechaza. No se exige que `azp` exista. Debe confirmarse con un token real del dispositivo cuando se pruebe el build.
+- **JWT de sesión propio**: HS256 con `JWT_SECRET` (mínimo 32 caracteres, sin valor por defecto), 15 minutos, claims `iss`, `aud`, `sub`, `iat`, `exp` y además `email` y `name` para que `GET /me` funcione sin base de datos. Audiencia distinta de la de Google. Sin configuración válida, la API no emite sesiones (500 `CONFIG_ERROR`).
+- **Sesión en la app**: `expo-secure-store` guarda solo el JWT propio. Nunca se guarda el ID token de Google. Renovación silenciosa con `signInSilently` + `POST /auth/google`, protegida contra concurrencia y sin reintentos infinitos. Un error de red no borra una sesión aún válida.
+- **Backup Android**: se usa el config plugin de `expo-secure-store` con `configureAndroidBackup` en su valor por defecto (activo), que añade reglas de respaldo que excluyen los datos de SecureStore. No se establece `android.allowBackup: false`.
+- **UI**: renderizado condicional (inicializando / no autenticado / autenticado), sin React Navigation ni TanStack Query en esta fase.
+
+### Validación en Android y corrección OAuth
+
+- **Verificado en un teléfono real** (development build, API `controlgastos-api-dev`): login con Google, validación del token en la API, restauración de sesión al reabrir, sesión visible tras 16 minutos, renovación silenciosa tras casi una hora y logout. Detalle en `docs/004-ROADMAP-PROYECTO.md`.
+- **Incidente `DEVELOPER_ERROR` (código nativo 10)**: el cliente OAuth Android de Google Cloud tenía registrada la SHA-1 `81:BC:E7:00:…:6C:53`, que no pertenece al keystore con que EAS firma el APK. Se corrigió registrando la del keystore actual de EAS.
+- **SHA-1 correcta del keystore de EAS** (huella pública de certificado, no es un secreto): `26:E4:D0:9D:2C:EB:53:62:69:B7:1D:FB:5A:CA:4C:BF:36:CE:73:F4`. Verificada sobre el APK con dos herramientas independientes (parseo del bloque de firma v2 y `openssl x509 -fingerprint`) y comprobando la firma contra la clave del certificado.
+- **Lección**: un valor `7E:ED:FF:82:…` atribuido al segundo APK resultó ser un error de extracción y no una tercera clave. Las huellas deben verificarse con `apksigner verify --print-certs` (o `eas credentials -p android`), no con scripts propios. `keytool -printcert -jarfile` no sirve para APK con solo firma v2/v3.
+- **Aviso**: el keystore de EAS se generó el 13/10/2026. Si se regenera, cambia la SHA-1 y debe actualizarse el cliente OAuth Android. Los comandos `eas` se ejecutan siempre desde `app/` (un `app.json` accidental en la raíz, vacío, se eliminó).
+- Se retiraron el diagnóstico en pantalla y los registros temporales usados en la investigación; los mensajes amigables y el tratamiento de errores no cambiaron.
+
+### Renovación silenciosa: evidencia y límites
+
+- **Prueba**: la app estuvo casi una hora sin usarse (más de 3 veces la vida de 15 minutos del JWT). Al reabrirla apareció directamente «Sesión iniciada», sin pulsar «Ingresar con Google».
+- **Registros de Cloudflare** (`controlgastos-api-dev`): dos solicitudes `POST /auth/google`, primero HTTP **401** y después HTTP **200**. El 200 confirma un intercambio exitoso y la emisión de un JWT propio, según el flujo implementado (`restore` → `signInSilently` → `POST /auth/google` → guardado en SecureStore).
+- **Qué está validado**: el comportamiento funcional (sesión recuperada sin intervención y emisión de JWT en el servidor). Con un JWT guardado vencido, el código solo llega a «autenticado» tras un intercambio exitoso.
+- **Qué NO se verificó**: los claims `iat` y `exp` del JWT nuevo no se inspeccionaron ni se compararon con los del anterior. Es una limitación conocida, no un fallo.
+- **HTTP 401 previo al 200 — causa NO determinada.** No se conoce qué lo originó ni qué código de error devolvió la API. Observación de la lectura del código, no una explicación: en `doRefresh` un rechazo de la API (`rejected`) cierra la sesión local, por lo que un único flujo con 401 no debería terminar autenticado; el 200 posterior sugiere un segundo intento, por ejemplo una segunda restauración al reabrir la app o un ID token de Google viejo seguido de uno renovado. Son hipótesis sin comprobar. Para investigarlo: obtener el código de error de la respuesta 401 en los registros de la API y comprobar si hubo dos restauraciones simultáneas. No hay corrección planificada hasta conocer la causa.
+
+### Pendientes de validación
+
+- **Causa del 401** previo al 200 en la renovación y, opcionalmente, inspección directa de `iat`/`exp` del JWT renovado (ver sección anterior).
+- Política `azp`: el login real fue aceptado, pero no se registró si el token trae `azp` ni su valor; queda por confirmar y documentar.
+- `JWT_SECRET` debe crearse como secreto de Cloudflare antes de desplegar. El Client Secret Web que apareció en una captura debe rotarse en Google Cloud.

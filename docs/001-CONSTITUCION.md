@@ -94,6 +94,8 @@ Los límites de las capas gratuitas cambian con el tiempo. Antes de cerrar decis
 7. Al cerrar sesión se revoca el token de refresco, se borran los tokens locales y se limpia por completo el caché de la app. Ningún dato de un usuario puede quedar en el teléfono para el siguiente.
 8. Toda consulta a datos se filtra por el `user_id` del token. Nunca se confía en un identificador enviado por el cliente.
 
+> **Implementación transitoria de la Fase 1** (excepción aprobada, ver docs/003-DECISIONES-FASE0.md): hasta que exista D1 no se crean usuarios ni `refresh_tokens`. La API emite solo un JWT de acceso de 15 minutos, la app lo renueva repitiendo `POST /auth/google` con un ID token nuevo de Google, y no existen `/auth/refresh` ni `/auth/logout`. El logout es solo local y un JWT emitido sigue siendo válido hasta su expiración. El diseño de arriba sigue siendo el objetivo y no se considera completo hasta implementarlo.
+
 ### Configuración de Google (requisito desde el inicio)
 
 1. Proyecto en Google Cloud Console con la pantalla de consentimiento OAuth en modo pruebas, agregando como usuarios de prueba los correos que se usarán.
