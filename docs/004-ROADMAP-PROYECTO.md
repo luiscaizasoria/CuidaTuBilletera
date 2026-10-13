@@ -48,11 +48,21 @@ Rules:
 [x] Configurar CI.
 [x] Configurar CD (despliegues).
 [x] Crear proyecto Expo base.
-[ ] Configurar Dev Container.
+[x] Configurar Dev Container.
 
 Nota CD: validado con el workflow `Deploy API #2` (ejecución 38175964135), estado Success, rama `main`, commit `90ac2dd`. Publicó el Worker `controlgastos-api` en Cloudflare (versión `2657d6c3-e636-433f-89c8-85551d710f03`), con pruebas de la API 3/3 aprobadas y verificación automática de `GET /health` aprobada.
 
-Nota: configuración preparada (`.devcontainer/`, `docs/005-DEVCONTAINER.md`), pendiente de validación con Docker y VS Code Dev Containers.
+Nota Dev Container: configuración en `.devcontainer/` y `docs/005-DEVCONTAINER.md`, instalada y validada satisfactoriamente.
+
+Evidencias de validación del Dev Container:
+
+- Docker Desktop 4.95.0 y Docker Engine 29.8.2, con Ubuntu sobre WSL 2.
+- VS Code conectado al Dev Container `ControlGastos @ desktop-linux`; usuario `node` y directorio `/workspaces/ControlGastos` verificados.
+- Node.js 22.16.0, npm 10.9.2 y Git 2.49.0 disponibles; dependencias principales accesibles.
+- Pruebas de API con Vitest: 3/3 aprobadas.
+- `npm run typecheck --workspace api`: correcto.
+- `npm run lint`: correcto.
+- `npm run build --workspace api`: correcto mediante Wrangler `--dry-run`, sin desplegar en Cloudflare.
 
 ---
 
