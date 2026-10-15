@@ -73,6 +73,7 @@ export function fakeResourcesApi(overrides: Partial<ResourcesApi> = {}): jest.Mo
     ),
     updateTransaction: jest.fn(async (_t, id, input) => transaction({ id, ...input })),
     deleteTransaction: jest.fn(async () => undefined),
+    getCalendar: jest.fn(async (_t, { accountId, month }) => ({ accountId, month, days: [] })),
     ...overrides,
   } as jest.Mocked<ResourcesApi>;
 }

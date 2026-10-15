@@ -139,8 +139,22 @@ Riesgos y observaciones:
 
 # Fase 4 - Calendario
 
-[ ] Vista mensual.
-[ ] Indicadores diarios.
+[x] Vista mensual.
+[x] Indicadores diarios.
+
+Evidencia (2026-10-15):
+
+- Local: API Vitest 20 archivos y 723 pruebas aprobadas (36 de `GET /calendar`); app Jest 21 suites y 906 pruebas aprobadas (incluye `CalendarScreen.test.tsx` y el bloque «calendario» de `MainNavigator.test.tsx`). `tsc`, ESLint y Prettier sin errores. Los totales mensuales del cliente usan `safeSumCents`/`monthTotals` y muestran «—» si no son enteros seguros.
+- QA (qa-engineer): aprobado para desplegar a DEV, sin hallazgos críticos, altos ni medios.
+- Cloudflare DEV: Worker `controlgastos-api-dev` desplegado con `cwrangler deploy --env dev` el 2026-10-15 (18:16 UTC), versionId `67d12824-b751-4f1f-85bf-9a56729ae1e8`, URL https://controlgastos-api-dev.luis-caiza-soria.workers.dev. Migraciones 0001–0003 ya aplicadas, ninguna pendiente ni nueva. Sin cambios en producción.
+- QA remoto sin credenciales: `/health` 200; `/calendar` sin JWT 401 y con JWT inválido 401, ambos con `Cache-Control: no-store` y sin datos sensibles; `/accounts`, `/transactions` y categorías sin JWT 401. Conteos D1 DEV sin cambios (users 1, refresh_tokens 6, accounts 0, categories 0, transactions 0).
+
+Pendientes y riesgos:
+
+- Pruebas autenticadas remotas de `/calendar` (200 con JWT válido, aislamiento, validación) por falta de identidad de prueba aislada; D1 DEV no tiene cuentas ni movimientos.
+- Sin validación en Android real (cuadrícula, montos compactos, botón atrás).
+- Menores: neto del día sin `safeSumCents`; categorías con `pageSize` 100 sin paginar; «hoy» no se actualiza pasada la medianoche; la prueba de remontaje de MainNavigator no simula un cambio real de usuario; sin prueba de neto negativo.
+- Mensajes `workerd ... internal error` en stderr de Vitest sin pruebas fallidas.
 
 ---
 

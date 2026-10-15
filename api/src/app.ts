@@ -3,6 +3,7 @@ import { createMiddleware } from 'hono/factory';
 import { errorHandler, notFoundHandler } from './lib/errors';
 import { authRoutes, type AuthRouteDeps } from './routes/auth';
 import { accountRoutes } from './routes/accounts';
+import { calendarRoutes } from './routes/calendar';
 import { categoryRoutes } from './routes/categories';
 import { meRoutes } from './routes/me';
 import { transactionRoutes } from './routes/transactions';
@@ -27,6 +28,7 @@ export function createApp(deps: AppDeps = {}) {
   app.use('/accounts', noStore);
   app.use('/accounts/*', noStore);
   app.use('/categories/*', noStore);
+  app.use('/calendar', noStore);
   app.use('/transactions', noStore);
   app.use('/transactions/*', noStore);
 
@@ -41,6 +43,7 @@ export function createApp(deps: AppDeps = {}) {
   app.route('/', accountRoutes(resourceDeps, deps.now));
   app.route('/', categoryRoutes(resourceDeps, deps.now));
   app.route('/', transactionRoutes(resourceDeps, deps.now));
+  app.route('/', calendarRoutes(deps.now));
 
   app.notFound(notFoundHandler);
   app.onError(errorHandler);

@@ -45,6 +45,7 @@ const handlers = {
   onSelectAccount: jest.fn(),
   onNewTransaction: jest.fn(),
   onOpenHistory: jest.fn(),
+  onOpenCalendar: jest.fn(),
   onEditTransaction: jest.fn(),
 };
 const onOpenAccounts = jest.fn();
