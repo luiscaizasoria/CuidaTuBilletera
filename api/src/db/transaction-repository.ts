@@ -35,12 +35,15 @@ export interface NewTransaction {
   now: Date;
 }
 
-export interface TransactionListOptions {
+export interface TransactionFilters {
   accountId: string;
   tipo?: TransactionType;
   categoryId?: string;
   desde?: string;
   hasta?: string;
+}
+
+export interface TransactionListOptions extends TransactionFilters {
   page: number;
   pageSize: number;
 }
@@ -116,35 +119,40 @@ export async function findTransaction(
     .first<TransactionWithVoidRow>();
 }
 
+// Filtro común del historial y de la exportación: movimientos vigentes de una cuenta del usuario.
+// ?1 cuenta, ?2 usuario, ?3 tipo, ?4 categoría, ?5 desde, ?6 hasta.
+const LIST_WHERE = `t.account_id = ?1 AND a.user_id = ?2 AND t.deleted_at IS NULL
+          AND (?3 IS NULL OR t.tipo = ?3) AND (?4 IS NULL OR t.category_id = ?4)
+          AND (?5 IS NULL OR t.fecha >= ?5) AND (?6 IS NULL OR t.fecha <= ?6)`;
+const LIST_ORDER = 'ORDER BY t.fecha DESC, t.created_at DESC, t.id DESC';
+
+function listFilters(
+  userId: string,
+  { accountId, tipo, categoryId, desde, hasta }: TransactionFilters,
+) {
+  return [accountId, userId, tipo ?? null, categoryId ?? null, desde ?? null, hasta ?? null];
+}
+
 // Historial vigente (sin anulados) de una cuenta del usuario, del más reciente al más antiguo.
 export async function listTransactions(
   db: D1Database,
   userId: string,
-  { accountId, tipo, categoryId, desde, hasta, page, pageSize }: TransactionListOptions,
+  options: TransactionListOptions,
 ): Promise<Page<TransactionRow>> {
-  const where = `t.account_id = ?1 AND a.user_id = ?2 AND t.deleted_at IS NULL
-          AND (?3 IS NULL OR t.tipo = ?3) AND (?4 IS NULL OR t.category_id = ?4)
-          AND (?5 IS NULL OR t.fecha >= ?5) AND (?6 IS NULL OR t.fecha <= ?6)`;
-  const filters = [
-    accountId,
-    userId,
-    tipo ?? null,
-    categoryId ?? null,
-    desde ?? null,
-    hasta ?? null,
-  ];
+  const { page, pageSize } = options;
+  const filters = listFilters(userId, options);
   const [items, total] = await db.batch<TransactionRow | { n: number }>([
     db
       .prepare(
         `SELECT ${COLUMNS} FROM transactions t JOIN accounts a ON a.id = t.account_id
-          WHERE ${where}
-          ORDER BY t.fecha DESC, t.created_at DESC, t.id DESC LIMIT ?7 OFFSET ?8`,
+          WHERE ${LIST_WHERE}
+          ${LIST_ORDER} LIMIT ?7 OFFSET ?8`,
       )
       .bind(...filters, pageSize, (page - 1) * pageSize),
     db
       .prepare(
         `SELECT count(*) AS n FROM transactions t JOIN accounts a ON a.id = t.account_id
-          WHERE ${where}`,
+          WHERE ${LIST_WHERE}`,
       )
       .bind(...filters),
   ]);
@@ -152,6 +160,35 @@ export async function listTransactions(
     items: (items?.results ?? []) as TransactionRow[],
     total: (total?.results[0] as { n: number } | undefined)?.n ?? 0,
   };
+}
+
+export interface ExportRow {
+  fecha: string;
+  tipo: TransactionType;
+  categoria: string;
+  nota: string | null;
+  monto: number;
+}
+
+// Movimientos vigentes para exportar, con el mismo filtro y orden que el historial, sin paginar.
+// `limit` acota las filas leídas (el servicio pide una más que el tope para detectar el exceso).
+export async function listTransactionsForExport(
+  db: D1Database,
+  userId: string,
+  options: TransactionFilters,
+  limit: number,
+): Promise<ExportRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT t.fecha, t.tipo, c.nombre AS categoria, t.nota, t.monto
+         FROM transactions t JOIN accounts a ON a.id = t.account_id
+         JOIN categories c ON c.id = t.category_id
+        WHERE ${LIST_WHERE}
+        ${LIST_ORDER} LIMIT ?7`,
+    )
+    .bind(...listFilters(userId, options), limit)
+    .all<ExportRow>();
+  return results;
 }
 
 // Devuelve el movimiento actualizado, o null si no existe, es ajeno o está anulado (el servicio

@@ -467,3 +467,224 @@ describe('createResourcesApi: calendario', () => {
   bad('cantidad negativa', body([day('2026-10-01', { cantidad: -2 })]));
   bad('cantidad decimal', body([day('2026-10-01', { cantidad: 1.5 })]));
 });
+
+describe('createResourcesApi: reportes', () => {
+  const ACC = 'acc-1';
+  const range = { accountId: ACC, desde: '2026-10-01', hasta: '2026-10-31' };
+  const base = { accountId: ACC, desde: range.desde, hasta: range.hasta };
+  const summary = (extra: object = {}) => ({
+    ...base,
+    ingresos: 10_000,
+    gastos: 4_550,
+    balance: 5_450,
+    cantidad: 3,
+    ...extra,
+  });
+  const item = (extra: object = {}) => ({
+    categoryId: 'c1',
+    nombre: 'Comida',
+    icono: 'tag',
+    color: '#E53935',
+    archivada: false,
+    total: 300,
+    cantidad: 2,
+    ...extra,
+  });
+  const byCategory = (gastos: object = { total: 300, items: [item()] }) => ({
+    ...base,
+    ingresos: { total: 0, items: [] },
+    gastos,
+  });
+  const byPeriod = (points: unknown[], extra: object = {}) => ({
+    ...base,
+    group: 'month',
+    points,
+    ...extra,
+  });
+  const point = (extra: object = {}) => ({
+    periodo: '2026-10',
+    ingresos: 100,
+    gastos: 40,
+    balance: 60,
+    cantidad: 2,
+    ...extra,
+  });
+
+  it('GET /reports/summary con account_id, desde y hasta', async () => {
+    const { api, call } = make(async () => res(200, summary()));
+    await expect(api.getReportSummary(TOKEN, range)).resolves.toEqual(summary());
+    const [url, init] = call();
+    expect(url).toBe(
+      `https://api.test/reports/summary?account_id=${ACC}&desde=2026-10-01&hasta=2026-10-31`,
+    );
+    expect(init.headers).toEqual({ Authorization: `Bearer ${TOKEN}` });
+  });
+
+  it('summary: balance inconsistente, negativos o rango distinto -> inválido', async () => {
+    for (const bad of [
+      summary({ balance: 1 }),
+      summary({ gastos: -1, balance: 10_001 }),
+      summary({ ingresos: 1.5 }),
+      summary({ desde: '2026-09-01' }),
+      summary({ accountId: 'otra' }),
+    ]) {
+      const { api } = make(async () => res(200, bad));
+      await expect(api.getReportSummary(TOKEN, range)).rejects.toBeInstanceOf(AuthError);
+    }
+  });
+
+  it('balance negativo exacto es válido', async () => {
+    const { api } = make(async () => res(200, summary({ ingresos: 0, gastos: 10, balance: -10 })));
+    await expect(api.getReportSummary(TOKEN, range)).resolves.toMatchObject({ balance: -10 });
+  });
+
+  it('GET /reports/by-category y validación de totales por grupo', async () => {
+    const ok = make(async () => res(200, byCategory()));
+    await expect(ok.api.getReportByCategory(TOKEN, range)).resolves.toEqual(byCategory());
+    expect(ok.call()[0]).toBe(
+      `https://api.test/reports/by-category?account_id=${ACC}&desde=2026-10-01&hasta=2026-10-31`,
+    );
+    const bad = make(async () => res(200, byCategory({ total: 999, items: [item()] })));
+    await expect(bad.api.getReportByCategory(TOKEN, range)).rejects.toBeInstanceOf(AuthError);
+    const unsafe = make(async () =>
+      res(200, byCategory({ total: 1, items: [item({ total: Number.MAX_SAFE_INTEGER + 2 })] })),
+    );
+    await expect(unsafe.api.getReportByCategory(TOKEN, range)).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it('GET /reports/by-period envía group y valida la serie', async () => {
+    const ok = make(async () => res(200, byPeriod([point(), point({ periodo: '2026-11' })])));
+    const result = await ok.api.getReportByPeriod(TOKEN, { ...range, group: 'month' });
+    expect(result.points).toHaveLength(2);
+    expect(ok.call()[0]).toBe(
+      `https://api.test/reports/by-period?account_id=${ACC}&desde=2026-10-01&hasta=2026-10-31&group=month`,
+    );
+    for (const bad of [
+      byPeriod([point({ balance: 1 })]),
+      byPeriod([point(), point()]),
+      byPeriod([point({ periodo: '2026' })]),
+      byPeriod([point()], { group: 'year' }),
+    ]) {
+      const { api } = make(async () => res(200, bad));
+      await expect(
+        api.getReportByPeriod(TOKEN, { ...range, group: 'month' }),
+      ).rejects.toBeInstanceOf(AuthError);
+    }
+  });
+
+  it('401 -> rejected; 404 -> ApiRequestError; 500 -> server', async () => {
+    const unauthorized = make(async () => res(401, errBody('UNAUTHORIZED')));
+    await expect(unauthorized.api.getReportSummary(TOKEN, range)).rejects.toMatchObject({
+      kind: 'rejected',
+    });
+    const missing = make(async () => res(404, errBody('NOT_FOUND')));
+    await expect(missing.api.getReportByCategory(TOKEN, range)).rejects.toBeInstanceOf(
+      ApiRequestError,
+    );
+    const broken = make(async () => res(500, errBody('INTERNAL')));
+    await expect(
+      broken.api.getReportByPeriod(TOKEN, { ...range, group: 'year' }),
+    ).rejects.toMatchObject({ kind: 'server' });
+  });
+});
+
+describe('createResourcesApi: exportación de archivos', () => {
+  const options = { accountId: 'acc-1', desde: '2026-10-01', hasta: '2026-10-31' };
+  const csvOptions = { ...options, format: 'csv' as const };
+  const pdfOptions = { ...options, format: 'pdf' as const };
+  const HEADER = Uint8Array.from([0xef, 0xbb, 0xbf, 0x66, 0x65, 0x63, 0x68, 0x61, 0x0d, 0x0a]);
+  const PDF = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0xe2, 0xe3, 0xcf, 0xd3, 0x00, 0xff]);
+  const fileRes = (bytes: Uint8Array, contentType: string | null = 'text/csv; charset=utf-8') =>
+    ({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === 'content-type' ? contentType : null) },
+      arrayBuffer: async () =>
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    }) as unknown as Response;
+
+  it('CSV: GET /export con parámetros exactos y token; conserva el BOM', async () => {
+    const { api, call } = make(async () => fileRes(HEADER));
+    const bytes = await api.exportFile(TOKEN, csvOptions);
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(Array.from(bytes)).toEqual(Array.from(HEADER));
+    expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
+    const [url, init] = call();
+    expect(url).toBe(
+      'https://api.test/export?account_id=acc-1&desde=2026-10-01&hasta=2026-10-31&format=csv',
+    );
+    expect(init.method).toBe('GET');
+    expect(init.headers).toEqual({ Authorization: `Bearer ${TOKEN}` });
+  });
+
+  it('PDF: format=pdf y bytes idénticos (incluidos bytes altos y nulos)', async () => {
+    const { api, call } = make(async () => fileRes(PDF, 'application/pdf'));
+    const bytes = await api.exportFile(TOKEN, pdfOptions);
+    expect(Array.from(bytes)).toEqual(Array.from(PDF));
+    expect(call()[0]).toBe(
+      'https://api.test/export?account_id=acc-1&desde=2026-10-01&hasta=2026-10-31&format=pdf',
+    );
+  });
+
+  it('envía tipo y category_id solo cuando se indican', async () => {
+    const { api, call } = make(async () => fileRes(HEADER));
+    await api.exportFile(TOKEN, { ...csvOptions, tipo: 'gasto', categoryId: 'c 1' });
+    expect(call()[0]).toBe(
+      'https://api.test/export?account_id=acc-1&desde=2026-10-01&hasta=2026-10-31&tipo=gasto&category_id=c%201&format=csv',
+    );
+  });
+
+  it('acepta application/pdf sin parámetros', async () => {
+    const { api } = make(async () => fileRes(PDF, 'application/pdf; charset=binary'));
+    await expect(api.exportFile(TOKEN, pdfOptions)).resolves.toBeInstanceOf(Uint8Array);
+  });
+
+  it('Content-Type que no corresponde al formato, ausente o cuerpo vacío -> AuthError unknown', async () => {
+    const cases: [Response, typeof csvOptions | typeof pdfOptions][] = [
+      [fileRes(HEADER, 'application/json'), csvOptions],
+      [fileRes(HEADER, 'text/csvx'), csvOptions],
+      [fileRes(HEADER, null), csvOptions],
+      [fileRes(new Uint8Array(0)), csvOptions],
+      [fileRes(PDF, 'text/csv'), pdfOptions],
+      [fileRes(HEADER, 'application/pdf'), csvOptions],
+      [fileRes(new Uint8Array(0), 'application/pdf'), pdfOptions],
+    ];
+    for (const [response, opts] of cases) {
+      const { api } = make(async () => response);
+      await expect(api.exportFile(TOKEN, opts)).rejects.toMatchObject({ kind: 'unknown' });
+    }
+  });
+
+  it('cuerpo ilegible -> AuthError unknown', async () => {
+    const bad = {
+      ...fileRes(HEADER),
+      arrayBuffer: async () => Promise.reject(new Error('x')),
+    } as unknown as Response;
+    const { api } = make(async () => bad);
+    await expect(api.exportFile(TOKEN, csvOptions)).rejects.toBeInstanceOf(AuthError);
+  });
+
+  it('errores: 400 EXPORT_TOO_LARGE y 404 son ApiRequestError; 401 rejected; 500 server; red', async () => {
+    const tooLarge = make(async () => res(400, errBody('EXPORT_TOO_LARGE')));
+    const error = (await tooLarge.api
+      .exportFile(TOKEN, pdfOptions)
+      .catch((e: unknown) => e)) as Error;
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 400, code: 'EXPORT_TOO_LARGE' });
+    expect(error.message).not.toContain('MENSAJE-NO-PROPAGAR');
+    const missing = make(async () => res(404, errBody('NOT_FOUND')));
+    await expect(missing.api.exportFile(TOKEN, csvOptions)).rejects.toMatchObject({ status: 404 });
+    const unauthorized = make(async () => res(401, errBody('UNAUTHORIZED')));
+    await expect(unauthorized.api.exportFile(TOKEN, csvOptions)).rejects.toMatchObject({
+      kind: 'rejected',
+    });
+    const broken = make(async () => res(500, errBody('INTERNAL')));
+    await expect(broken.api.exportFile(TOKEN, pdfOptions)).rejects.toMatchObject({
+      kind: 'server',
+    });
+    const offline = make(async () => Promise.reject(new Error('offline')));
+    await expect(offline.api.exportFile(TOKEN, csvOptions)).rejects.toMatchObject({
+      kind: 'network',
+    });
+  });
+});

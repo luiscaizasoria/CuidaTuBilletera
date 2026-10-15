@@ -46,6 +46,7 @@ const handlers = {
   onNewTransaction: jest.fn(),
   onOpenHistory: jest.fn(),
   onOpenCalendar: jest.fn(),
+  onOpenReports: jest.fn(),
   onEditTransaction: jest.fn(),
 };
 const onOpenAccounts = jest.fn();
@@ -143,6 +144,8 @@ describe('HomeScreen: panel', () => {
     expect(handlers.onNewTransaction).toHaveBeenCalledWith(accounts[1]);
     await fireEvent.press(screen.getByText('Ver historial'));
     expect(handlers.onOpenHistory).toHaveBeenCalledWith(accounts[1]);
+    await fireEvent.press(screen.getByText('Reportes'));
+    expect(handlers.onOpenReports).toHaveBeenCalledWith(accounts[1]);
   });
 
   it('tocar un movimiento reciente lo abre para edición', async () => {

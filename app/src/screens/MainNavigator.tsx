@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
 import { BackHandler } from 'react-native';
 import { todayLocal } from '../lib/dates';
+import { clearExports } from '../lib/export-files';
+import { initialReportsView, type ReportsView } from '../lib/reports';
 import type { Account, ResourcesApi, Transaction } from '../lib/resources-api';
 import AccountsScreen from './AccountsScreen';
 import CalendarScreen from './CalendarScreen';
 import CategoriesScreen from './CategoriesScreen';
-import HistoryScreen from './HistoryScreen';
+import HistoryScreen, { type HistoryFilters } from './HistoryScreen';
 import HomeScreen from './HomeScreen';
+import ReportsScreen from './ReportsScreen';
 import TransactionFormScreen from './TransactionFormScreen';
 
 type Route =
   | { name: 'home' }
   | { name: 'accounts' }
   | { name: 'categories'; account: Account }
-  | { name: 'history'; account: Account }
+  | { name: 'history'; account: Account; filters?: HistoryFilters }
   | { name: 'calendar'; account: Account; month: string; day: string }
+  | { name: 'reports'; account: Account; view: ReportsView }
   | { name: 'transaction'; account: Account; transaction?: Transaction; fecha?: string };
 
 // Navegación sin dependencias: pila en estado local y botón «atrás» de Android. Al cerrar sesión
@@ -23,6 +27,9 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
   const [stack, setStack] = useState<Route[]>([{ name: 'home' }]);
   // Cuenta elegida en Inicio: solo en memoria, se pierde al cerrar sesión (el navegador se desmonta).
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+
+  // Al cerrar sesión (o cambiar de usuario) el navegador se desmonta: se borran los archivos exportados.
+  useEffect(() => clearExports, []);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -44,6 +51,13 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
           : entry,
       ),
     );
+  // El modo y el período de Reportes se guardan en la entrada superior para sobrevivir al volver.
+  const updateReportsView = (view: ReportsView) =>
+    setStack((current) =>
+      current.map((entry, index) =>
+        index === current.length - 1 && entry.name === 'reports' ? { ...entry, view } : entry,
+      ),
+    );
   const route = stack[stack.length - 1] ?? { name: 'home' };
 
   switch (route.name) {
@@ -62,9 +76,21 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
           key={route.account.id}
           account={route.account}
           api={api}
+          initialFilters={route.filters}
           onOpenTransaction={(transaction) =>
             push({ name: 'transaction', account: route.account, transaction })
           }
+        />
+      );
+    case 'reports':
+      return (
+        <ReportsScreen
+          key={route.account.id}
+          account={route.account}
+          api={api}
+          initialView={route.view}
+          onViewChange={updateReportsView}
+          onOpenHistory={(filters) => push({ name: 'history', account: route.account, filters })}
         />
       );
     case 'calendar':
@@ -107,6 +133,8 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
               const today = todayLocal();
               push({ name: 'calendar', account, month: today.slice(0, 7), day: today });
             },
+            onOpenReports: (account) =>
+              push({ name: 'reports', account, view: initialReportsView(todayLocal()) }),
             onEditTransaction: (account, transaction) =>
               push({ name: 'transaction', account, transaction }),
           }}

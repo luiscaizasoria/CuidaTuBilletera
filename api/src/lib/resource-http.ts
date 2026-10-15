@@ -163,3 +163,86 @@ export function parseCalendarQuery(c: Context): CalendarQuery {
   if (!parsed.success) throw invalidRequest();
   return { accountId: parsed.data.account_id, month: parsed.data.month };
 }
+
+const reportRangeShape = {
+  account_id: uuidSchema,
+  desde: transactionDateSchema,
+  hasta: transactionDateSchema,
+};
+const reportRangeSchema = z.object(reportRangeShape);
+const reportPeriodSchema = z.object({ ...reportRangeShape, group: z.enum(['month', 'year']) });
+
+export type ReportGroup = 'month' | 'year';
+
+export interface ReportRangeQuery {
+  accountId: string;
+  desde: string;
+  hasta: string;
+}
+
+export interface ReportPeriodQuery extends ReportRangeQuery {
+  group: ReportGroup;
+}
+
+// Máximo de puntos de la serie por mes (10 años). Por año el máximo natural es 101 (2000-2100).
+export const MAX_REPORT_MONTH_POINTS = 120;
+
+export function countPeriods(desde: string, hasta: string, group: ReportGroup): number {
+  const years = Number(hasta.slice(0, 4)) - Number(desde.slice(0, 4));
+  if (group === 'year') return years + 1;
+  return years * 12 + Number(hasta.slice(5, 7)) - Number(desde.slice(5, 7)) + 1;
+}
+
+// Query de GET /reports/summary y /reports/by-category: account_id, desde y hasta obligatorios
+// (inclusivos, 2000-01-01 a 2100-12-31) y desde <= hasta.
+export function parseReportQuery(c: Context): ReportRangeQuery {
+  const parsed = reportRangeSchema.safeParse(collectQuery(c, ['account_id', 'desde', 'hasta']));
+  if (!parsed.success || parsed.data.desde > parsed.data.hasta) throw invalidRequest();
+  const { account_id, desde, hasta } = parsed.data;
+  return { accountId: account_id, desde, hasta };
+}
+
+// Query de GET /reports/by-period: igual que la anterior más group=month|year (obligatorio).
+// Por mes se admiten como máximo 120 períodos.
+export function parseReportPeriodQuery(c: Context): ReportPeriodQuery {
+  const parsed = reportPeriodSchema.safeParse(
+    collectQuery(c, ['account_id', 'desde', 'hasta', 'group']),
+  );
+  if (!parsed.success || parsed.data.desde > parsed.data.hasta) throw invalidRequest();
+  const { account_id, desde, hasta, group } = parsed.data;
+  if (group === 'month' && countPeriods(desde, hasta, group) > MAX_REPORT_MONTH_POINTS) {
+    throw invalidRequest();
+  }
+  return { accountId: account_id, desde, hasta, group };
+}
+
+const exportQuerySchema = z.object({
+  ...reportRangeShape,
+  tipo: z.enum(['ingreso', 'gasto']).optional(),
+  category_id: uuidSchema.optional(),
+  format: z.enum(['csv', 'pdf']).optional(),
+});
+
+export interface ExportQuery extends ReportRangeQuery {
+  tipo?: 'ingreso' | 'gasto';
+  categoryId?: string;
+  format: 'csv' | 'pdf';
+}
+
+// Query de GET /export: account_id, desde y hasta obligatorios (desde <= hasta); tipo, category_id
+// y format opcionales. format admite csv (por defecto) o pdf.
+export function parseExportQuery(c: Context): ExportQuery {
+  const parsed = exportQuerySchema.safeParse(
+    collectQuery(c, ['account_id', 'desde', 'hasta', 'tipo', 'category_id', 'format']),
+  );
+  if (!parsed.success || parsed.data.desde > parsed.data.hasta) throw invalidRequest();
+  const { account_id, desde, hasta, tipo, category_id, format } = parsed.data;
+  return {
+    accountId: account_id,
+    desde,
+    hasta,
+    format: format ?? 'csv',
+    ...(tipo ? { tipo } : {}),
+    ...(category_id ? { categoryId: category_id } : {}),
+  };
+}

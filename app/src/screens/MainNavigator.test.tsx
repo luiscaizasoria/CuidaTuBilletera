@@ -1,7 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, BackHandler } from 'react-native';
 import { account, category, fakeResourcesApi, pageOf, transaction } from '../resources-test-utils';
+import { clearExports } from '../lib/export-files';
 import MainNavigator from './MainNavigator';
+
+jest.mock('../lib/export-files', () => ({ clearExports: jest.fn() }));
 
 jest.mock('../hooks/use-auth', () => ({
   useAuth: () => ({
@@ -34,6 +37,13 @@ afterEach(() => jest.restoreAllMocks());
 const pressBack = () => handlers[handlers.length - 1]!();
 
 describe('MainNavigator', () => {
+  it('al desmontarse (cierre de sesión o cambio de usuario) limpia los archivos exportados', async () => {
+    const view = await render(<MainNavigator api={fakeResourcesApi()} />);
+    (clearExports as jest.Mock).mockClear();
+    await view.unmount();
+    expect(clearExports).toHaveBeenCalledTimes(1);
+  });
+
   it('Inicio -> Cuentas -> Categorías y atrás regresa paso a paso', async () => {
     await render(<MainNavigator api={fakeResourcesApi()} />);
     expect(screen.getByText('Sesión iniciada')).toBeTruthy();
@@ -267,6 +277,119 @@ describe('MainNavigator', () => {
       expect(screen.queryByText(/Banco|Efectivo/)).toBeNull();
       expect(otherApi.getCalendar).not.toHaveBeenCalled();
       // La pila vuelve a Inicio: Atrás no se intercepta.
+      expect(pressBack()).toBe(false);
+      await back();
+    });
+  });
+
+  describe('reportes', () => {
+    const twoAccounts = [
+      account({ id: 'acc-1', nombre: 'Efectivo' }),
+      account({ id: 'acc-2', nombre: 'Banco', saldo: 500 }),
+    ];
+    const cats = (o: { accountId: string; desde: string; hasta: string }) => ({
+      ...o,
+      ingresos: { total: 0, items: [] },
+      gastos: {
+        total: 1500,
+        items: [
+          {
+            categoryId: 'cat-1',
+            nombre: 'Comida',
+            icono: 'tag',
+            color: '#E53935',
+            archivada: false,
+            total: 1500,
+            cantidad: 1,
+          },
+        ],
+      },
+    });
+    const apiWithReports = (accounts = twoAccounts) =>
+      fakeResourcesApi({
+        listAccounts: jest.fn(async () => pageOf(accounts)),
+        getReportSummary: jest.fn(async (_t, o) => ({
+          ...o,
+          ingresos: 0,
+          gastos: 1500,
+          balance: -1500,
+          cantidad: 1,
+        })),
+        getReportByCategory: jest.fn(async (_t, o) => cats(o)),
+      });
+    const back = async () => {
+      await act(async () => {
+        pressBack();
+      });
+    };
+
+    it('abre Reportes desde Inicio con la cuenta elegida', async () => {
+      const api = apiWithReports();
+      await render(<MainNavigator api={api} />);
+      await fireEvent.press(await screen.findByRole('radio', { name: 'Cuenta Banco' }));
+      await fireEvent.press(await screen.findByText('Reportes'));
+      expect(await screen.findByText('Reportes de Banco')).toBeTruthy();
+      await waitFor(() => expect(api.getReportSummary).toHaveBeenCalled());
+      for (const call of api.getReportSummary.mock.calls) expect(call[1].accountId).toBe('acc-2');
+    });
+
+    it('tocar una categoría abre el Historial filtrado y Atrás conserva el modo y el período', async () => {
+      const api = apiWithReports();
+      await render(<MainNavigator api={api} />);
+      await fireEvent.press(await screen.findByText('Reportes'));
+      await fireEvent.press(await screen.findByRole('radio', { name: 'Modo Año' }));
+      await fireEvent.press(await screen.findByLabelText('Año anterior'));
+      await fireEvent.press(await screen.findByTestId('report-category-cat-1'));
+      expect(await screen.findByText('Historial de Efectivo')).toBeTruthy();
+      await waitFor(() =>
+        expect(api.listTransactions).toHaveBeenCalledWith(
+          'tok',
+          expect.objectContaining({
+            accountId: 'acc-1',
+            categoryId: 'cat-1',
+            desde: expect.stringMatching(/^\d{4}-01-01$/),
+            hasta: expect.stringMatching(/^\d{4}-12-31$/),
+          }),
+        ),
+      );
+      await back();
+      expect(await screen.findByText('Reportes de Efectivo')).toBeTruthy();
+      expect(
+        screen.getByRole('radio', { name: 'Modo Año' }).props.accessibilityState.selected,
+      ).toBe(true);
+      const expectedYear = String(new Date().getFullYear() - 1);
+      expect(screen.getByText(expectedYear)).toBeTruthy();
+      await back();
+      expect(await screen.findByText('Saldo de Efectivo')).toBeTruthy();
+    });
+
+    it('el Historial abierto desde Inicio no trae filtros', async () => {
+      const api = apiWithReports();
+      await render(<MainNavigator api={api} />);
+      await fireEvent.press(await screen.findByText('Ver historial'));
+      await screen.findByText('Historial de Efectivo');
+      await waitFor(() => expect(api.listTransactions).toHaveBeenCalled());
+      expect(api.listTransactions).toHaveBeenLastCalledWith('tok', {
+        accountId: 'acc-1',
+        page: 1,
+        pageSize: 20,
+      });
+    });
+
+    it('tras desmontar y remontar con otro usuario no queda rastro de Reportes', async () => {
+      const first = await render(<MainNavigator api={apiWithReports()} />);
+      await fireEvent.press(await screen.findByRole('radio', { name: 'Cuenta Banco' }));
+      await fireEvent.press(await screen.findByText('Reportes'));
+      await screen.findByText('Reportes de Banco');
+      await screen.findByText('Comida');
+      await first.unmount();
+
+      const otherApi = apiWithReports([account({ id: 'acc-7', nombre: 'Ahorros' })]);
+      await render(<MainNavigator api={otherApi} />);
+      expect(await screen.findByText('Saldo de Ahorros')).toBeTruthy();
+      expect(screen.queryByText(/Reportes de/)).toBeNull();
+      expect(screen.queryByText('Comida')).toBeNull();
+      expect(otherApi.getReportSummary).not.toHaveBeenCalled();
       expect(pressBack()).toBe(false);
       await back();
     });
