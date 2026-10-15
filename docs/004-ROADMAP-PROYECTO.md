@@ -188,6 +188,7 @@ Evidencia de la subfase 2A.2 (resultados confirmados por el usuario y verificado
 - Android real contra `controlgastos-api-dev`: login con Google, logout y renovación (refresh) validados en el dispositivo.
 - Recuperación de sesión degradada y botón «Reintentar» comprobados en Android real (Decisión 2A.7 de docs/003).
 - Revisión final del Paso 319.5.4: `qa-engineer` APRUEBA, `architect` APRUEBA CON RESERVAS (riesgos residuales en docs/003, Decisión 2A.7).
+- Paso 322 (estabilización de concurrencia, riesgo R1): `signIn()` y `restore()` se excluyen mutuamente y `busy` solo lo libera su propietaria (Decisión 2A.7, D9 de docs/003). Pruebas de la app: **543/543** aprobadas (8 suites; 18 nuevas), medidas por `qa-engineer` en el repositorio. `tsc`, ESLint y Prettier sin errores. Cobertura de ramas de `auth-service.ts`: 96,02 % (línea sin cubrir: 350). Verificación por mutación de cada pieza de la corrección. `architect` APRUEBA y `qa-engineer` APRUEBA. Solo pruebas automatizadas: no se realizaron pruebas manuales en dispositivo para este cambio.
 
 Pendientes de la subfase 2A.2 (sin evidencia, no se consideran completados):
 

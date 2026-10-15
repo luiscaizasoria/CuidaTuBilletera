@@ -3679,48 +3679,43 @@ describe('recuperación degradada: respuestas tardías de /me y distinción 401 
   // Lleva el access al margen de vencimiento sin que haya vencido.
   const toMargin = (ctx: Ctx) => ctx.clock.advance(600_000 - 59_000 - RESTORE_MIN_INTERVAL_MS);
 
-  it('logout, signIn en vuelo y /me anterior que falla: busy se conserva y no reaparece la sesión vieja', async () => {
-    const ctx = await degradedFresh();
-    const { gate, restoring } = await revalidating(ctx);
-    const out = ctx.service.signOut();
-    const google = controlledPromise<{ status: 'cancelled' }>();
-    (ctx.google.signIn as jest.Mock).mockReturnValueOnce(google.promise);
-    const signing = ctx.service.signIn();
-    await flush();
-    expect(ctx.service.getState()).toMatchObject({ status: 'unauthenticated', busy: true });
-    gate.reject(err('network'));
-    await restoring;
-    expect(ctx.service.getState()).toMatchObject({
-      status: 'unauthenticated',
-      busy: true,
-      user: null,
-      degraded: false,
-    });
-    google.resolve({ status: 'cancelled' });
-    await Promise.all([out, signing]);
-    expect(ctx.service.getState()).toMatchObject({ status: 'unauthenticated', busy: false });
-    expect(ctx.storage.isEmpty()).toBe(true);
-  });
-
-  it('logout, signIn en vuelo y /me anterior que responde 200: busy se conserva y no reaparece la sesión', async () => {
-    const ctx = await degradedFresh();
-    const { gate, restoring } = await revalidating(ctx);
-    const out = ctx.service.signOut();
-    const google = controlledPromise<{ status: 'cancelled' }>();
-    (ctx.google.signIn as jest.Mock).mockReturnValueOnce(google.promise);
-    const signing = ctx.service.signIn();
-    await flush();
-    gate.resolve(USER);
-    await restoring;
-    expect(ctx.service.getState()).toMatchObject({
-      status: 'unauthenticated',
-      busy: true,
-      user: null,
-    });
-    google.resolve({ status: 'cancelled' });
-    await Promise.all([out, signing]);
-    expect(ctx.service.getState().busy).toBe(false);
-  });
+  // R1: con una revalidación obsoleta aún en vuelo (restoring), signIn() es un no-op; cuando el
+  // /me tardío se resuelve ya no reaparece la sesión y un nuevo signIn() sí corre.
+  it.each([
+    [
+      'falla',
+      (gate: ReturnType<typeof controlledPromise<typeof USER>>) => gate.reject(err('network')),
+    ],
+    [
+      'responde 200',
+      (gate: ReturnType<typeof controlledPromise<typeof USER>>) => gate.resolve(USER),
+    ],
+  ] as const)(
+    'logout, signIn en vuelo y /me anterior que %s: busy se conserva y no reaparece la sesión vieja',
+    async (_name, settle) => {
+      const ctx = await degradedFresh();
+      const { gate, restoring } = await revalidating(ctx);
+      const out = ctx.service.signOut();
+      const google = controlledPromise<{ status: 'cancelled' }>();
+      (ctx.google.signIn as jest.Mock).mockReturnValueOnce(google.promise);
+      const signing = ctx.service.signIn(); // signOut descartó el restore() obsoleto: corre
+      await flush();
+      expect(ctx.google.signIn).toHaveBeenCalledTimes(1);
+      expect(ctx.service.getState()).toMatchObject({ status: 'unauthenticated', busy: true });
+      settle(gate);
+      await restoring;
+      expect(ctx.service.getState()).toMatchObject({
+        status: 'unauthenticated',
+        busy: true,
+        user: null,
+        degraded: false,
+      });
+      google.resolve({ status: 'cancelled' });
+      await Promise.all([out, signing]);
+      expect(ctx.service.getState()).toMatchObject({ status: 'unauthenticated', busy: false });
+      expect(ctx.storage.isEmpty()).toBe(true);
+    },
+  );
 
   it('/me tardío 200 tras un ciclo real fallido por red: NO limpia el aviso degradado y libera busy', async () => {
     const ctx = await degradedFresh();
@@ -3983,5 +3978,325 @@ describe('recuperación degradada: respuestas tardías de /me y distinción 401 
       'No pudimos verificar tu sesión. Puedes reintentar más tarde',
     );
     jest.restoreAllMocks();
+  });
+});
+
+describe('R1: restore() no compite con un signIn() interactivo en vuelo', () => {
+  type GoogleResult = { status: 'success'; idToken: string } | { status: 'cancelled' };
+  const SUCCESS: GoogleResult = { status: 'success', idToken: 'google-id-token' };
+
+  // Sesión degradada (access vigente, /me falló por red), lista para un nuevo intento.
+  async function degraded(): Promise<Ctx> {
+    const ctx = setup({ stored: stored(600) });
+    (ctx.api.getMe as jest.Mock).mockRejectedValueOnce(err('network'));
+    await ctx.service.restore();
+    expect(ctx.service.getState()).toMatchObject({ status: 'authenticated', degraded: true });
+    jest.clearAllMocks();
+    ctx.clock.advance(RESTORE_MIN_INTERVAL_MS);
+    return ctx;
+  }
+
+  // La próxima llamada a google.signIn queda pendiente hasta resolver la compuerta.
+  function pendingGoogle(ctx: Ctx) {
+    const gate = controlledPromise<GoogleResult>();
+    (ctx.google.signIn as jest.Mock).mockReturnValueOnce(gate.promise);
+    return gate;
+  }
+
+  it('(a) degradada + signIn pendiente + restore(): no consulta /me, busy sigue y se publica la sesión nueva', async () => {
+    const ctx = await degraded();
+    const gate = pendingGoogle(ctx);
+    const signing = ctx.service.signIn();
+    await flush();
+    expect(ctx.service.getState().busy).toBe(true);
+
+    await ctx.service.restore();
+    expect(ctx.api.getMe).not.toHaveBeenCalled();
+    expect(ctx.service.getState().busy).toBe(true);
+
+    gate.resolve(SUCCESS);
+    await signing;
+    expect(ctx.service.getState()).toMatchObject({
+      status: 'authenticated',
+      busy: false,
+      degraded: false,
+    });
+    expect(ctx.storage.session()?.refreshToken).toBe(refreshTokenOf('RT-google-1'));
+  });
+
+  it('(b) restore() inicial en curso + signIn(): no-op, no invoca a Google', async () => {
+    const ctx = setup({ stored: stored(120) });
+    const me = controlledPromise<typeof USER>();
+    (ctx.api.getMe as jest.Mock).mockReturnValueOnce(me.promise);
+    expect(ctx.service.getState().status).toBe('initializing');
+    const restoring = ctx.service.restore();
+    await flush();
+    expect(ctx.api.getMe).toHaveBeenCalledTimes(1);
+
+    await ctx.service.signIn();
+    expect(ctx.google.signIn).not.toHaveBeenCalled();
+
+    me.resolve(USER);
+    await restoring;
+    expect(ctx.service.getState()).toMatchObject({ status: 'authenticated', busy: false });
+    expect(ctx.google.signIn).not.toHaveBeenCalled();
+  });
+
+  it('(c) signOut durante signIn pendiente: restore() procede y el signIn viejo no cambia nada', async () => {
+    const ctx = await degraded();
+    const gate = pendingGoogle(ctx);
+    const signing = ctx.service.signIn();
+    await flush();
+    await ctx.service.signOut();
+    const loads = ctx.storage.loadSession.mock.calls.length;
+
+    await ctx.service.restore();
+    expect(ctx.storage.loadSession.mock.calls.length).toBeGreaterThan(loads); // sí corrió
+    const before = ctx.service.getState();
+    expect(before).toMatchObject({ status: 'unauthenticated', busy: false });
+
+    gate.resolve(SUCCESS);
+    await signing;
+    await flush();
+    expect(ctx.service.getState()).toBe(before);
+    expect(ctx.api.exchangeGoogleToken).not.toHaveBeenCalled();
+    expect(ctx.storage.saveSession).not.toHaveBeenCalled();
+    expect(ctx.storage.isEmpty()).toBe(true);
+  });
+
+  it('(d) dos signIn seguidos: el segundo es no-op', async () => {
+    const ctx = setup();
+    const gate = pendingGoogle(ctx);
+    const first = ctx.service.signIn();
+    await ctx.service.signIn();
+    expect(ctx.google.signIn).toHaveBeenCalledTimes(1);
+    gate.resolve(SUCCESS);
+    await first;
+    expect(ctx.service.getState().status).toBe('authenticated');
+  });
+
+  it.each([
+    ['cancelación', () => jest.fn(async () => ({ status: 'cancelled' }))],
+    ['error', () => jest.fn().mockRejectedValue(err('config'))],
+    ['éxito', () => jest.fn(async () => SUCCESS)],
+  ] as const)(
+    '(d) el token se libera tras %s: un signIn posterior y restore() corren',
+    async (_n, make) => {
+      const google = fakeGoogle({ signIn: make() });
+      const ctx = setup({ google });
+      await ctx.service.signIn();
+      expect(google.signIn).toHaveBeenCalledTimes(1);
+      const loads = ctx.storage.loadSession.mock.calls.length;
+      await ctx.service.restore();
+      expect(ctx.storage.loadSession.mock.calls.length).toBeGreaterThan(loads);
+      await ctx.service.signIn();
+      expect(google.signIn).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('(e) un signIn viejo no libera el token de uno nuevo', async () => {
+    const ctx = setup({ stored: stored(600) });
+    await ctx.service.restore();
+    jest.clearAllMocks();
+    const oldGate = pendingGoogle(ctx);
+    const oldSign = ctx.service.signIn();
+    await flush();
+    await ctx.service.signOut();
+    const newGate = pendingGoogle(ctx);
+    const newSign = ctx.service.signIn();
+    await flush();
+    expect(ctx.google.signIn).toHaveBeenCalledTimes(2);
+
+    oldGate.resolve(SUCCESS);
+    await oldSign;
+    expect(ctx.api.exchangeGoogleToken).not.toHaveBeenCalled();
+    const loads = ctx.storage.loadSession.mock.calls.length;
+    await ctx.service.restore(); // el nuevo sigue en vuelo: bloqueado
+    expect(ctx.storage.loadSession.mock.calls.length).toBe(loads);
+    expect(ctx.service.getState().busy).toBe(true);
+
+    newGate.resolve(SUCCESS);
+    await newSign;
+    expect(ctx.service.getState()).toMatchObject({ status: 'authenticated', busy: false });
+    await ctx.service.restore(); // ya terminó: restore() vuelve a correr
+    expect(ctx.storage.loadSession.mock.calls.length).toBeGreaterThan(loads);
+  });
+
+  it('(f) una revalidación /me anterior en vuelo bloquea signIn(): su respuesta tardía no pisa nada', async () => {
+    const ctx = await degraded();
+    const me = controlledPromise<typeof USER>();
+    (ctx.api.getMe as jest.Mock).mockReturnValueOnce(me.promise);
+    const restoring = ctx.service.restore();
+    await flush();
+    await ctx.service.signIn(); // no puede empezar con una restauración en curso
+    expect(ctx.google.signIn).not.toHaveBeenCalled();
+
+    me.resolve({ ...USER, name: 'Ana Tardía' });
+    await restoring;
+    expect(ctx.service.getState()).toMatchObject({
+      status: 'authenticated',
+      busy: false,
+      degraded: false,
+    });
+    // Un signIn posterior sí corre y su sesión no la pisa ninguna respuesta antigua.
+    await ctx.service.signIn();
+    await flush();
+    expect(ctx.google.signIn).toHaveBeenCalledTimes(1);
+    expect(ctx.service.getState()).toMatchObject({ status: 'authenticated', busy: false });
+    expect(ctx.service.getState().user).toEqual(USER);
+  });
+
+  it.each([
+    ['200', (g: ReturnType<typeof controlledPromise<typeof USER>>) => g.resolve(USER)],
+    ['fallo', (g: ReturnType<typeof controlledPromise<typeof USER>>) => g.reject(err('network'))],
+  ] as const)(
+    '(k) restore() obsoleto + signOut() + signIn(): Google sí se invoca y el /me viejo (%s) no cambia estado ni busy',
+    async (_n, settle) => {
+      const ctx = await degraded();
+      const me = controlledPromise<typeof USER>();
+      (ctx.api.getMe as jest.Mock).mockReturnValueOnce(me.promise);
+      const restoring = ctx.service.restore();
+      await flush();
+      await ctx.service.signOut();
+      const gate = pendingGoogle(ctx);
+      const signing = ctx.service.signIn();
+      await flush();
+      expect(ctx.google.signIn).toHaveBeenCalledTimes(1);
+      const before = ctx.service.getState();
+      expect(before).toMatchObject({ status: 'unauthenticated', busy: true });
+
+      settle(me);
+      await restoring;
+      expect(ctx.service.getState()).toBe(before);
+
+      gate.resolve(SUCCESS);
+      await signing;
+      expect(ctx.service.getState()).toMatchObject({ status: 'authenticated', busy: false });
+    },
+  );
+
+  it('(g) logout durante saveSession del signIn: resultado stale, no se publica y se revoca la familia nueva', async () => {
+    const ctx = setup();
+    const release = ctx.storage.hold('saveSession');
+    const signing = ctx.service.signIn();
+    await flush();
+    expect(ctx.storage.session()).toBeNull(); // la escritura sigue retenida
+    const out = ctx.service.signOut();
+    release();
+    await Promise.all([signing, out]);
+    await flush();
+
+    expect(ctx.service.getState()).toMatchObject({
+      status: 'unauthenticated',
+      signedOutReason: 'signed-out',
+      busy: false,
+      user: null,
+    });
+    expect(ctx.storage.isEmpty()).toBe(true);
+    const revoked = (ctx.api.logout as jest.Mock).mock.calls.map(([t]) => t);
+    expect(revoked).toContain(refreshTokenOf('RT-google-1'));
+    // signIn() libera el token: restore() vuelve a correr.
+    const loads = ctx.storage.loadSession.mock.calls.length;
+    await ctx.service.restore();
+    expect(ctx.storage.loadSession.mock.calls.length).toBeGreaterThan(loads);
+  });
+
+  it('(g) logout durante saveSession de una rotación: no se publica y solo el logout explícito revoca', async () => {
+    const ctx = await signedIn();
+    ageToExpired(ctx);
+    const release = ctx.storage.hold('saveSession');
+    const calling = ctx.service.authorizedCall(async (t) => t).catch(() => 'ended');
+    await flush();
+    const out = ctx.service.signOut();
+    release();
+    await Promise.all([calling, out]);
+    await flush();
+
+    expect(ctx.service.getState()).toMatchObject({ status: 'unauthenticated', user: null });
+    expect(ctx.storage.isEmpty()).toBe(true);
+    expect(ctx.api.refresh).toHaveBeenCalledTimes(1);
+    expect(ctx.api.logout).toHaveBeenCalledTimes(1); // solo (c); jamás el par rotado tardío
+  });
+
+  it('(h) reintentos rápidos no duplican solicitudes a la red', async () => {
+    const refresh = jest.fn().mockRejectedValue(err('network'));
+    const ctx = setup({ stored: stored(-10), api: fakeApi({ refresh }) });
+    await ctx.service.restore();
+    expect(ctx.service.getState().status).toBe('unavailable');
+    expect(refresh).toHaveBeenCalledTimes(1);
+    const loads = ctx.storage.loadSession.mock.calls.length;
+    for (let i = 0; i < 4; i += 1) {
+      ctx.clock.advance(RESTORE_MIN_INTERVAL_MS / 10);
+      await ctx.service.restore();
+    }
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(ctx.storage.loadSession.mock.calls.length).toBe(loads);
+    expect(ctx.google.signInSilently).not.toHaveBeenCalled();
+  });
+
+  it('(h) reintentos rápidos de una sesión degradada hacen un solo GET /me', async () => {
+    const ctx = await degraded();
+    (ctx.api.getMe as jest.Mock).mockRejectedValueOnce(err('network'));
+    await ctx.service.restore();
+    expect(ctx.api.getMe).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 3; i += 1) {
+      ctx.clock.advance(500);
+      await ctx.service.restore();
+      await ctx.service.onForeground();
+    }
+    expect(ctx.api.getMe).toHaveBeenCalledTimes(1);
+    expect(ctx.api.refresh).not.toHaveBeenCalled();
+  });
+
+  it('(i) tras el logout nada revive la sesión ni llama a Google', async () => {
+    const ctx = await signedIn();
+    ageToExpired(ctx);
+    const rotation = controlledPromise<Awaited<ReturnType<typeof ctx.api.refresh>>>();
+    (ctx.api.refresh as jest.Mock).mockReturnValueOnce(rotation.promise);
+    const calling = ctx.service.authorizedCall(async (t) => t).catch(() => 'ended');
+    await flush();
+    await ctx.service.signOut();
+    const closed = ctx.service.getState();
+
+    await ctx.service.restore();
+    await ctx.service.onForeground();
+    rotation.resolve(refreshedTokens('late'));
+    await calling;
+    await flush();
+    await ctx.service.restore();
+    await ctx.service.onForeground();
+
+    expect(ctx.service.getState()).toMatchObject({
+      status: 'unauthenticated',
+      signedOutReason: 'signed-out',
+      user: null,
+      busy: false,
+    });
+    expect(ctx.service.getState().status).toBe(closed.status);
+    expect(ctx.storage.isEmpty()).toBe(true);
+    expect(ctx.google.signIn).not.toHaveBeenCalled();
+    expect(ctx.google.signInSilently).not.toHaveBeenCalled();
+    expect(ctx.api.exchangeGoogleToken).not.toHaveBeenCalled();
+  });
+
+  it('(j) access vencido renueva con un solo POST /auth/refresh', async () => {
+    const ctx = await signedIn();
+    ageToExpired(ctx);
+    await Promise.all([
+      ctx.service.authorizedCall(async (t) => t),
+      ctx.service.authorizedCall(async (t) => t),
+    ]);
+    expect(ctx.api.refresh).toHaveBeenCalledTimes(1);
+    expect(ctx.service.getState().status).toBe('authenticated');
+  });
+
+  it('(j) access vigente no provoca rotaciones', async () => {
+    const ctx = await signedIn();
+    await ctx.service.authorizedCall(async (t) => t);
+    await ctx.service.restore();
+    await ctx.service.onForeground();
+    await ctx.service.authorizedCall(async (t) => t);
+    expect(ctx.api.refresh).not.toHaveBeenCalled();
+    expect(ctx.google.signInSilently).not.toHaveBeenCalled();
   });
 });
