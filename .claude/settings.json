@@ -14,9 +14,17 @@
       "Bash(rm -rf *)",
       "PowerShell(Remove-Item *-Recurse*)",
       "PowerShell(Remove-Item * -r *)",
-      "Read(./.env)",
-      "Read(./.env.*)",
-      "Read(./.dev.vars)"
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/.dev.vars)",
+      "Read(**/.dev.vars.*)",
+      "Read(**/*.jks)",
+      "Read(**/*.keystore)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/credentials*.json)",
+      "Read(!**/.env.example)",
+      "Read(!**/.dev.vars.example)"
     ]
   }
 }

@@ -187,15 +187,15 @@ Esta tarea ajusta por fases la decisión de la sección Worker ("Producción se 
 - GitHub Environment `production`, con revisor requerido y despliegue restringido a `main`. `CLOUDFLARE_API_TOKEN` es secreto del Environment; `CLOUDFLARE_ACCOUNT_ID` y `WORKER_URL` son variables del Environment.
 - El workflow comprueba que la ejecución corresponde a `main` y que el SHA es el vigente antes de publicar. Usa `concurrency` y `permissions: contents: read`.
 - `api/wrangler.jsonc`: `workers_dev: true` y `preview_urls: false` explícitos.
-- Solo existe el entorno `production`. El entorno `dev` y D1 se añaden en la Fase 2, con revisión arquitectónica previa.
+- Al registrarse esta decisión solo existía el entorno `production`. *(Actualización Fase 2A: `api/wrangler.jsonc` declara ahora `env.dev` con la base D1 de desarrollo, y el Worker `controlgastos-api-dev` está desplegado solo en DEV; no hay D1 de producción.)*
 - La verificación de `GET /health` solo se ejecuta si `WORKER_URL` está configurada; si no, queda **pendiente** y no se considera aprobada.
 - Rollback manual documentado, no automatizado.
 - La tarea "Configurar CD (despliegues)" del Roadmap sigue sin marcar hasta que exista un despliegue exitoso y verificado.
 
 ### Pendientes de validación
 
-- Ningún despliegue real se ha ejecutado: no hay cuenta, token ni Environment configurados.
-- El workflow no se ha ejecutado en GitHub; solo se revisó su sintaxis localmente.
+- *(Histórico: estado de la Fase 0 al registrar esta decisión; el despliegue se validó después, ver docs/004-ROADMAP-PROYECTO.md.)* Ningún despliegue real se ha ejecutado: no hay cuenta, token ni Environment configurados.
+- *(Histórico: estado de la Fase 0.)* El workflow no se ha ejecutado en GitHub; solo se revisó su sintaxis localmente.
 - Fijar por SHA las acciones de `ci.yml` queda como decisión aparte.
 
 ## FASE 1: Autenticación con Google (implementación transitoria)
@@ -204,7 +204,7 @@ Aprobado por el orquestador. Esta sección registra la excepción a la constituc
 
 ### Excepción arquitectónica aprobada
 
-- **No se implementa todavía**: D1, tabla `users`, tabla `refresh_tokens`, `POST /auth/refresh`, `POST /auth/logout` ni revocación centralizada. Corresponden a la fase con D1 (Fase 2).
+- **No se implementa todavía** *(histórico: sustituido por la Fase 2A, ver «Decisión 2A.3» más abajo)*: D1, tabla `users`, tabla `refresh_tokens`, `POST /auth/refresh`, `POST /auth/logout` ni revocación centralizada. Corresponden a la fase con D1 (Fase 2).
 - Esta solución es **transitoria**. No es el modelo definitivo de producción. El diseño objetivo sigue siendo el de la constitución §4.
 - **Limitación explícita**: un JWT emitido sigue siendo válido hasta su expiración (15 minutos), incluso después del logout local, porque el servidor no puede revocarlo.
 - La identidad del usuario es el claim `sub` de Google. No se persiste nada en el servidor; `GET /me` devuelve los claims del JWT propio.
@@ -243,3 +243,171 @@ Aprobado por el orquestador. Esta sección registra la excepción a la constituc
 - **Causa del 401** previo al 200 en la renovación y, opcionalmente, inspección directa de `iat`/`exp` del JWT renovado (ver sección anterior).
 - Política `azp`: el login real fue aceptado, pero no se registró si el token trae `azp` ni su valor; queda por confirmar y documentar.
 - `JWT_SECRET` debe crearse como secreto de Cloudflare antes de desplegar. El Client Secret Web que apareció en una captura debe rotarse en Google Cloud.
+
+## Fase 2 — Decisiones funcionales aprobadas (13/10/2026)
+
+### Moneda y cuentas
+
+- La aplicación v1 utiliza exclusivamente USD.
+- El usuario crea manualmente su primera cuenta.
+- El saldo inicial es opcional; valor por defecto: 0 centavos.
+- Cada cuenta nueva recibe sus 11 categorías iniciales en una operación atómica.
+
+### Autenticación persistente
+
+- JWT de acceso: 15 minutos.
+- Refresh token: 7 días de inactividad.
+- Cada renovación exitosa rota el refresh token e invalida el anterior.
+- La rotación será atómica en D1.
+- El logout debe revocar el refresh token.
+- No se ha aprobado todavía una duración máxima absoluta adicional de sesión.
+
+### Categorías
+
+- El tipo ingreso/egreso es inmutable.
+- Se permiten cambios de nombre, descripción, icono y color.
+- Una categoría sin movimientos asociados puede eliminarse físicamente.
+- Una categoría con movimientos asociados no puede eliminarse; sí puede editarse o archivarse.
+- Los movimientos anulados siguen contando como referencias de la categoría.
+
+### Movimientos (implementación funcional en Fase 3)
+
+- No se permite cambiar el tipo ingreso/gasto después de registrar.
+- No se permite cambiar la categoría asignada.
+- Se permite modificar monto, fecha y nota.
+- Se permite eliminar un movimiento de cualquier antigüedad mediante anulación lógica.
+- Los movimientos anulados no afectan el saldo ni los reportes ni el historial habitual.
+- Los movimientos anulados se conservan para auditoría.
+
+### Límites de esta aprobación
+
+- Las reglas de movimientos se documentan ahora, pero se implementan en Fase 3.
+- La estructura técnica de D1, contratos JSON y estrategia de migración de sesiones requieren revisión antes de implementar.
+- Los pendientes de seguridad de la Fase 1 permanecen abiertos y no se consideran resueltos.
+
+## Fase 2A — Arquitectura de D1 y sesiones aprobada
+
+> **Nomenclatura.** Los encabezados «Fase 2A.1» a «Fase 2A.7» de este documento son decisiones numeradas en orden cronológico (Decisión 2A.1 a 2A.7). No equivalen a las subfases «Fase 2A.1 — D1, usuarios y sesiones en API» y «Fase 2A.2 — Integración Android» del plan de docs/004-ROADMAP-PROYECTO.md. Para evitar confusiones se cita aquí «Decisión 2A.n» y en el Roadmap «subfase 2A.1/2A.2»; los encabezados existentes no se renumeran.
+
+Decisiones aprobadas por el usuario:
+
+1. Access JWT de 15 minutos.
+2. Refresh token de 7 días de inactividad, con ventana deslizante.
+3. Rotación atómica en D1.
+4. Máximo de 5 sesiones independientes por usuario.
+5. En el sexto inicio, expulsar la sesión menos recientemente utilizada.
+6. Logout remoto limitado a la familia de la sesión correspondiente.
+7. Gracia de 30 segundos para reutilizaciones inmediatas:
+   HTTP 409 sin revocación.
+8. Reutilización posterior: HTTP 401 y revocación de la familia.
+9. Campos `family_id`, `replaced_by` y `revoked_reason` aprobados.
+10. JWT v2 con UUID interno en `sub`, conservando `email` y `name`.
+11. JSON de API en camelCase, manteniendo compatibilidad cuando sea posible.
+12. Migración 0001: `users` y `refresh_tokens`.
+13. Migración 0002: `accounts` y `categories`, en el bloque 2B.
+14. Cambios Android en un PR independiente.
+15. Sin límite absoluto adicional de duración de la sesión.
+16. Persistencia en D1 de desarrollo separada de producción.
+17. Fechas UTC ISO-8601 y UUID en texto.
+18. Se acepta la validez residual de los JWT hasta 15 minutos tras logout.
+
+Pendientes técnicos antes del despliegue:
+
+- Probar atomicidad y concurrencia de la rotación en D1 local y remoto.
+- Verificar el índice único parcial y las sentencias SQL utilizadas.
+- Validar la transición de JWT antiguos a JWT v2 en Android.
+- Revisar el comportamiento ante pérdidas de respuestas y fallos de SecureStore.
+- Configurar los bindings y secretos propios de cada entorno.
+- Mantener documentados los riesgos de credenciales pendientes de Fase 1.
+
+Las decisiones funcionales de cuentas, categorías y movimientos aprobadas
+anteriormente permanecen vigentes.
+
+### Fase 2A.1 — Retención de refresh tokens: sin purga
+
+Decisión aprobada por el usuario:
+
+- En la Fase 2A.1 no se implementa ninguna purga ni limpieza de refresh tokens (ni programada ni oportunista).
+- Los tokens rotados, revocados o vencidos se conservan en `refresh_tokens`.
+- Para el límite de 5 sesiones solo cuentan las familias vigentes (token activo con `expires_at` posterior al instante actual). Un token activo ya vencido no cuenta, no se expulsa y permanece inerte.
+- Motivo: simplicidad y trazabilidad de la reutilización tardía; el volumen esperado es bajo.
+- Consecuencia asumida: la tabla crece sin límite hasta que se apruebe una política de retención en una fase posterior (riesgo registrado, sin migración asociada).
+- Despliegue: las migraciones remotas y el despliegue son manuales y requieren autorización expresa (docs/001-CONSTITUCION.md §10).
+
+### Fase 2A.2 — Clasificación de un token rotado por el estado vivo de la familia (R1)
+
+Decisión aprobada por architect (sin migración ni cambio de esquema):
+
+- Problema: un token rotado cuya familia se revocó después (logout, expulsión por límite de sesiones o reutilización previa) conserva `revoked_reason = 'rotated'`, porque la revocación de familia solo toca tokens con `revoked_at IS NULL`. Dentro de la ventana de gracia, `refreshSession` devolvía `REFRESH_CONFLICT` aunque no existiera un sucesor vigente.
+- Regla: al presentar un token rotado, la API lo clasifica así:
+  - A: dentro de gracia y la familia conserva un token vigente (`revoked_at IS NULL` y `expires_at` posterior a ahora) => `REFRESH_CONFLICT`.
+  - B: dentro de gracia y la familia no conserva ningún token vigente => `INVALID_TOKEN`, sin escrituras.
+  - C: fuera de gracia => reutilización tardía: se revoca la familia y se responde `INVALID_TOKEN`.
+- La gracia es estrictamente menor que 30.000 ms: 29.999 ms es A o B; 30.000 ms o más es C.
+- Implementación: `findRefreshTokenByHash` calcula `family_live` en la misma consulta (solo para tokens rotados) con un sub-SELECT filtrado por `family_id`, que usa el índice parcial único de familias no revocadas. No añade consultas al refresco exitoso.
+- La representación pública de `REFRESH_CONFLICT` e `INVALID_TOKEN` no cambia y ninguna de las dos respuestas incluye credenciales.
+
+### Fase 2A.3 — Integración HTTP de sesiones persistentes (paso 276)
+
+Decisiones aprobadas por el orquestador y el usuario:
+
+- D1. `POST /auth/google` pasa a emitir JWT v2 y refresh token (reemplazo único, sin ruta paralela). La respuesta añade `refreshToken` y `refreshExpiresAt` (ISO UTC) a los campos ya consumidos por Android (`accessToken`, `tokenType`, `expiresIn`, `user.{id,email,name}`); los campos extra son compatibles.
+- D2. `refreshExpiresAt` lo calcula la ruta con `refreshExpiry(now)`, usando un único `now` por petición que también se pasa al servicio; `AuthSession` no cambia.
+- D3. `session-service.ts` (JWT v1) queda sin uso en producción. No se borra sin autorización; es deuda a retirar en un cambio posterior.
+- D4. El código público para un refresh token inválido es `INVALID_REFRESH_TOKEN` (el servicio usa internamente `INVALID_TOKEN`). El mensaje es idéntico para todos los casos inválidos. `REFRESH_CONFLICT` responde 409. El formato del token (43 caracteres base64url) se valida con 400 `INVALID_REQUEST` antes de hashear o consultar D1.
+- D5. `Cache-Control: no-store` en todas las respuestas de `/auth/*` y `/me`, incluidos errores y 204. No aplica a `/health` ni al 404 global. Sin CORS.
+- D6. `user.id` pasa del `sub` de Google al UUID interno de `users`. `GET /me` consulta la fila en D1 (nunca confía en los claims).
+- D7. Los JWT v1 en circulación se rechazan (401 `INVALID_TOKEN`) en `/me`; la app los renueva repitiendo `POST /auth/google`.
+- D8. Sin binding `DB`, las cuatro rutas responden 500 `CONFIG_ERROR` antes de procesar la solicitud. `errorHandler` registra solo el nombre del error inesperado (el mensaje de D1 puede incluir SQL, valores enlazados o hashes); la respuesta pública no cambia.
+
+### Fase 2A.4 — Límite preventivo del cuerpo JSON de /auth/* (paso 277)
+
+- Alcance: `POST /auth/google`, `/auth/refresh` y `/auth/logout`, mediante el helper único `readJsonBody` (`api/src/lib/json-body.ts`), que sustituye a `request.json()`.
+- Límite: `MAX_JSON_BODY_BYTES` = 16 KiB (16 384 bytes). El mayor campo aceptado es `idToken` (máximo 8192 caracteres); el resto es margen para el envoltorio JSON y escapes. Se cuentan bytes reales, no caracteres.
+- Mecanismo: un `Content-Length` declarado mayor al máximo se rechaza sin leer el cuerpo. Sin `Content-Length` (chunked) o con uno falso, el stream se lee con contador y se cancela al excederse, sin acumular el cuerpo completo.
+- Respuesta: 413 `PAYLOAD_TOO_LARGE` ("El cuerpo de la solicitud es demasiado grande."), con el formato de error único y `Cache-Control: no-store`, sin detalles internos. Motivo de 413 en lugar de 400: es el código HTTP semántico y permite distinguirlo de `INVALID_REQUEST`.
+- Orden: la configuración (`requireGoogleWebClientId`, `requireJwtSecret`, `requireDb`) se valida primero; luego el tamaño; luego JSON y esquema. JSON inválido o ausente sigue siendo 400 `INVALID_REQUEST`. D1 no se toca en ningún rechazo.
+- El contrato JSON de las respuestas existentes no cambia.
+- `POST /auth/google` sin la claim `name`: `identity.name ?? null` guarda `nombre` NULL y `user.name` se omite de la respuesta; `GET /me` coincide. Cubierto por prueba.
+
+### Fase 2A.5 — Conservación del nombre persistido y pruebas de borde del límite (paso 278)
+
+- Decisión: el nombre guardado en `users.nombre` se conserva cuando Google no entrega un nombre válido en un login posterior. "Válido" sigue la normalización existente (`normalizeNombre`): se recorta con `trim` y un valor ausente, vacío o solo espacios cuenta como no válido. Google sigue siendo la fuente cuando entrega un nombre válido distinto: en ese caso se actualiza.
+- Motivo: un login sin la claim `name` sobrescribía con NULL un nombre ya conocido, degradando `user.name` en la respuesta y en `GET /me` sin que el usuario hubiera cambiado nada.
+- Implementación (sin migración): `UPSERT_USER_SQL` usa `nombre = COALESCE(excluded.nombre, users.nombre)` y el `WHERE` compara contra el valor efectivo (`users.nombre IS NOT COALESCE(excluded.nombre, users.nombre)`). `updated_at` solo cambia si cambia el correo o el nombre efectivo; `id` y `google_sub` nunca cambian; sin cambios no hay escritura. Un usuario nuevo sin nombre válido se guarda con NULL; un NULL guardado se completa cuando Google entrega un nombre válido. La firma pública y el resultado de `upsertUserByGoogleSub` no cambian, y `auth-session-service` no se modifica (construye la respuesta desde la fila).
+- Límite del cuerpo (2A.4), pruebas de borde: un `Content-Length` no numérico o negativo (`abc`, `1e3`, `12abc`, `-1`, `0x10`, `+5`, vacío) se ignora y se cuentan los bytes reales; no es un bypass del límite (cuerpo > 16 KiB sigue en 413). Un `idToken` de 8193 caracteres responde 400 `INVALID_REQUEST` sin invocar la verificación de Google. El contrato HTTP no cambia.
+
+### Fase 2A.6 — Token de renovación consumido por un 409 en la app móvil (M2)
+
+Contexto: `POST /auth/refresh` responde 409 `REFRESH_CONFLICT` cuando el token presentado ya fue rotado dentro de la gracia de 30 s y la familia conserva un sucesor vigente (2A.2). Ese sucesor puede estar en otro proceso o dispositivo. El token enviado queda consumido y jamás debe reenviarse: pasados 30 s la API lo trata como reutilización, responde 401 y revoca la familia entera, incluido el sucesor legítimo. Sin una marca persistente, un reinicio, un «Reintentar» o el fin del enfriamiento de 60 s podían reenviarlo. No hay cambios en la API, el contrato HTTP ni el esquema D1.
+
+- D1. Marca de consumido. `StoredSessionV2` admite el campo opcional `refreshConsumed?: true` en la misma entrada `session_v2` (`version` sigue siendo 2). Ante un 409 la app marca el token primero en memoria, antes de releer el disco, y luego intenta persistir la marca. Si la persistencia falla se recuerda en `unpersistedMark` y se reintenta antes de cualquier llamada a Google. Un refresh token marcado nunca se envía a `/auth/refresh`: ni en el mismo ciclo, ni tras 60 s, ni con «Reintentar», ni en `authorizedCall`, ni tras reiniciar la app. El único acceso a `/auth/refresh` está detrás de ese guard.
+- D2. Relectura del disco. Tras el 409 la app espera 1000 ms más un jitter de hasta 250 ms y relee el almacenamiento por la cola. Si hay una sesión con otro refresh token, la adopta como sucesor (sin heredar la marca) y la publica si su access sigue fresco, o la rota una sola vez. Un segundo 409 sobre el sucesor también lo marca como consumido (memoria y disco) y termina en `unavailable('server')`, sin Google ni familia nueva. Al restaurar, la marca es memoria OR disco, en ambos sentidos.
+- D3. Sin sucesor. Si no aparece sucesor, la marca se persiste ANTES de llamar a Google, con compare-and-set por `epoch` y por refresh token dentro de la cola. Si la marca no se puede persistir, no se llama a Google. Solo después se recupera con Google, con el enfriamiento de 60 s, un `exchangeGoogleToken` por ciclo y single-flight.
+- D4. Escritura segura. La marca solo se escribe si en disco sigue el mismo refresh token. Con disco vacío, corrupto, legado o con limpieza pendiente (`pendingClear`) no se escribe nada, para no resucitar una sesión cerrada; la marca queda solo en memoria y la recuperación procede. Si en disco hay otro refresh token, se adopta como sucesor sin marcarlo. Todo se revalida contra `epoch`: un logout o un reemplazo concurrente descarta la operación.
+- D5. Revocación. Ningún camino con origen 409 llama a `/auth/logout` con el token antiguo, porque `POST /auth/logout` busca por hash también tokens rotados y revoca la familia entera, lo que mataría el sucesor vigente de otro proceso. Solo se revoca la familia NUEVA creada por la propia app cuando no llega a persistirse o publicarse, o cuando Google devuelve otra cuenta. La familia antigua solo se revoca tras una recuperación con origen 401 `INVALID_REFRESH_TOKEN` (token ya muerto; la llamada es idempotente e inocua). El cierre de sesión explícito del usuario no cambia.
+- D6. Sesión de versión futura (`unsupported`). Una sesión guardada por una versión futura de la app nunca se borra, se sobrescribe ni se marca. En el camino de un 409 se trata como fallo de almacenamiento: `unavailable('storage')` (o degradada si el access sigue vigente), sin Google, sin `exchangeGoogleToken`, sin reenviar el token, sin familia nueva y sin `/auth/logout`. Lo mismo ocurre en `restore()` y tras reiniciar. La comprobación de `unsupported` en `commit` va antes del atajo de la marca, para que una versión futura persistente no se confunda con «nada que marcar»; de lo contrario cada «Reintentar» crearía y revocaría una familia, pudiendo expulsar sesiones legítimas de otros dispositivos por el límite de 5.
+- D7. Reintentos manuales. «Reintentar» respeta un intervalo mínimo de 5 s entre intentos que llegan a la red, y un ciclo activo se espera sin lanzar un segundo refresh por la misma pulsación.
+- Compatibilidad hacia atrás. Una sesión v2 sin el campo equivale a «no consumida» y renueva como siempre; `false` se interpreta como sin marca; cualquier otro valor presente se interpreta de forma conservadora como consumido, sin volver corrupta la sesión. `saveSession` solo serializa el campo cuando es `true`; toda sesión nueva (rotación, recuperación, inicio de sesión, migración) se guarda sin él. La migración v1 y la rotación normal no cambian.
+- Riesgos residuales aceptados:
+  - Marca no persistida más reinicio de la app (SecureStore falla al escribirla): el token consumido se reenvía una vez al arrancar. Con menos de 30 s desde su rotación la API responde 409 y se vuelve a marcar; con 30 s o más la API lo trata como reutilización tardía, revoca la familia entera (incluido el sucesor de otro proceso) y el usuario debe iniciar sesión de nuevo.
+  - Si el almacenamiento falla de forma persistente, la app permanece no disponible por almacenamiento hasta que se recupere; no hay cola persistente de reintentos.
+  - Procesos o versiones antiguas de la app descartan el campo al guardar y pueden reenviar el token consumido (409 o, pasados 30 s, 401 con revocación de la familia). Solo aplica a una degradación de versión y no tiene mitigación.
+  - SecureStore no ofrece compare-and-set entre procesos: el compare-and-set cubre la cola local, pero un proceso puede sobrescribir la marca o un sucesor de otro entre la relectura y la escritura. El enfriamiento de la recuperación vive solo en memoria y un reinicio permite una nueva llamada a Google (una por arranque, sin bucle).
+  - Con `unsupported` en disco y origen 401 (no 409), la recuperación con Google puede ejecutarse una vez por enfriamiento; la familia nueva no se puede guardar, se revoca y no se sobrescribe la sesión futura. La rotación exitosa y el inicio de sesión interactivo no releen el disco antes de guardar.
+  - Si el logout no pudo borrar el disco (`pendingClear`), la marca no se escribe y `pendingClear` no sobrevive a un reinicio; esa sesión ya fue revocada por el logout.
+  - La app no puede distinguir si un sucesor pertenece a otro proceso del mismo dispositivo o a otro dispositivo; solo adopta el que encuentra en su propio almacenamiento. Tras un 409 sin sucesor, la recuperación con Google crea una familia nueva y la antigua, que puede seguir viva en otro proceso, no se revoca y expira sola.
+
+### Fase 2A.7 — Recuperación por AppState y sesión degradada (Decisión 2A.7)
+
+Contexto: decisiones ya implementadas en `app/src/hooks/use-auth.tsx` y `app/src/lib/auth-service.ts`, y validadas con pruebas automatizadas y en un teléfono Android real. No hay cambios en la API, el contrato HTTP ni el esquema D1. Conserva JWT v2, el single-flight, `epoch` y la marca `refreshConsumed` de la Decisión 2A.6.
+
+- D1. Recuperación al volver a primer plano. `AuthProvider` escucha `AppState` y llama a `onForeground()` solo en la transición de segundo plano o inactiva a `active`, con un anti-rebote de 1000 ms. `onForeground()` no hace nada durante la carga inicial, con una operación en vuelo o sin sesión (nunca llama a Google en automático tras un logout). Con la sesión no disponible, o degradada con el access fresco, delega en `restore()`; con el access fresco y sesión normal no usa la red; con el access por vencer (también si está degradada) ejecuta la renovación normal.
+- D2. Sesión degradada. Si falla la renovación por una causa transitoria (red, timeout, 5xx) y el access en memoria sigue vigente, la sesión se conserva con `degraded: true` y se muestra «Reintentar» (`restore()`). Sin access vigente queda `unavailable`. Jamás se borra el almacenamiento por un fallo transitorio.
+- D3. Revalidación mediante `GET /me`. En una sesión degradada con el access vigente, `restore()` hace una sola comprobación `GET /me` con el access en memoria. Deliberadamente NO usa `authorizedCall`: un 401 allí rotaría el refresh token con el access aún vigente por reloj. Con 200 se quita `degraded` y se publica el usuario; con el access dentro del margen de 60 s, `restore()` renueva con el refresh token en lugar de llamar a `/me`.
+- D4. Política conservadora ante un HTTP 401 de `/me` con access vigente. No se rota, no se llama a Google, no se crean familias ni se borra el almacenamiento: la sesión sigue degradada con `error = 'rejected'`, y el siguiente uso real (`authorizedCall`) o la renovación proactiva por margen lo resuelven. Motivo: un 401 con access vigente por reloj es ambiguo (reloj, revocación, fallo transitorio) y una acción destructiva sería irreversible.
+- D5. Separación entre conectividad y autenticación. Solo un 401 produce `error = 'rejected'`, que la pantalla muestra como «No pudimos verificar tu sesión…»; red, timeout, 429 y 5xx muestran el aviso de conectividad. Un fallo posterior de otro tipo reemplaza el error anterior; ni un ciclo fallido por red ni un logout arrastran el 401.
+- D6. Respuestas tardías. `revalidate()` descarta el resultado si cambió `epoch`, la generación de la sesión, el access en memoria, hay un ciclo activo o terminó uno (`cycleSeq`). `busy` se libera en todas las salidas; un ciclo activo lo libera al publicar.
+- D7. Intervalos. `restore()` en estado `unavailable` o degradado respeta 5 s entre intentos que llegan a la red (`RESTORE_MIN_INTERVAL_MS`); un `restore()` normal no está bloqueado por ese intervalo. La recuperación con Google conserva su enfriamiento de 60 s.
+- D8. `expo-network` aplazado. La detección automática de conectividad NO está implementada ni se añade ninguna dependencia: hoy el reintento es manual («Reintentar») o por regreso a primer plano. Se evaluará en una decisión futura, con revisión arquitectónica.
+- Riesgos residuales aceptados: `restore()` no comprueba `busy`; un `signIn()` programático en vuelo con sesión degradada podría ver liberado `busy` antes de tiempo (la interfaz no lo permite); tras un logout con un `GET /me` en vuelo, `restoring` permanece hasta 15 s (el plazo de la petición) y un reintento en ese lapso devuelve la promesa anterior sin efecto; `revalidate` publica el usuario de `/me` en el estado, no en `session.user` de memoria; la rama de `commit` posterior a `saveSession` con logout concurrente carece de prueba dedicada.

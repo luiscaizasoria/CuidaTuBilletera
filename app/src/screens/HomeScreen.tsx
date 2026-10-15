@@ -1,16 +1,39 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
-import { AUTH_ERROR_MESSAGES } from '../lib/auth-messages';
+import {
+  DEGRADED_MESSAGE,
+  DEGRADED_UNVERIFIED_MESSAGE,
+  unavailableMessage,
+} from '../lib/auth-messages';
 
 export default function HomeScreen() {
-  const { user, error, signOut } = useAuth();
+  const { status, user, busy, degraded, unavailableCause, error, signOut, restore } = useAuth();
+  const unavailable = status === 'unavailable';
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Sesión iniciada</Text>
+      <Text style={styles.title}>{unavailable ? 'Sesión no disponible' : 'Sesión iniciada'}</Text>
       {user?.name ? <Text style={styles.name}>{user.name}</Text> : null}
       {user ? <Text style={styles.email}>{user.email}</Text> : null}
-      {error ? <Text style={styles.notice}>{AUTH_ERROR_MESSAGES[error]}</Text> : null}
+      {degraded ? (
+        <Text style={styles.notice}>
+          {error === 'rejected' ? DEGRADED_UNVERIFIED_MESSAGE : DEGRADED_MESSAGE}
+        </Text>
+      ) : null}
+      {unavailable && unavailableCause ? (
+        <Text style={styles.notice}>{unavailableMessage(unavailableCause, error)}</Text>
+      ) : null}
+      {unavailable || degraded ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: busy, busy }}
+          disabled={busy}
+          onPress={() => void restore()}
+          style={[styles.primaryButton, busy && styles.buttonDisabled]}
+        >
+          <Text style={styles.primaryButtonText}>Reintentar</Text>
+        </Pressable>
+      ) : null}
       <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.button}>
         <Text style={styles.buttonText}>Cerrar sesión</Text>
       </Pressable>
@@ -40,4 +63,15 @@ const styles = StyleSheet.create({
     borderColor: '#1a73e8',
   },
   buttonText: { color: '#1a73e8', fontSize: 16, fontWeight: '600' },
+  primaryButton: {
+    minWidth: 240,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#1a73e8',
+    marginBottom: 12,
+  },
+  primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
+  buttonDisabled: { opacity: 0.6 },
 });

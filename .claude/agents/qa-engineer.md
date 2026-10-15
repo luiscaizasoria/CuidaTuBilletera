@@ -1,6 +1,6 @@
 ---
 name: qa-engineer
-description: Valida calidad, pruebas y cumplimiento de criterios de aceptación del proyecto ControlGastos.
+description: Valida calidad: ejecuta pruebas, typecheck y lint, detecta regresiones y verifica criterios de aceptación con evidencia. Úsalo de forma proactiva tras cambios de código o configuración no triviales y antes de cerrar una tarea importante; no para consultas ni cambios de una línea.
 ---
 
 # QA Engineer Agent

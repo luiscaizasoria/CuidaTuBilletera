@@ -31,7 +31,8 @@ function Root() {
       </View>
     );
   }
-  return status === 'authenticated' ? <HomeScreen /> : <LoginScreen />;
+  // Sin disponibilidad temporal la sesión se conserva: se muestra la pantalla principal con reintento.
+  return status === 'authenticated' || status === 'unavailable' ? <HomeScreen /> : <LoginScreen />;
 }
 
 // `service` solo se inyecta en pruebas; en la app se construye con la configuración real.

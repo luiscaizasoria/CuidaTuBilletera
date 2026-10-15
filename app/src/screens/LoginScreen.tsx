@@ -1,14 +1,31 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
-import { AUTH_ERROR_MESSAGES } from '../lib/auth-messages';
+import {
+  AUTH_ERROR_MESSAGES,
+  LOGOUT_NOTICE_MESSAGES,
+  SIGNED_OUT_MESSAGES,
+} from '../lib/auth-messages';
 
 export default function LoginScreen() {
-  const { busy, error, signIn } = useAuth();
+  const { busy, error, notice, signedOutReason, signIn } = useAuth();
+  // Prioridad: error > aviso > motivo de cierre; el motivo solo aparece si nada es más específico.
+  const signedOutMessage =
+    !error && !notice && signedOutReason ? SIGNED_OUT_MESSAGES[signedOutReason] : null;
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>CuidaTuBilletera</Text>
       <Text style={styles.subtitle}>Inicia sesión para continuar.</Text>
+      {notice ? (
+        <Text accessibilityRole="alert" style={styles.notice}>
+          {LOGOUT_NOTICE_MESSAGES[notice]}
+        </Text>
+      ) : null}
+      {signedOutMessage ? (
+        <Text accessibilityRole="alert" style={styles.notice}>
+          {signedOutMessage}
+        </Text>
+      ) : null}
       {error ? (
         <Text accessibilityRole="alert" style={styles.error}>
           {AUTH_ERROR_MESSAGES[error]}
@@ -42,6 +59,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: 'bold', marginBottom: 8 },
   subtitle: { fontSize: 16, color: '#444444', marginBottom: 24 },
   error: { color: '#b00020', textAlign: 'center', marginBottom: 16 },
+  notice: { color: '#8a6d00', textAlign: 'center', marginBottom: 16 },
   button: {
     minWidth: 240,
     minHeight: 48,

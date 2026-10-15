@@ -12,7 +12,8 @@ Antes de realizar cualquier cambio:
 2. Consultar docs/001-CONSTITUCION.md para reglas del producto, alcance y arquitectura.
 3. Consultar docs/002-CONVENCIONES.md para estándares técnicos.
 4. Consultar docs/003-DECISIONES-FASE0.md para decisiones del proyecto.
-5. Si existe una ambigüedad, preguntar antes de decidir.
+5. Consultar docs/004-ROADMAP-PROYECTO.md para el estado y el plan de las fases.
+6. Si existe una ambigüedad, preguntar antes de decidir.
 
 ---
 
@@ -55,6 +56,10 @@ Estándares técnicos:
 Historial de decisiones:
 
 - docs/003-DECISIONES-FASE0.md
+
+Estado y plan de las fases:
+
+- docs/004-ROADMAP-PROYECTO.md
 
 Los documentos anteriores son fuentes de verdad del proyecto según su responsabilidad.
 
@@ -99,23 +104,63 @@ Estructura:
 - .claude/rules/
   Reglas técnicas específicas.
 
-- .claude/skills/
-  Procesos repetibles.
+- .claude/settings.json
+  Permisos compartidos del proyecto (versionado).
 
-- .claude/.mcp.json
-  Configuración MCP del proyecto.
+- .claude/settings.local.json
+  Preferencias locales (no versionado).
+
+- .claude/skills/
+  Procesos repetibles. Aún no hay skills del proyecto.
+
+- .mcp.json (raíz del repositorio)
+  Configuración de los servidores MCP del proyecto. Hoy no existe: el proyecto no define servidores MCP. Los conectores de cuenta (por ejemplo Claude Docs) y el MCP del IDE no son configuración del proyecto.
 
 Los agentes se crean solamente cuando exista una responsabilidad clara.
+
+### Coordinación y delegación
+
+- `orchestrator` coordina las tareas importantes. Una tarea es importante si cambia más de un archivo de código o de configuración, o si toca migraciones, contratos de la API, dependencias, autenticación o sesiones. Antes de delegar consulta docs/004-ROADMAP-PROYECTO.md y .claude/rules/, delimita el alcance y fija los criterios de aceptación.
+- Las consultas, las lecturas y los cambios menores no requieren agentes: no se delega por sistema.
+- Las ambigüedades, las aprobaciones y las operaciones irreversibles se resuelven con el usuario desde la conversación principal. Los agentes devuelven la pregunta en lugar de decidir.
+
+Política de delegación:
+
+- `architect`: diseño y revisión estructural. Se consulta antes de implementar cambios estructurales. Es de solo lectura: propone el texto de las decisiones y quien coordina las documenta tras la aprobación del usuario (primero en docs/001 si cambia una norma; el motivo se registra en docs/003).
+- `backend-engineer`: implementación API/D1 (Hono, Zod, servicios y acceso a datos) con sus pruebas. No toma decisiones arquitectónicas.
+- `mobile-engineer`: implementación y revisión de la app móvil (React Native, Expo, TypeScript y Android) con sus pruebas. Se usa de forma proactiva en las tareas de /app. No toma decisiones arquitectónicas: el diseño arquitectónico móvil se coordina con `architect` y las pruebas móviles con `qa-engineer`.
+- `qa-engineer`: pruebas, regresiones y calidad. Ejecuta pruebas, typecheck y lint y aporta la evidencia con la que se cierra una tarea.
+- `devops-engineer`: Wrangler, CI/CD, entornos y despliegues.
+
+Ningún agente hace commit, push, PR, migración remota ni despliegue sin autorización expresa del usuario.
+
+Una delegación solo se da por ocurrida si hay evidencia de invocación: el `agentId` devuelto por la herramienta Agent o su transcript en `subagents/`. Una mención en un texto no cuenta.
+
+Registro de ejecución (al cerrar cada tarea importante):
+
+| Agente | Trabajo realizado | Evidencia de invocación (agentId) |
+| --- | --- | --- |
+
+- Skills usadas: ninguna, o la skill con su evidencia.
+- MCP usados: ninguno, o el servidor y la herramienta con su evidencia.
+- No utilizados: lo que se esperaba usar y no se usó, con el motivo.
 
 ---
 
 ## Entorno
 
-- Sistema operativo: Windows.
-- Shell: PowerShell.
+- Entorno de trabajo actual: Linux (Bash) dentro del Dev Container, en /workspaces/ControlGastos (ver docs/005-DEVCONTAINER.md).
+- Sistema anfitrión: Windows (Docker Desktop, WSL 2 y VS Code). PowerShell solo aplica si se trabaja directamente en el anfitrión; las reglas de permisos de PowerShell de .claude/settings.json se conservan para ese caso.
 - Idioma de trabajo: español.
 - Código y nombres técnicos: según docs/002-CONVENCIONES.md.
 
 ## Fase actual
 
-Fase 0 - Preparación del proyecto.
+Fase 2A - D1, usuarios y sesiones (en curso).
+
+Historial:
+
+- Fase 0 - Preparación del proyecto: completada.
+- Fase 1 - Autenticación con Google: completada funcionalmente. Es una implementación transitoria sin D1, con pendientes de seguimiento en docs/003 y docs/004.
+
+El detalle y la evidencia están en docs/004-ROADMAP-PROYECTO.md.

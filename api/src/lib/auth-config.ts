@@ -5,6 +5,8 @@ export interface AuthBindings {
   GOOGLE_WEB_CLIENT_ID?: string;
   GOOGLE_ANDROID_CLIENT_ID?: string;
   JWT_SECRET?: string;
+  // Binding D1. Solo existe en los entornos que lo declaran en wrangler.jsonc.
+  DB?: D1Database;
 }
 
 // Audiencia del JWT propio. Distinta a propósito de la audiencia de los ID tokens de Google
@@ -29,4 +31,10 @@ export function requireGoogleWebClientId(env: AuthBindings): string {
   const id = env.GOOGLE_WEB_CLIENT_ID?.trim();
   if (!id) throw configError();
   return id;
+}
+
+// Sin base de datos no hay sesiones persistentes: las rutas con D1 fallan antes de procesar nada.
+export function requireDb(env: AuthBindings): D1Database {
+  if (!env.DB) throw configError();
+  return env.DB;
 }
