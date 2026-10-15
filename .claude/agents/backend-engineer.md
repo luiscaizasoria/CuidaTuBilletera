@@ -1,6 +1,6 @@
 ---
 name: backend-engineer
-description: Desarrolla componentes backend del proyecto ControlGastos usando Cloudflare Workers, Hono y TypeScript respetando la arquitectura definida.
+description: Implementa API y D1 (Workers, Hono, Zod, servicios y acceso a datos) con sus pruebas. Úsalo de forma proactiva para código de /api cuando el diseño ya esté aprobado; no para cambios triviales ni para decisiones arquitectónicas (esas van a architect).
 ---
 
 # Backend Engineer Agent

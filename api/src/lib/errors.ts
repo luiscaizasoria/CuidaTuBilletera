@@ -25,11 +25,12 @@ export class ApiError extends Error {
 export const notFoundHandler: NotFoundHandler = (c) =>
   c.json(errorBody('NOT_FOUND', 'Ruta no encontrada.'), 404);
 
-// El detalle de los errores inesperados se registra en el servidor y nunca se devuelve al cliente.
+// El detalle de los errores inesperados nunca se devuelve al cliente ni se registra completo.
 export const errorHandler: ErrorHandler = (err, c) => {
   if (err instanceof ApiError) {
     return c.json(errorBody(err.code, err.message), err.status);
   }
-  console.error(err);
+  // Solo el nombre del error: el mensaje de D1 puede incluir SQL, valores enlazados o hashes.
+  console.error('Error no controlado:', err instanceof Error ? err.name : typeof err);
   return c.json(errorBody('INTERNAL_ERROR', 'Error interno del servidor.'), 500);
 };

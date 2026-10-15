@@ -29,7 +29,7 @@ describe('error no controlado', () => {
   });
 
   it('responde 500 con INTERNAL_ERROR sin exponer el error original', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     // Misma aplicación que usa el Worker (createApp), con una ruta que lanza
     // solo en esta prueba; así se verifica que onError está conectado de verdad.
     const app = createApp();
@@ -45,5 +45,8 @@ describe('error no controlado', () => {
       error: { code: 'INTERNAL_ERROR', message: expect.any(String) },
     });
     expect(text).not.toContain('detalle-interno-secreto');
+    // El log conserva solo información saneada: nunca el mensaje del error.
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(logged.mock.calls)).not.toContain('detalle-interno-secreto');
   });
 });

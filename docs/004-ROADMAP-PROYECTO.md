@@ -2,11 +2,18 @@
 
 ## Estado actual
 
-Fase:
-Fase 0 - Preparación del proyecto
+Fase actual:
+Fase 2A - D1, usuarios y sesiones (en curso). La subfase 2A.1 (API) tiene su evidencia registrada con un pendiente de pruebas remotas; la subfase 2A.2 (Android) está validada en dispositivo con pendientes (cambio de cuenta, 409 en dispositivo y PR). Detalle y evidencia en «Plan de ejecución de Fase 2».
 
-Objetivo:
-Construir la base técnica, arquitectura y gobernanza necesaria antes del desarrollo funcional.
+Nomenclatura: «subfase 2A.1/2A.2» designa los bloques de este plan. Los encabezados «Fase 2A.1 … 2A.7» de docs/003 son decisiones numeradas (Decisión 2A.1 … 2A.7) y no equivalen a estas subfases.
+
+Objetivo de la fase actual:
+Persistir usuarios y sesiones en Cloudflare D1, con refresh tokens rotados de forma atómica, según docs/001-CONSTITUCION.md y docs/003-DECISIONES-FASE0.md.
+
+Historial de fases:
+
+- Fase 0 - Preparación del proyecto: completada. Objetivo: construir la base técnica, arquitectura y gobernanza necesaria antes del desarrollo funcional.
+- Fase 1 - Autenticación con Google: completada funcionalmente. Es una implementación transitoria sin D1; los pendientes de seguimiento están en la sección Fase 1 y en docs/003.
 
 ---
 
@@ -33,12 +40,14 @@ Agents:
 - backend-engineer
 - qa-engineer
 - devops-engineer
+- mobile-engineer
 
 Rules:
 - architecture
 - workflow
 - quality
 - project-state
+- security
 
 ## Infraestructura base
 
@@ -138,3 +147,64 @@ Alcance de la validación de la renovación:
 [ ] Pruebas completas.
 [ ] APK prueba.
 [ ] Revisión final.
+
+## Plan de ejecución de Fase 2 — Detalle aprobado
+
+### Fase 2A.1 — D1, usuarios y sesiones en API
+
+- [x] Migración 0001 de usuarios y refresh tokens.
+- [x] Configuración D1 para local y desarrollo.
+- [x] Persistencia de usuarios identificados por Google sub.
+- [x] JWT v2 con UUID de usuario interno.
+- [ ] Rotación de refresh tokens con pruebas de concurrencia. Parcial: probada en D1 local y observada en D1 DEV; la prueba de concurrencia en remoto no está registrada.
+- [x] Logout remoto y control de hasta 5 sesiones.
+- [x] API validada con pruebas automatizadas y D1 de desarrollo.
+
+Evidencia de la subfase 2A.1 (resultados confirmados por el usuario y verificados en este repositorio el 2026-10-15):
+
+- Pruebas de la API: **329/329** aprobadas (12 archivos; Vitest con D1 local efímera de Miniflare). `tsc`, ESLint y Prettier de `api` sin errores.
+- Cloudflare DEV: Worker `controlgastos-api-dev` desplegado, con la base `controlgastos-db-dev` (`env.dev` en `api/wrangler.jsonc`). No existe D1 ni despliegue de producción.
+- En D1 DEV se observó la rotación del refresh token y la revocación del logout remoto.
+- No se registran aquí el identificador de ejecución de GitHub Actions ni la versión del Worker de DEV; deben anotarse cuando se confirmen.
+
+Pendientes de la subfase 2A.1:
+
+- Concurrencia de la rotación en D1 remoto (docs/003 la exige en local y remoto): ejecutar o registrar la excepción aprobada.
+- Retirar `api/src/services/session-service.ts` (JWT v1, sin uso en producción), con autorización.
+- Política de retención de `refresh_tokens` (la tabla crece sin límite, Decisión 2A.1).
+
+### Fase 2A.2 — Integración Android
+
+- [x] Almacenar sesión y refresh token mediante SecureStore.
+- [x] Consumir POST /auth/refresh.
+- [x] Consumir POST /auth/logout.
+- [ ] Mantener aislamiento al cambiar de usuario. Parcial: hay pruebas unitarias; falta la prueba manual con una segunda cuenta de Google.
+- [x] Validar restauración, renovación y logout en Android.
+- [ ] Preparar PR independiente para la aplicación.
+
+Evidencia de la subfase 2A.2 (resultados confirmados por el usuario y verificados en este repositorio el 2026-10-15):
+
+- Pruebas de la app: **525/525** aprobadas (8 suites). `tsc`, ESLint y Prettier de `app` sin errores. Cobertura de ramas de `auth-service.ts`: 95,68 % (línea sin cubrir: 347).
+- Android real contra `controlgastos-api-dev`: login con Google, logout y renovación (refresh) validados en el dispositivo.
+- Recuperación de sesión degradada y botón «Reintentar» comprobados en Android real (Decisión 2A.7 de docs/003).
+- Revisión final del Paso 319.5.4: `qa-engineer` APRUEBA, `architect` APRUEBA CON RESERVAS (riesgos residuales en docs/003, Decisión 2A.7).
+
+Pendientes de la subfase 2A.2 (sin evidencia, no se consideran completados):
+
+- Cambio de cuenta de Google en el dispositivo.
+- Respuesta 409 (`REFRESH_CONFLICT`) en dispositivo; solo está cubierta por pruebas automatizadas.
+- Detección automática de conectividad: `expo-network` está aplazado y no implementado (Decisión 2A.7, D8).
+- Riesgos residuales de concurrencia documentados en las Decisiones 2A.6 y 2A.7 (docs/003).
+- Producción bloqueada: no se despliega a producción hasta que el PR de la app JWT v2 esté fusionado, porque la app de `main` aún usa el flujo v1.
+
+### Fase 2B — Cuentas y categorías
+
+- [ ] Migración 0002.
+- [ ] API de cuentas.
+- [ ] API de categorías.
+- [ ] Creación atómica de una cuenta y 11 categorías iniciales.
+- [ ] Pantallas Android de cuentas y categorías.
+- [ ] Pruebas de aislamiento entre usuarios.
+
+No se realizarán despliegues automáticos por fusionar a main.
+El entorno de producción requiere aprobación expresa.

@@ -1,6 +1,6 @@
 ---
 name: devops-engineer
-description: Gestiona infraestructura, automatización, CI/CD y despliegues del proyecto ControlGastos.
+description: Gestiona Wrangler, CI/CD, entornos y despliegues. Úsalo de forma proactiva cuando cambien workflows, wrangler.jsonc, migraciones en el pipeline, secretos o entornos; no para cambios menores.
 ---
 
 # DevOps Engineer Agent

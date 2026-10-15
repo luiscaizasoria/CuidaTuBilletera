@@ -5,4 +5,21 @@
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
   "preview_urls": false,
+  "env": {
+    "dev": {
+      "name": "controlgastos-api-dev",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "controlgastos-db-dev",
+          "database_id": "ed52c4cb-a375-42a3-b0db-f1a2a4bab50a",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "vars": {
+        "GOOGLE_WEB_CLIENT_ID": "441178517157-d2cfm6jre3hoepj9ltnaqmlrk57negkv.apps.googleusercontent.com",
+        "GOOGLE_ANDROID_CLIENT_ID": "441178517157-kdiehkv9jrt4mo4fq7shpt02955e3mkg.apps.googleusercontent.com"
+      }
+    }
+  },
 }
