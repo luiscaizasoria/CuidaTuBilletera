@@ -70,6 +70,8 @@ Esquema (texto plano):
 | Base de datos | Cloudflare D1 (SQLite), migraciones versionadas con wrangler |
 | Compilación móvil | EAS Build (perfil gratuito) para generar el APK |
 | Repositorio y CI/CD | GitHub y GitHub Actions |
+
+Nota (Decisión 2B.1 de docs/003): React Navigation y TanStack Query se incorporan a partir de la Fase 3; la Fase 2B usa navegación por estado local y no añade dependencias.
 | Entorno de desarrollo | Dev container (Docker) |
 
 Los límites de las capas gratuitas cambian con el tiempo. Antes de cerrar decisiones de capacidad se verifican en la documentación oficial de Cloudflare.
@@ -172,6 +174,8 @@ Todas las rutas, salvo las de autenticación, exigen JWT. Las respuestas de `/au
 | `GET /reports/by-category` | Totales por categoría en un rango |
 | `GET /reports/by-period?group=month` o `group=year` | Serie por mes o por año |
 | `GET /export?account_id=&desde=&hasta=&format=csv` o `format=pdf` | Exportación del historial |
+
+Recursos de cuentas y categorías (Decisión 2B.1 de docs/003): los listados usan los parámetros de query `page` y `page_size` (defecto 50, máximo 100) y responden `{ items, page, pageSize, total }`; las respuestas llevan `Cache-Control: no-store`; los recursos ajenos responden 404 `NOT_FOUND`; los conflictos de negocio usan 409 con los códigos `ACCOUNT_ARCHIVED`, `CATEGORY_NAME_TAKEN`, `CATEGORY_IN_USE` y `LIMIT_REACHED`.
 
 Límites de protección opcionales (para cuidar las cuotas gratuitas, no como plan comercial): máximo de cuentas por usuario, de categorías por cuenta y de solicitudes por minuto, definidos en un único archivo de configuración.
 

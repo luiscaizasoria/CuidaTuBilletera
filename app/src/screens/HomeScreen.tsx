@@ -6,7 +6,7 @@ import {
   unavailableMessage,
 } from '../lib/auth-messages';
 
-export default function HomeScreen() {
+export default function HomeScreen({ onOpenAccounts }: { onOpenAccounts?: () => void }) {
   const { status, user, busy, degraded, unavailableCause, error, signOut, restore } = useAuth();
   const unavailable = status === 'unavailable';
 
@@ -32,6 +32,15 @@ export default function HomeScreen() {
           style={[styles.primaryButton, busy && styles.buttonDisabled]}
         >
           <Text style={styles.primaryButtonText}>Reintentar</Text>
+        </Pressable>
+      ) : null}
+      {onOpenAccounts && !unavailable ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenAccounts}
+          style={[styles.primaryButton, styles.accountsButton]}
+        >
+          <Text style={styles.primaryButtonText}>Cuentas</Text>
         </Pressable>
       ) : null}
       <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.button}>
@@ -74,4 +83,5 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
   buttonDisabled: { opacity: 0.6 },
+  accountsButton: { marginBottom: 12 },
 });

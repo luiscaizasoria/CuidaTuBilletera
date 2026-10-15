@@ -200,12 +200,35 @@ Pendientes de la subfase 2A.2 (sin evidencia, no se consideran completados):
 
 ### Fase 2B — Cuentas y categorías
 
-- [ ] Migración 0002.
-- [ ] API de cuentas.
-- [ ] API de categorías.
-- [ ] Creación atómica de una cuenta y 11 categorías iniciales.
-- [ ] Pantallas Android de cuentas y categorías.
-- [ ] Pruebas de aislamiento entre usuarios.
+- [x] Migración 0002 (`api/migrations/0002_accounts_categories.sql`: `accounts` y `categories`, sin `transactions`). Validada en D1 local y aplicada en D1 DEV (`controlgastos-db-dev`); no existe D1 de producción.
+- [x] API de cuentas (`GET/POST/PATCH /accounts`).
+- [x] API de categorías (`GET/POST /accounts/:id/categories`, `PATCH/DELETE /categories/:id`).
+- [x] Creación atómica de una cuenta y 11 categorías iniciales (un único `db.batch`, con prueba de rollback total).
+- [ ] Pantallas Android de cuentas y categorías. Parcial: implementadas y probadas con pruebas automatizadas y API simulada; sin validación en dispositivo ni contra la API desplegada.
+- [x] Pruebas de aislamiento entre usuarios (API: 7 endpoints con dos usuarios y pruebas directas de repositorio; app: sin datos del usuario anterior tras cerrar sesión).
+
+Evidencia del primer incremento (Decisión 2B.1 de docs/003; ejecutada en este repositorio el 2026-10-15):
+
+- API: **502/502** pruebas (16 archivos; 329 anteriores + 173 nuevas). `tsc`, ESLint y Prettier de `api/src`, `api/test` y `api/migrations` sin errores. `api/wrangler.jsonc` falla `prettier --check` también en HEAD (previo a este incremento).
+- App: **669/669** pruebas (14 suites; 543 anteriores + 126 nuevas). `tsc`, ESLint y Prettier sin errores.
+- `qa-engineer` APRUEBA: revisión contra el contrato, coherencia cliente-servidor sin divergencias y mutaciones del filtro de propiedad detectadas por las pruebas. Sin dependencias nuevas.
+- No se realizaron pruebas manuales en dispositivo.
+
+Evidencia de la integración en Cloudflare DEV (Paso 324.2, 2026-10-15; `devops-engineer` y verificación independiente de `qa-engineer`):
+
+- Migración 0002 aplicada una sola vez en `controlgastos-db-dev` (la lista de pendientes contenía solo 0002). `d1_migrations`: 0001 y 0002. Tablas `accounts` y `categories` (0 filas), índices `ix_accounts_user` y `ux_categories_account_tipo_nombre`, claves foráneas con `ON DELETE CASCADE`, `PRAGMA foreign_key_check` sin filas.
+- Integridad de la Fase 2A: `users` = 1 y `refresh_tokens` = 6, iguales antes y después; sin DELETE, DROP ni TRUNCATE.
+- Worker `controlgastos-api-dev` desplegado con `--env dev`, versión `ec9bf1fd-55ed-4864-a0b0-22384e77563d` (100 % del tráfico), URL https://controlgastos-api-dev.luis-caiza-soria.workers.dev. Producción no se tocó.
+- Verificaciones remotas sin credenciales: `GET /health` 200; las seis rutas de cuentas y categorías sin Authorization responden 401 `UNAUTHORIZED` con `Cache-Control: no-store`; tokens inválidos o de firma falsa, 401 `INVALID_TOKEN`; ruta inexistente, 404 `NOT_FOUND`; cuerpo de 20 KB a `/auth/google`, 413.
+- Tras el despliegue, las rutas nuevas devolvieron 404 durante unos 20 s (propagación) antes de responder 401.
+
+Pendientes de la Fase 2B:
+
+- Pruebas autenticadas remotas en DEV, sin realizar por no existir una identidad de prueba autorizada: CRUD de cuentas y categorías, aislamiento entre dos usuarios, creación atómica de las 11 categorías y límites. Solo están cubiertas por pruebas locales.
+- Validar las pantallas en Android contra `controlgastos-api-dev` (incluye teclado numérico y botón «atrás»). Estos pendientes no bloquean el avance hacia la Fase 3.
+- Fase 3: activar `categoryHasTransactions` con la tabla `transactions` y `ON DELETE RESTRICT` en `category_id`; exponer `balance` en las cuentas.
+- Comprobación de límites con COUNT + INSERT no atómica (aceptada, Decisión 2B.1 D6).
+- PR: el trabajo está versionado en `feat/fase2b-cuentas-categorias`; el PR no se ha creado.
 
 No se realizarán despliegues automáticos por fusionar a main.
 El entorno de producción requiere aprobación expresa.

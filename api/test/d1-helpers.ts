@@ -145,3 +145,40 @@ export async function readInvariants(db: D1Database): Promise<{
     successorsOfOtherFamily: mismatched?.n ?? -1,
   };
 }
+
+export async function insertAccount(
+  db: D1Database,
+  userId: string,
+  overrides: Row = {},
+): Promise<string> {
+  const row: Row = {
+    id: uuid(),
+    user_id: userId,
+    nombre: 'Cuenta de prueba',
+    created_at: iso(NOW),
+    updated_at: iso(NOW),
+    ...overrides,
+  };
+  await insertRow(db, 'accounts', row);
+  return row.id as string;
+}
+
+export async function insertCategory(
+  db: D1Database,
+  accountId: string,
+  overrides: Row = {},
+): Promise<string> {
+  const row: Row = {
+    id: uuid(),
+    account_id: accountId,
+    nombre: `Categoría ${uuid()}`.slice(0, 40),
+    tipo: 'egreso',
+    icono: 'tag',
+    color: '#6B7280',
+    created_at: iso(NOW),
+    updated_at: iso(NOW),
+    ...overrides,
+  };
+  await insertRow(db, 'categories', row);
+  return row.id as string;
+}

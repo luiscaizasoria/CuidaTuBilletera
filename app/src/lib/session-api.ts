@@ -24,7 +24,7 @@ export function classifyFailure(status: number, code?: string): AuthErrorKind {
   return 'unknown'; // 400, 413 y el resto
 }
 
-async function request(
+export async function request(
   fetchImpl: typeof fetch,
   url: string,
   init: RequestInit,
@@ -42,7 +42,7 @@ async function request(
 }
 
 // Lee solo error.code (validado por patrón). El message del cuerpo nunca se lee ni se propaga.
-async function readErrorCode(response: Response): Promise<string | undefined> {
+export async function readErrorCode(response: Response): Promise<string | undefined> {
   try {
     const data: unknown = await response.json();
     const error = (data as { error?: unknown } | null)?.error;

@@ -41,8 +41,11 @@ describe('esquema creado por la migración 0001', () => {
   });
 
   it('registra la migración aplicada con el nombre del archivo', async () => {
-    const { results } = await db.prepare('SELECT name FROM d1_migrations').all<{ name: string }>();
-    expect(results).toHaveLength(1);
+    const { results } = await db
+      .prepare('SELECT name FROM d1_migrations ORDER BY id')
+      .all<{ name: string }>();
+    // La 0002 (cuentas y categorías) se prueba en accounts-schema.test.ts.
+    expect(results).toHaveLength(2);
     expect(results[0]?.name).toMatch(/^0001_users_refresh_tokens(\.sql)?$/);
   });
 

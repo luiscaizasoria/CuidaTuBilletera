@@ -5,11 +5,12 @@ import { AuthProvider, useAuth } from './hooks/use-auth';
 import { createAuthService, type AuthService } from './lib/auth-service';
 import { readConfig } from './lib/config';
 import { createGoogleProvider } from './lib/google-auth';
+import { createResourcesApi, type ResourcesApi } from './lib/resources-api';
 import { createSessionApi } from './lib/session-api';
 import { secureSessionStorage } from './lib/session-storage';
 import ConfigMissingScreen from './screens/ConfigMissingScreen';
-import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
+import MainNavigator from './screens/MainNavigator';
 
 function createDefaultService(): AuthService | null {
   const config = readConfig();
@@ -21,7 +22,12 @@ function createDefaultService(): AuthService | null {
   });
 }
 
-function Root() {
+function createDefaultResourcesApi(): ResourcesApi {
+  // Sin configuración la app ni siquiera llega aquí (ConfigMissingScreen); '' solo aplica en pruebas.
+  return createResourcesApi(readConfig()?.apiUrl ?? '');
+}
+
+function Root({ api }: { api: ResourcesApi }) {
   const { status } = useAuth();
 
   if (status === 'initializing') {
@@ -32,18 +38,29 @@ function Root() {
     );
   }
   // Sin disponibilidad temporal la sesión se conserva: se muestra la pantalla principal con reintento.
-  return status === 'authenticated' || status === 'unavailable' ? <HomeScreen /> : <LoginScreen />;
+  return status === 'authenticated' || status === 'unavailable' ? (
+    <MainNavigator api={api} />
+  ) : (
+    <LoginScreen />
+  );
 }
 
 // `service` solo se inyecta en pruebas; en la app se construye con la configuración real.
-export default function App({ service }: { service?: AuthService }) {
+export default function App({
+  service,
+  resourcesApi,
+}: {
+  service?: AuthService;
+  resourcesApi?: ResourcesApi;
+}) {
   const resolved = useMemo(() => service ?? createDefaultService(), [service]);
+  const api = useMemo(() => resourcesApi ?? createDefaultResourcesApi(), [resourcesApi]);
 
   return (
     <>
       {resolved ? (
         <AuthProvider service={resolved}>
-          <Root />
+          <Root api={api} />
         </AuthProvider>
       ) : (
         <ConfigMissingScreen />
