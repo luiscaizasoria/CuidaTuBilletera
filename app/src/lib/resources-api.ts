@@ -68,6 +68,25 @@ export interface UpdateTransactionInput {
   nota?: string | null;
 }
 
+// Contrato de docs/003 (Decisión 4.1): solo los días con movimientos vigentes, en centavos.
+export interface CalendarDay {
+  fecha: string;
+  ingresos: number;
+  gastos: number;
+  cantidad: number;
+}
+
+export interface CalendarMonth {
+  accountId: string;
+  month: string; // AAAA-MM
+  days: CalendarDay[];
+}
+
+export interface GetCalendarOptions {
+  accountId: string;
+  month: string;
+}
+
 export interface Page<T> {
   items: T[];
   page: number;
@@ -147,6 +166,7 @@ export interface ResourcesApi {
     input: UpdateTransactionInput,
   ): Promise<Transaction>;
   deleteTransaction(accessToken: string, id: string): Promise<void>;
+  getCalendar(accessToken: string, options: GetCalendarOptions): Promise<CalendarMonth>;
 }
 
 // 401 -> AuthError 'rejected' (authorizedCall renueva y reintenta). 429/5xx -> 'server'.
@@ -251,6 +271,42 @@ function parseTransaction(value: unknown): Transaction {
     return invalid();
   }
   return { id, accountId, categoryId, tipo, monto, fecha, nota, createdAt, updatedAt };
+}
+
+function parseCalendar(
+  data: Record<string, unknown>,
+  accountId: string,
+  month: string,
+): CalendarMonth {
+  if (data.accountId !== accountId || data.month !== month || !Array.isArray(data.days)) {
+    return invalid();
+  }
+  if (data.days.length > 31) return invalid();
+  let previous = '';
+  const days = data.days.map((value: unknown): CalendarDay => {
+    if (!isRecord(value)) return invalid();
+    const { fecha, ingresos, gastos, cantidad } = value;
+    if (
+      typeof fecha !== 'string' ||
+      !isValidDateString(fecha) ||
+      !fecha.startsWith(`${month}-`) ||
+      fecha <= previous ||
+      typeof ingresos !== 'number' ||
+      !Number.isSafeInteger(ingresos) ||
+      ingresos < 0 ||
+      typeof gastos !== 'number' ||
+      !Number.isSafeInteger(gastos) ||
+      gastos < 0 ||
+      typeof cantidad !== 'number' ||
+      !Number.isSafeInteger(cantidad) ||
+      cantidad < 1
+    ) {
+      return invalid();
+    }
+    previous = fecha;
+    return { fecha, ingresos, gastos, cantidad };
+  });
+  return { accountId, month, days };
 }
 
 function parsePage<T>(data: Record<string, unknown>, parseItem: (value: unknown) => T): Page<T> {
@@ -396,6 +452,15 @@ export function createResourcesApi(baseUrl: string, fetchImpl: typeof fetch = fe
     async deleteTransaction(accessToken, transactionId) {
       const response = await call(accessToken, `/transactions/${id(transactionId)}`, 'DELETE');
       if (response.status !== 204) invalid();
+    },
+
+    async getCalendar(accessToken, options) {
+      const response = await call(
+        accessToken,
+        `/calendar${query({ account_id: options.accountId, month: options.month })}`,
+        'GET',
+      );
+      return parseCalendar(await readJson(response), options.accountId, options.month);
     },
   };
 }

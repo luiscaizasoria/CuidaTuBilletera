@@ -76,7 +76,7 @@ export interface TransactionsQuery {
 }
 
 // Un parámetro repetido o vacío es inválido; los desconocidos se ignoran.
-function collectQuery(c: Context, keys: readonly string[]): Record<string, string> {
+export function collectQuery(c: Context, keys: readonly string[]): Record<string, string> {
   const raw: Record<string, string> = {};
   for (const key of keys) {
     const values = c.req.queries(key);
@@ -142,4 +142,24 @@ export function parseListQuery(
 export function requireUuidParam(value: string): string {
   if (!UUID_LOWERCASE.test(value)) throw resourceNotFound();
   return value;
+}
+
+const calendarQuerySchema = z.object({
+  account_id: uuidSchema,
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .refine((value) => isValidTransactionDate(`${value}-01`)),
+});
+
+export interface CalendarQuery {
+  accountId: string;
+  month: string;
+}
+
+// Query de GET /calendar: account_id UUID y month AAAA-MM (2000-01 a 2100-12), ambos obligatorios.
+export function parseCalendarQuery(c: Context): CalendarQuery {
+  const parsed = calendarQuerySchema.safeParse(collectQuery(c, ['account_id', 'month']));
+  if (!parsed.success) throw invalidRequest();
+  return { accountId: parsed.data.account_id, month: parsed.data.month };
 }

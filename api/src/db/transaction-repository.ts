@@ -209,3 +209,35 @@ export async function voidTransaction(
     .run();
   return result.meta.changes > 0;
 }
+
+export interface DailyTotalsRow {
+  fecha: string;
+  ingresos: number;
+  gastos: number;
+  cantidad: number;
+}
+
+// Totales por día (solo movimientos vigentes) de una cuenta del usuario en un mes AAAA-MM. Solo
+// devuelve los días con movimientos, en orden ascendente. La fecha es texto AAAA-MM-DD, así que
+// el rango [AAAA-MM-01, AAAA-MM-31] cubre el mes completo. Usa ix_transactions_account_fecha.
+export async function dailyTotals(
+  db: D1Database,
+  userId: string,
+  accountId: string,
+  month: string,
+): Promise<DailyTotalsRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT t.fecha,
+              COALESCE(SUM(CASE WHEN t.tipo = 'ingreso' THEN t.monto END), 0) AS ingresos,
+              COALESCE(SUM(CASE WHEN t.tipo = 'gasto' THEN t.monto END), 0) AS gastos,
+              count(*) AS cantidad
+         FROM transactions t JOIN accounts a ON a.id = t.account_id
+        WHERE t.account_id = ?1 AND a.user_id = ?2 AND t.deleted_at IS NULL
+          AND t.fecha >= ?3 AND t.fecha <= ?4
+        GROUP BY t.fecha ORDER BY t.fecha`,
+    )
+    .bind(accountId, userId, `${month}-01`, `${month}-31`)
+    .all<DailyTotalsRow>();
+  return results;
+}

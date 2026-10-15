@@ -60,17 +60,26 @@ export function ErrorBox({
   message,
   onRetry,
   retryLabel = 'Reintentar',
+  retryAccessibilityLabel,
 }: {
   message: string;
   onRetry?: () => void;
   retryLabel?: string;
+  retryAccessibilityLabel?: string;
 }) {
   return (
     <View style={styles.errorBox}>
       <Text accessibilityRole="alert" style={styles.errorText}>
         {message}
       </Text>
-      {onRetry ? <Button label={retryLabel} onPress={onRetry} variant="primary" /> : null}
+      {onRetry ? (
+        <Button
+          label={retryLabel}
+          accessibilityLabel={retryAccessibilityLabel}
+          onPress={onRetry}
+          variant="primary"
+        />
+      ) : null}
     </View>
   );
 }

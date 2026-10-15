@@ -21,3 +21,21 @@ export function formatCents(cents: number): string {
   const fraction = String(abs % 100).padStart(2, '0');
   return `${cents < 0 ? '-' : ''}$${whole}.${fraction}`;
 }
+
+// Importe compacto para celdas del calendario: trunca, nunca redondea.
+// Ejemplos: 4550 -> "45", 120000 -> "1.2k", 99999900 -> "999k", 0 -> "0", 50 -> "<1".
+// Un valor negativo o no seguro se muestra como "—".
+export function formatCompactCents(cents: number): string {
+  if (!Number.isSafeInteger(cents) || cents < 0) return '—';
+  const dollars = Math.floor(cents / 100);
+  if (cents > 0 && dollars === 0) return '<1';
+  if (dollars < 1000) return String(dollars);
+  const scale = (divisor: number, suffix: string) => {
+    const tenths = Math.floor(dollars / (divisor / 10));
+    const rest = tenths % 10;
+    return `${Math.floor(tenths / 10)}${rest === 0 ? '' : `.${rest}`}${suffix}`;
+  };
+  if (dollars < 1_000_000) return scale(1000, 'k');
+  if (dollars < 1_000_000_000) return scale(1_000_000, 'M');
+  return scale(1_000_000_000, 'B');
+}

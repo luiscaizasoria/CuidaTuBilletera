@@ -1,4 +1,4 @@
-import { formatCents, parseCentsFromInput } from './money';
+import { formatCents, formatCompactCents, parseCentsFromInput } from './money';
 
 describe('parseCentsFromInput', () => {
   it.each([
@@ -80,5 +80,42 @@ describe('formatCents', () => {
     for (const cents of [0, 1, 99, 100, 1250, -1250, 99999999]) {
       expect(parseCentsFromInput(formatCents(cents).replace('$', ''))).toBe(cents);
     }
+  });
+});
+
+describe('formatCompactCents', () => {
+  it.each([
+    [0, '0'],
+    [1, '<1'],
+    [99, '<1'],
+    [100, '1'],
+    [199, '1'],
+    [4550, '45'],
+    [99_999, '999'],
+    [100_000, '1k'],
+    [120_000, '1.2k'],
+    [129_999, '1.2k'],
+    [199_999, '1.9k'],
+    [99_900_000, '999k'],
+    [99_999_999, '999.9k'],
+    [100_000_000, '1M'],
+    [123_456_789, '1.2M'],
+    [99_999_999_999, '999.9M'],
+    [100_000_000_000, '1B'],
+    [250_000_000_000, '2.5B'],
+  ])('%i -> %s', (cents, expected) => {
+    expect(formatCompactCents(cents)).toBe(expected);
+  });
+
+  it('trunca, nunca redondea', () => {
+    expect(formatCompactCents(199_999)).toBe('1.9k');
+    expect(formatCompactCents(99_999)).toBe('999');
+  });
+
+  it('negativos y valores no seguros se muestran como guion', () => {
+    expect(formatCompactCents(-1)).toBe('—');
+    expect(formatCompactCents(1.5)).toBe('—');
+    expect(formatCompactCents(Number.NaN)).toBe('—');
+    expect(formatCompactCents(Number.MAX_SAFE_INTEGER + 1)).toBe('—');
   });
 });

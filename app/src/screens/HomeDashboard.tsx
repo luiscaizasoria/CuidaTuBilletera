@@ -13,6 +13,7 @@ export interface HomeDashboardProps {
   onCreateAccount: () => void;
   onNewTransaction: (account: Account) => void;
   onOpenHistory: (account: Account) => void;
+  onOpenCalendar: (account: Account) => void;
   onEditTransaction: (account: Account, transaction: Transaction) => void;
 }
 
@@ -69,6 +70,7 @@ export default function HomeDashboard(props: HomeDashboardProps) {
           onPress={() => props.onNewTransaction(selected)}
         />
         <Button label="Ver historial" onPress={() => props.onOpenHistory(selected)} />
+        <Button label="Ver calendario" onPress={() => props.onOpenCalendar(selected)} />
       </View>
       <RecentTransactions key={selected.id} account={selected} {...props} />
     </View>

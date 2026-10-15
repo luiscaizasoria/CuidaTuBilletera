@@ -9,6 +9,7 @@ import {
   type Transaction,
   type TransactionType,
 } from '../lib/resources-api';
+import { mergeById } from '../lib/list-utils';
 import { resourceErrorMessage } from '../lib/resources-messages';
 import TransactionRow, { categoryMap } from './TransactionRow';
 import { Button, Chip, ErrorBox, screenStyles as s } from './ui';
@@ -28,12 +29,6 @@ type ListState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'ready'; items: Transaction[]; page: number; total: number };
-
-// Une la página nueva a la lista sin repetir ids (la paginación por desplazamiento puede repetir filas).
-function mergeById(current: Transaction[], incoming: Transaction[]): Transaction[] {
-  const seen = new Set(current.map((item) => item.id));
-  return [...current, ...incoming.filter((item) => !seen.has(item.id))];
-}
 
 export default function HistoryScreen({
   account,

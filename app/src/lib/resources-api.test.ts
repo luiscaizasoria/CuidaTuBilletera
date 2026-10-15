@@ -389,3 +389,81 @@ describe('createResourcesApi: movimientos', () => {
     }),
   );
 });
+
+describe('createResourcesApi: calendario', () => {
+  const ACC = '11111111-1111-4111-8111-111111111111';
+  const MONTH = '2026-10';
+  const day = (fecha: string, extra: object = {}) => ({
+    fecha,
+    ingresos: 150_000,
+    gastos: 4_550,
+    cantidad: 3,
+    ...extra,
+  });
+  const body = (days: unknown[] = [day('2026-10-01'), day('2026-10-15')], extra: object = {}) => ({
+    accountId: ACC,
+    month: MONTH,
+    days,
+    ...extra,
+  });
+  const get = (api: ReturnType<typeof make>['api']) =>
+    api.getCalendar(TOKEN, { accountId: ACC, month: MONTH });
+
+  it('GET /calendar con account_id y month, cabecera Bearer y respuesta', async () => {
+    const { api, call } = make(async () => res(200, body()));
+    await expect(get(api)).resolves.toEqual(body());
+    const [url, init] = call();
+    expect(url).toBe(`https://api.test/calendar?account_id=${ACC}&month=2026-10`);
+    expect(init.method).toBe('GET');
+    expect(init.headers).toEqual({ Authorization: `Bearer ${TOKEN}` });
+    expect(init.body).toBeUndefined();
+  });
+
+  it('acepta un mes sin movimientos y ceros', async () => {
+    const empty = make(async () => res(200, body([])));
+    await expect(get(empty.api)).resolves.toEqual(body([]));
+    const zeros = make(async () => res(200, body([day('2026-10-02', { ingresos: 0 })])));
+    await expect(get(zeros.api)).resolves.toMatchObject({ days: [{ ingresos: 0, gastos: 4550 }] });
+  });
+
+  it('401 -> AuthError rejected; 400 y 404 -> ApiRequestError', async () => {
+    const unauthorized = make(async () => res(401, errBody('UNAUTHORIZED')));
+    await expect(get(unauthorized.api)).rejects.toMatchObject({ kind: 'rejected', status: 401 });
+    for (const [status, code] of [
+      [400, 'INVALID_REQUEST'],
+      [404, 'NOT_FOUND'],
+    ] as const) {
+      const { api } = make(async () => res(status, errBody(code)));
+      const error = await get(api).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ApiRequestError);
+      expect(error).toMatchObject({ status, code });
+    }
+  });
+
+  const bad = (name: string, payload: unknown) =>
+    it(`respuesta inesperada: ${name}`, async () => {
+      const { api } = make(async () => res(200, payload));
+      await expect(get(api)).rejects.toMatchObject({ name: 'AuthError', kind: 'unknown' });
+    });
+
+  bad('cuerpo lista', []);
+  bad('sin days', { accountId: ACC, month: MONTH });
+  bad('days no es lista', { accountId: ACC, month: MONTH, days: {} });
+  bad('mes distinto', body([], { month: '2026-09' }));
+  bad('cuenta distinta', body([], { accountId: 'otra' }));
+  bad('más de 31 días', body(Array.from({ length: 32 }, () => day('2026-10-01'))));
+  bad('fecha fuera del mes', body([day('2026-11-01')]));
+  bad('fecha imposible', body([day('2026-10-32')]));
+  bad('fechas desordenadas', body([day('2026-10-15'), day('2026-10-01')]));
+  bad('fecha repetida', body([day('2026-10-01'), day('2026-10-01')]));
+  bad('día no objeto', body(['2026-10-01']));
+  bad('ingresos negativos', body([day('2026-10-01', { ingresos: -1 })]));
+  bad('gastos negativos', body([day('2026-10-01', { gastos: -100 })]));
+  bad('ingresos decimales', body([day('2026-10-01', { ingresos: 1.5 })]));
+  bad('gastos como texto', body([day('2026-10-01', { gastos: '10' })]));
+  bad('importe no seguro', body([day('2026-10-01', { ingresos: Number.MAX_SAFE_INTEGER + 1 })]));
+  bad('ingresos ausentes', body([day('2026-10-01', { ingresos: undefined })]));
+  bad('cantidad cero', body([day('2026-10-01', { cantidad: 0 })]));
+  bad('cantidad negativa', body([day('2026-10-01', { cantidad: -2 })]));
+  bad('cantidad decimal', body([day('2026-10-01', { cantidad: 1.5 })]));
+});

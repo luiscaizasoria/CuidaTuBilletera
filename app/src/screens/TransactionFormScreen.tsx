@@ -37,11 +37,14 @@ export default function TransactionFormScreen({
   account,
   api,
   transaction,
+  initialFecha,
   onDone,
 }: {
   account: Account;
   api: ResourcesApi;
   transaction?: Transaction | undefined;
+  // Fecha preseleccionada al crear (p. ej. el día elegido en el calendario); si no es válida, hoy.
+  initialFecha?: string | undefined;
   onDone: () => void;
 }) {
   const { authorizedCall } = useAuth();
@@ -49,7 +52,10 @@ export default function TransactionFormScreen({
   const [montoText, setMontoText] = useState(transaction ? centsToInput(transaction.monto) : '');
   const [tipo, setTipo] = useState<TransactionType>(transaction?.tipo ?? 'gasto');
   const [categoryId, setCategoryId] = useState<string | null>(transaction?.categoryId ?? null);
-  const [fecha, setFecha] = useState(transaction?.fecha ?? todayLocal());
+  const [fecha, setFecha] = useState(
+    transaction?.fecha ??
+      (initialFecha !== undefined && isValidDateString(initialFecha) ? initialFecha : todayLocal()),
+  );
   const [nota, setNota] = useState(transaction?.nota ?? '');
   const [errors, setErrors] = useState<{ monto?: string; categoria?: string; fecha?: string }>({});
   const mutation = useMutation();

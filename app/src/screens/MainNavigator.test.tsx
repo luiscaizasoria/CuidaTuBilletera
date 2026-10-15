@@ -195,4 +195,80 @@ describe('MainNavigator', () => {
       expect(api.deleteTransaction).toHaveBeenCalledWith('tok', 'tx-1');
     });
   });
+  describe('calendario', () => {
+    const twoAccounts = [
+      account({ id: 'acc-1', nombre: 'Efectivo' }),
+      account({ id: 'acc-2', nombre: 'Banco', saldo: 500 }),
+    ];
+    const apiWithCalendar = (accounts = twoAccounts) =>
+      fakeResourcesApi({
+        listAccounts: jest.fn(async () => pageOf(accounts)),
+        getCalendar: jest.fn(async (_t, { accountId, month }) => ({
+          accountId,
+          month,
+          days: [],
+        })),
+      });
+    const back = async () => {
+      await act(async () => {
+        pressBack();
+      });
+    };
+
+    it('abre el calendario desde Inicio con la cuenta mostrada', async () => {
+      const api = apiWithCalendar();
+      await render(<MainNavigator api={api} />);
+      await fireEvent.press(await screen.findByText('Ver calendario'));
+      expect(await screen.findByText('Calendario de Efectivo')).toBeTruthy();
+      await waitFor(() =>
+        expect(api.getCalendar).toHaveBeenCalledWith('tok', {
+          accountId: 'acc-1',
+          month: expect.stringMatching(/^\d{4}-\d{2}$/),
+        }),
+      );
+    });
+
+    it('conserva la cuenta seleccionada al abrir el calendario', async () => {
+      const api = apiWithCalendar();
+      await render(<MainNavigator api={api} />);
+      await fireEvent.press(await screen.findByRole('radio', { name: 'Cuenta Banco' }));
+      await screen.findByText('Saldo de Banco');
+      await fireEvent.press(screen.getByText('Ver calendario'));
+      expect(await screen.findByText('Calendario de Banco')).toBeTruthy();
+      await waitFor(() => expect(api.getCalendar).toHaveBeenCalled());
+      for (const call of api.getCalendar.mock.calls) expect(call[1].accountId).toBe('acc-2');
+    });
+
+    it('el botón Atrás de Android vuelve del calendario a Inicio', async () => {
+      await render(<MainNavigator api={apiWithCalendar()} />);
+      await fireEvent.press(await screen.findByText('Ver calendario'));
+      await screen.findByText('Calendario de Efectivo');
+      let handled = false;
+      await act(async () => {
+        handled = pressBack() === true;
+      });
+      expect(handled).toBe(true);
+      expect(await screen.findByText('Saldo de Efectivo')).toBeTruthy();
+      expect(screen.queryByText('Calendario de Efectivo')).toBeNull();
+      expect(pressBack()).toBe(false);
+    });
+
+    it('tras desmontar y remontar con otro usuario no queda rastro de la sesión anterior', async () => {
+      const first = await render(<MainNavigator api={apiWithCalendar()} />);
+      await fireEvent.press(await screen.findByRole('radio', { name: 'Cuenta Banco' }));
+      await fireEvent.press(await screen.findByText('Ver calendario'));
+      await screen.findByText('Calendario de Banco');
+      await first.unmount();
+
+      const otherApi = apiWithCalendar([account({ id: 'acc-7', nombre: 'Ahorros' })]);
+      await render(<MainNavigator api={otherApi} />);
+      expect(await screen.findByText('Saldo de Ahorros')).toBeTruthy();
+      expect(screen.queryByText(/Calendario de/)).toBeNull();
+      expect(screen.queryByText(/Banco|Efectivo/)).toBeNull();
+      expect(otherApi.getCalendar).not.toHaveBeenCalled();
+      // La pila vuelve a Inicio: Atrás no se intercepta.
+      expect(pressBack()).toBe(false);
+      await back();
+    });
+  });
 });

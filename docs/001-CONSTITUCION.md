@@ -65,7 +65,7 @@ Esquema (texto plano):
 
 | Capa | Elección |
 | --- | --- |
-| App | React Native con Expo, TypeScript, React Navigation, TanStack Query, `react-native-calendars`, `@react-native-google-signin/google-signin` |
+| App | React Native con Expo, TypeScript, React Navigation, TanStack Query, `@react-native-google-signin/google-signin`; cuadrícula mensual del calendario con componentes propios de React Native (Decisión 4.1 de docs/003) |
 | API | Cloudflare Workers, Hono, TypeScript, validación de entradas con Zod |
 | Base de datos | Cloudflare D1 (SQLite), migraciones versionadas con wrangler |
 | Compilación móvil | EAS Build (perfil gratuito) para generar el APK |
@@ -169,7 +169,7 @@ Todas las rutas, salvo las de autenticación, exigen JWT. Las respuestas de `/au
 | `GET /accounts/:id/categories`, `POST /accounts/:id/categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | Gestión de categorías por cuenta; eliminación solo si no tienen movimientos asociados |
 | `GET /transactions` | Filtros: cuenta, tipo, categoría, desde, hasta, página |
 | `POST /transactions`, `PATCH /transactions/:id`, `DELETE /transactions/:id` | Gestión de movimientos; PATCH no cambia tipo ni categoría y DELETE realiza anulación lógica |
-| `GET /calendar?account_id=&month=AAAA-MM` | Totales por día para pintar el calendario |
+| `GET /calendar?account_id=&month=AAAA-MM` | Totales por día para pintar el calendario: ingresos, gastos y cantidad por día con movimientos vigentes del mes, en centavos |
 | `GET /reports/summary` | Ingresos, gastos y balance en un rango |
 | `GET /reports/by-category` | Totales por categoría en un rango |
 | `GET /reports/by-period?group=month` o `group=year` | Serie por mes o por año |
