@@ -175,6 +175,9 @@ export function createAuthService({
   // terminó (p. ej. falló por red) mientras su GET /me estaba en vuelo.
   let cycleSeq = 0;
   let restoring: Promise<void> | null = null;
+  // Identifica el inicio de sesión interactivo en vuelo (null si no hay). Mientras exista,
+  // restore() no corre: su setState({ busy: false }) liberaría `busy` con signIn() aún esperando.
+  let signInToken: object | null = null;
   let lastRecoveryAt: number | null = null;
   // El logout no pudo borrar el almacenamiento: impide que restore() reviva esa sesión. Solo se
   // lee y escribe dentro de tareas de la cola; un guardado correcto de una sesión nueva la apaga.
@@ -922,6 +925,8 @@ export function createAuthService({
   }
 
   function restore(): Promise<void> {
+    // Un inicio de sesión interactivo en vuelo manda: restore() no corre ni toca lastAttemptAt.
+    if (signInToken !== null) return Promise.resolve();
     if (restoring) return restoring;
     // Reintentar repetido: dentro del intervalo mínimo no se vuelve a la red ni a rotar.
     if (
@@ -942,8 +947,12 @@ export function createAuthService({
   }
 
   async function signIn() {
-    if (state.busy) return; // evita pulsaciones repetidas
+    // evita pulsaciones repetidas y no compite con una restauración en curso
+    if (state.busy || restoring) return;
     const epoch0 = epoch;
+    // Mismo turno síncrono que setState({ busy: true }): sin await antes.
+    const mine = {};
+    signInToken = mine;
     setState({ busy: true, error: null, notice: null });
     try {
       const result = await withTimeout(() => google.signIn(), GOOGLE_INTERACTIVE_TIMEOUT_MS);
@@ -970,6 +979,9 @@ export function createAuthService({
     } catch (error) {
       if (epoch !== epoch0) return;
       setState({ busy: false, error: kindOf(error) });
+    } finally {
+      // Un signIn viejo (invalidado por signOut) no libera el token de uno nuevo.
+      if (signInToken === mine) signInToken = null;
     }
   }
 
@@ -977,6 +989,9 @@ export function createAuthService({
     // Parte síncrona: el estado local queda cerrado antes de tocar disco o red.
     const refreshSnapshot = session?.refreshToken ?? null;
     epoch += 1;
+    signInToken = null; // el cierre invalida el signIn en vuelo: restore() vuelve a poder correr
+    // Un restore() obsoleto no debe bloquear el siguiente signIn(); su finally compara `restoring === run`.
+    restoring = null;
     const mine = epoch;
     setSession(null, 0);
     cycle = null; // un ciclo anterior no debe acoger llamadas de una sesión posterior

@@ -34,3 +34,6 @@ export const errorHandler: ErrorHandler = (err, c) => {
   console.error('Error no controlado:', err instanceof Error ? err.name : typeof err);
   return c.json(errorBody('INTERNAL_ERROR', 'Error interno del servidor.'), 500);
 };
+
+// Recurso inexistente o ajeno: la misma respuesta para no revelar su existencia.
+export const resourceNotFound = () => new ApiError(404, 'NOT_FOUND', 'Recurso no encontrado.');
