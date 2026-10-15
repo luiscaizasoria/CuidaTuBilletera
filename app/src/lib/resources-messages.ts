@@ -5,11 +5,14 @@ import { ApiRequestError } from './resources-api';
 const API_CODE_MESSAGES: Record<string, string> = {
   INVALID_REQUEST: 'Los datos enviados no son válidos. Revísalos e inténtalo de nuevo.',
   NOT_FOUND: 'El elemento ya no existe. Actualiza la lista.',
-  ACCOUNT_ARCHIVED: 'La cuenta está archivada. Desarchívala para modificar sus categorías.',
+  ACCOUNT_ARCHIVED: 'La cuenta está archivada. Desarchívala para modificarla.',
   CATEGORY_NAME_TAKEN: 'Ya existe una categoría de ese tipo con ese nombre.',
   CATEGORY_IN_USE:
     'La categoría tiene movimientos y no puede eliminarse. Puedes archivarla en su lugar.',
   LIMIT_REACHED: 'Alcanzaste el límite permitido. Archiva o elimina elementos para continuar.',
+  CATEGORY_ARCHIVED: 'La categoría está archivada. Elige otra categoría.',
+  CATEGORY_MISMATCH: 'La categoría no corresponde a esta cuenta o al tipo de movimiento.',
+  TRANSACTION_VOIDED: 'El movimiento ya fue anulado y no puede modificarse.',
   PAYLOAD_TOO_LARGE: 'Los datos enviados son demasiado grandes.',
 };
 

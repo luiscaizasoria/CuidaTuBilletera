@@ -5,6 +5,7 @@ import { authRoutes, type AuthRouteDeps } from './routes/auth';
 import { accountRoutes } from './routes/accounts';
 import { categoryRoutes } from './routes/categories';
 import { meRoutes } from './routes/me';
+import { transactionRoutes } from './routes/transactions';
 import type { ResourceDeps } from './services/resource-deps';
 import type { AuthBindings } from './lib/auth-config';
 
@@ -26,6 +27,8 @@ export function createApp(deps: AppDeps = {}) {
   app.use('/accounts', noStore);
   app.use('/accounts/*', noStore);
   app.use('/categories/*', noStore);
+  app.use('/transactions', noStore);
+  app.use('/transactions/*', noStore);
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
   app.route('/', authRoutes(deps));
@@ -37,6 +40,7 @@ export function createApp(deps: AppDeps = {}) {
   };
   app.route('/', accountRoutes(resourceDeps, deps.now));
   app.route('/', categoryRoutes(resourceDeps, deps.now));
+  app.route('/', transactionRoutes(resourceDeps, deps.now));
 
   app.notFound(notFoundHandler);
   app.onError(errorHandler);

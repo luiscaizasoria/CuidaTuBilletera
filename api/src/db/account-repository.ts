@@ -11,6 +11,12 @@ export interface AccountRow {
   updated_at: string;
 }
 
+// Cuenta con los agregados de sus movimientos vigentes (los anulados no cuentan), en centavos.
+export interface AccountWithTotalsRow extends AccountRow {
+  ingresos: number;
+  gastos: number;
+}
+
 export interface Page<T> {
   items: T[];
   total: number;
@@ -30,7 +36,14 @@ export interface NewAccount {
   now: Date;
 }
 
-const ACCOUNT_COLUMNS = 'id, user_id, nombre, saldo_inicial, archivada, created_at, updated_at';
+// Cuenta + agregados en una sola consulta (sin N+1). `deleted_at IS NULL` va en el ON y no en
+// el WHERE: así una cuenta sin movimientos (o solo con anulados) sigue apareciendo (LEFT JOIN).
+const TOTALS_SELECT = `SELECT a.id, a.user_id, a.nombre, a.saldo_inicial, a.archivada, a.created_at,
+          a.updated_at,
+          COALESCE(SUM(CASE WHEN t.tipo = 'ingreso' THEN t.monto END), 0) AS ingresos,
+          COALESCE(SUM(CASE WHEN t.tipo = 'gasto' THEN t.monto END), 0) AS gastos
+     FROM accounts a
+     LEFT JOIN transactions t ON t.account_id = a.id AND t.deleted_at IS NULL`;
 
 export async function countAccounts(db: D1Database, userId: string): Promise<number> {
   const row = await db
@@ -44,14 +57,15 @@ export async function listAccounts(
   db: D1Database,
   userId: string,
   { page, pageSize, incluirArchivadas }: AccountListOptions,
-): Promise<Page<AccountRow>> {
+): Promise<Page<AccountWithTotalsRow>> {
   const archived = incluirArchivadas ? 1 : 0; // 1 = incluir todas; 0 = solo activas.
-  const [items, total] = await db.batch<AccountRow | { n: number }>([
+  const [items, total] = await db.batch<AccountWithTotalsRow | { n: number }>([
     db
       .prepare(
-        `SELECT ${ACCOUNT_COLUMNS} FROM accounts
-          WHERE user_id = ?1 AND (?2 = 1 OR archivada = 0)
-          ORDER BY created_at, id LIMIT ?3 OFFSET ?4`,
+        `${TOTALS_SELECT}
+          WHERE a.user_id = ?1 AND (?2 = 1 OR a.archivada = 0)
+          GROUP BY a.id
+          ORDER BY a.created_at, a.id LIMIT ?3 OFFSET ?4`,
       )
       .bind(userId, archived, pageSize, (page - 1) * pageSize),
     db
@@ -61,7 +75,7 @@ export async function listAccounts(
       .bind(userId, archived),
   ]);
   return {
-    items: (items?.results ?? []) as AccountRow[],
+    items: (items?.results ?? []) as AccountWithTotalsRow[],
     total: (total?.results[0] as { n: number } | undefined)?.n ?? 0,
   };
 }
@@ -70,11 +84,11 @@ export async function findAccount(
   db: D1Database,
   userId: string,
   id: string,
-): Promise<AccountRow | null> {
+): Promise<AccountWithTotalsRow | null> {
   return db
-    .prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ?1 AND user_id = ?2`)
+    .prepare(`${TOTALS_SELECT} WHERE a.id = ?1 AND a.user_id = ?2 GROUP BY a.id`)
     .bind(id, userId)
-    .first<AccountRow>();
+    .first<AccountWithTotalsRow>();
 }
 
 // Sentencia (sin ejecutar) para componerla en un db.batch junto con las categorías iniciales.
@@ -100,7 +114,7 @@ export async function updateAccount(
   id: string,
   patch: AccountPatch,
   now: Date,
-): Promise<AccountRow | null> {
+): Promise<AccountWithTotalsRow | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
   if (patch.nombre !== undefined) {
@@ -115,14 +129,14 @@ export async function updateAccount(
   sets.push(`updated_at = ?${values.length}`);
   values.push(id, userId);
   const idIndex = values.length - 1;
-  const [, selected] = await db.batch<AccountRow>([
+  const [, selected] = await db.batch<AccountWithTotalsRow>([
     db
       .prepare(
         `UPDATE accounts SET ${sets.join(', ')} WHERE id = ?${idIndex} AND user_id = ?${idIndex + 1}`,
       )
       .bind(...values),
     db
-      .prepare(`SELECT ${ACCOUNT_COLUMNS} FROM accounts WHERE id = ?1 AND user_id = ?2`)
+      .prepare(`${TOTALS_SELECT} WHERE a.id = ?1 AND a.user_id = ?2 GROUP BY a.id`)
       .bind(id, userId),
   ]);
   return selected?.results[0] ?? null;

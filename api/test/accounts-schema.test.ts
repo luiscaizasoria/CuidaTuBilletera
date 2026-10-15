@@ -41,6 +41,7 @@ describe('migración 0002', () => {
     expect(results.map((row) => row.name.replace(/\.sql$/, ''))).toEqual([
       '0001_users_refresh_tokens',
       '0002_accounts_categories',
+      '0003_transactions',
     ]);
     const { results: objects } = await db
       .prepare("SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")
@@ -48,7 +49,6 @@ describe('migración 0002', () => {
     expect(objects.map((row) => row.name)).toEqual(
       expect.arrayContaining(['accounts', 'categories', 'ix_accounts_user']),
     );
-    expect(objects.map((row) => row.name)).not.toContain('transactions');
   });
 
   it('las tablas arrancan vacías salvo lo insertado por la prueba', async () => {

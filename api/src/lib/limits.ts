@@ -16,3 +16,10 @@ export const CATEGORY_ICON_MAX = 40;
 
 // Rango seguro de JavaScript para montos en centavos (Number.MAX_SAFE_INTEGER).
 export const MAX_AMOUNT_CENTS = 9_007_199_254_740_991;
+
+// Movimientos (Decisión 3.1). Coinciden con los CHECK de api/migrations/0003_transactions.sql.
+export const MAX_TRANSACTION_AMOUNT_CENTS = 99_999_999_999;
+export const TRANSACTION_NOTE_MAX = 500;
+export const DEFAULT_TRANSACTIONS_PAGE_SIZE = 20;
+export const TRANSACTION_MIN_DATE = '2000-01-01';
+export const TRANSACTION_MAX_DATE = '2100-12-31';

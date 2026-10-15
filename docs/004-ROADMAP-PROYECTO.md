@@ -113,10 +113,27 @@ Alcance de la validación de la renovación:
 
 # Fase 3 - Movimientos
 
-[ ] Crear ingresos.
-[ ] Crear gastos.
-[ ] Historial.
-[ ] Filtros.
+[x] Crear ingresos. Implementado y probado en local (Decisión 3.1 de docs/003).
+[x] Crear gastos. Implementado y probado en local.
+[x] Historial. Implementado y probado en local (paginación 20/100, orden fecha DESC, created_at DESC, id DESC).
+[x] Filtros. Tipo, categoría y rango de fechas, implementados y probados en local.
+[x] Edición, anulación lógica y saldo calculado (`saldo` en cuentas y `GET /accounts/:id/balance`).
+
+Estado del primer incremento (rama `feat/fase3-movimientos`, sin commit; Pasos 326 y 327):
+
+- Implementación local: migración `api/migrations/0003_transactions.sql`, endpoints `POST/GET /transactions`, `PATCH/DELETE /transactions/:id` y `GET /accounts/:id/balance`; pantallas Android de Inicio (selector de cuenta, saldo y recientes), formulario de movimiento, Historial con filtros y anulación con confirmación. Sin dependencias nuevas.
+- Pruebas automatizadas: API **687/687** (19 archivos; 502 anteriores + 185 nuevas); app **808/808** (18 suites; 669 anteriores + 139 nuevas). `tsc`, ESLint y Prettier sin errores. `qa-engineer` APRUEBA: revisión contra el contrato, coherencia cliente-servidor y mutaciones de aislamiento, cálculo de saldo, tipo de categoría y filtro de anulados detectadas por las pruebas.
+- Migración 0003 en D1 DEV (Paso 327, 2026-10-15): **aplicada** una sola vez en `controlgastos-db-dev` (la lista de pendientes contenía solo 0003). `d1_migrations`: 0001, 0002 y 0003. Tabla `transactions` con 10 columnas y 0 filas, índices `ix_transactions_account_fecha` e `ix_transactions_account_category`, `category_id` con `ON DELETE RESTRICT` y `account_id` con `ON DELETE CASCADE`, CHECK de tipo y monto, `PRAGMA foreign_key_check` sin filas. Conteos sin cambios: users 1, refresh_tokens 6, accounts 0, categories 0.
+- API Fase 3 en `controlgastos-api-dev`: **desplegada** con `--env dev`, versión `e62adad2-f214-4bb0-b763-27a887e4b8ec` (100 % del tráfico), URL https://controlgastos-api-dev.luis-caiza-soria.workers.dev. `GET /health` 200; `GET/POST /transactions`, `PATCH/DELETE /transactions/:id` y `GET /accounts/:id/balance` sin credenciales responden 401 con `Cache-Control: no-store`; tokens inválidos o de firma falsa, 401 `INVALID_TOKEN` sin datos financieros; `qa-engineer` APRUEBA la validación remota (solo lectura). Producción no se tocó. La app exige el campo `saldo` de la API: ambas deben usarse juntas.
+- Android real: **no validado** (foco y teclado numérico del formulario, botón «atrás» y flujo completo contra DEV).
+- Pruebas autenticadas remotas de Fases 2B y 3 (CRUD, aislamiento entre usuarios, saldo, historial y FK real a través de la API): pendientes por no existir una identidad de prueba DEV autorizada.
+
+Riesgos y observaciones:
+
+- Inestabilidad por tiempos de espera de 5 s bajo carga: con todos los procesos de Jest o Vitest y otras tareas pesadas en paralelo se observaron fallos intermitentes (API 2 en una de dos corridas; app en 2 de 3). Con `-w 2` la app pasó 2 de 2 y las repeticiones sin carga pasaron completas. Es un riesgo para la integración continua; pendiente de decidir un ajuste de `maxWorkers` o de tiempos de espera.
+- El tipo `ajuste` no existe aún: llegará con la conciliación y exigirá reconstruir `transactions` en una migración posterior.
+- Suma de saldos limitada a enteros seguros de JavaScript (falla con 500 en lugar de devolver cifras imprecisas).
+- POST /transactions no es idempotente.
 
 ---
 

@@ -116,6 +116,7 @@ describe('POST /accounts', () => {
       id: expect.any(String),
       nombre: 'Billetera',
       saldoInicial: 12_345,
+      saldo: 12_345,
       archivada: false,
       createdAt: iso(NOW),
       updatedAt: iso(NOW),
@@ -341,6 +342,7 @@ describe('GET /accounts', () => {
       id: second,
       nombre: 'Segunda',
       saldoInicial: 0,
+      saldo: 0,
       archivada: true,
       createdAt: iso(plusMs(NOW, 1000)),
       updatedAt: iso(NOW),
@@ -397,7 +399,12 @@ describe('PATCH /accounts/:id', () => {
     const archived = await json(
       await call('PATCH', `/accounts/${account.id}`, token, { archivada: true }),
     );
-    expect(archived.account).toMatchObject({ archivada: true, nombre: 'Nueva', saldoInicial: 700 });
+    expect(archived.account).toMatchObject({
+      archivada: true,
+      nombre: 'Nueva',
+      saldoInicial: 700,
+      saldo: 700,
+    });
     const restored = await json(
       await call('PATCH', `/accounts/${account.id}`, token, { archivada: false, nombre: 'Otra' }),
     );
@@ -834,7 +841,7 @@ describe('DELETE /categories/:id', () => {
     expect((await guardedCall('DELETE', `/categories/${free!.id}`, token)).status).toBe(204);
   });
 
-  it('categoryHasTransactions devuelve false mientras no exista transactions (Fase 3)', async () => {
+  it('categoryHasTransactions es false sin movimientos y para una categoría inexistente', async () => {
     const { categories } = await createAccount();
     expect(await categoryHasTransactions(db, categories[0].id)).toBe(false);
     expect(await categoryHasTransactions(db, uuid())).toBe(false);

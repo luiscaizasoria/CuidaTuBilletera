@@ -1,4 +1,5 @@
 import { AuthError } from './auth-types';
+import { isValidDateString } from './dates';
 import { isUtcIsoDate, readErrorCode, request } from './session-api';
 
 // Contrato aprobado en docs/003 (Decisión 2B.1): JSON camelCase, errores { error: { code, message } }.
@@ -6,6 +7,7 @@ export interface Account {
   id: string;
   nombre: string;
   saldoInicial: number; // centavos
+  saldo: number; // centavos; calculado por la API (saldoInicial + ingresos - gastos)
   archivada: boolean;
   createdAt: string;
   updatedAt: string;
@@ -24,6 +26,46 @@ export interface Category {
   archivada: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export type TransactionType = 'ingreso' | 'gasto';
+
+// Contrato de docs/003 (Decisión 3.1). `monto` en centavos (> 0), `fecha` AAAA-MM-DD.
+export interface Transaction {
+  id: string;
+  accountId: string;
+  categoryId: string;
+  tipo: TransactionType;
+  monto: number;
+  fecha: string;
+  nota: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListTransactionsOptions {
+  accountId: string;
+  tipo?: TransactionType;
+  categoryId?: string;
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreateTransactionInput {
+  accountId: string;
+  categoryId: string;
+  tipo: TransactionType;
+  monto: number;
+  fecha: string;
+  nota?: string;
+}
+
+export interface UpdateTransactionInput {
+  monto?: number;
+  fecha?: string;
+  nota?: string | null;
 }
 
 export interface Page<T> {
@@ -94,6 +136,17 @@ export interface ResourcesApi {
   ): Promise<Category>;
   updateCategory(accessToken: string, id: string, input: UpdateCategoryInput): Promise<Category>;
   deleteCategory(accessToken: string, id: string): Promise<void>;
+  listTransactions(
+    accessToken: string,
+    options: ListTransactionsOptions,
+  ): Promise<Page<Transaction>>;
+  createTransaction(accessToken: string, input: CreateTransactionInput): Promise<Transaction>;
+  updateTransaction(
+    accessToken: string,
+    id: string,
+    input: UpdateTransactionInput,
+  ): Promise<Transaction>;
+  deleteTransaction(accessToken: string, id: string): Promise<void>;
 }
 
 // 401 -> AuthError 'rejected' (authorizedCall renueva y reintenta). 429/5xx -> 'server'.
@@ -129,19 +182,21 @@ const isString = (value: unknown): value is string => typeof value === 'string' 
 
 function parseAccount(value: unknown): Account {
   if (!isRecord(value)) return invalid();
-  const { id, nombre, saldoInicial, archivada, createdAt, updatedAt } = value;
+  const { id, nombre, saldoInicial, saldo, archivada, createdAt, updatedAt } = value;
   if (
     !isString(id) ||
     typeof nombre !== 'string' ||
     typeof saldoInicial !== 'number' ||
     !Number.isSafeInteger(saldoInicial) ||
+    typeof saldo !== 'number' ||
+    !Number.isSafeInteger(saldo) ||
     typeof archivada !== 'boolean' ||
     !isUtcIsoDate(createdAt) ||
     !isUtcIsoDate(updatedAt)
   ) {
     return invalid();
   }
-  return { id, nombre, saldoInicial, archivada, createdAt, updatedAt };
+  return { id, nombre, saldoInicial, saldo, archivada, createdAt, updatedAt };
 }
 
 function parseCategory(value: unknown): Category {
@@ -174,6 +229,28 @@ function parseCategory(value: unknown): Category {
     createdAt,
     updatedAt,
   };
+}
+
+function parseTransaction(value: unknown): Transaction {
+  if (!isRecord(value)) return invalid();
+  const { id, accountId, categoryId, tipo, monto, fecha, nota, createdAt, updatedAt } = value;
+  if (
+    !isString(id) ||
+    !isString(accountId) ||
+    !isString(categoryId) ||
+    (tipo !== 'ingreso' && tipo !== 'gasto') ||
+    typeof monto !== 'number' ||
+    !Number.isSafeInteger(monto) ||
+    monto <= 0 ||
+    typeof fecha !== 'string' ||
+    !isValidDateString(fecha) ||
+    !(nota === null || typeof nota === 'string') ||
+    !isUtcIsoDate(createdAt) ||
+    !isUtcIsoDate(updatedAt)
+  ) {
+    return invalid();
+  }
+  return { id, accountId, categoryId, tipo, monto, fecha, nota, createdAt, updatedAt };
 }
 
 function parsePage<T>(data: Record<string, unknown>, parseItem: (value: unknown) => T): Page<T> {
@@ -280,6 +357,44 @@ export function createResourcesApi(baseUrl: string, fetchImpl: typeof fetch = fe
 
     async deleteCategory(accessToken, categoryId) {
       const response = await call(accessToken, `/categories/${id(categoryId)}`, 'DELETE');
+      if (response.status !== 204) invalid();
+    },
+
+    async listTransactions(accessToken, options) {
+      const response = await call(
+        accessToken,
+        `/transactions${query({
+          account_id: options.accountId,
+          tipo: options.tipo,
+          category_id: options.categoryId,
+          desde: options.desde,
+          hasta: options.hasta,
+          page: options.page,
+          page_size: options.pageSize,
+        })}`,
+        'GET',
+      );
+      return parsePage(await readJson(response), parseTransaction);
+    },
+
+    // POST no es idempotente: nunca se reintenta salvo el 401 de authorizedCall.
+    async createTransaction(accessToken, input) {
+      const response = await call(accessToken, '/transactions', 'POST', input);
+      return parseTransaction((await readJson(response)).transaction);
+    },
+
+    async updateTransaction(accessToken, transactionId, input) {
+      const response = await call(
+        accessToken,
+        `/transactions/${id(transactionId)}`,
+        'PATCH',
+        input,
+      );
+      return parseTransaction((await readJson(response)).transaction);
+    },
+
+    async deleteTransaction(accessToken, transactionId) {
+      const response = await call(accessToken, `/transactions/${id(transactionId)}`, 'DELETE');
       if (response.status !== 204) invalid();
     },
   };

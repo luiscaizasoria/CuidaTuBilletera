@@ -182,3 +182,32 @@ export async function insertCategory(
   await insertRow(db, 'categories', row);
   return row.id as string;
 }
+
+export async function insertTransactionRow(
+  db: D1Database,
+  accountId: string,
+  categoryId: string,
+  overrides: Row = {},
+): Promise<string> {
+  const row: Row = {
+    id: uuid(),
+    account_id: accountId,
+    category_id: categoryId,
+    tipo: 'gasto',
+    monto: 1000,
+    fecha: '2026-10-13',
+    created_at: iso(NOW),
+    updated_at: iso(NOW),
+    ...overrides,
+  };
+  await insertRow(db, 'transactions', row);
+  return row.id as string;
+}
+
+// SQL de una migración (por prefijo de nombre), tal como la entrega readD1Migrations.
+export function migrationSql(prefix: string): string {
+  const { TEST_MIGRATIONS } = env as unknown as TestEnv;
+  const migration = TEST_MIGRATIONS.find((item) => item.name.startsWith(prefix));
+  if (!migration) throw new Error(`migración no encontrada: ${prefix}`);
+  return migration.queries.join('\n');
+}

@@ -1,17 +1,28 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import {
   DEGRADED_MESSAGE,
   DEGRADED_UNVERIFIED_MESSAGE,
   unavailableMessage,
 } from '../lib/auth-messages';
+import type { ResourcesApi } from '../lib/resources-api';
+import HomeDashboard, { type HomeDashboardProps } from './HomeDashboard';
 
-export default function HomeScreen({ onOpenAccounts }: { onOpenAccounts?: () => void }) {
+// `api` y `dashboard` habilitan el panel de cuenta, saldo y movimientos; sin ellos solo se muestra la sesión.
+export default function HomeScreen({
+  onOpenAccounts,
+  api,
+  dashboard,
+}: {
+  onOpenAccounts?: () => void;
+  api?: ResourcesApi;
+  dashboard?: Omit<HomeDashboardProps, 'api' | 'onCreateAccount'>;
+}) {
   const { status, user, busy, degraded, unavailableCause, error, signOut, restore } = useAuth();
   const unavailable = status === 'unavailable';
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>{unavailable ? 'Sesión no disponible' : 'Sesión iniciada'}</Text>
       {user?.name ? <Text style={styles.name}>{user.name}</Text> : null}
       {user ? <Text style={styles.email}>{user.email}</Text> : null}
@@ -34,6 +45,9 @@ export default function HomeScreen({ onOpenAccounts }: { onOpenAccounts?: () => 
           <Text style={styles.primaryButtonText}>Reintentar</Text>
         </Pressable>
       ) : null}
+      {api && dashboard && onOpenAccounts && !unavailable ? (
+        <HomeDashboard api={api} onCreateAccount={onOpenAccounts} {...dashboard} />
+      ) : null}
       {onOpenAccounts && !unavailable ? (
         <Pressable
           accessibilityRole="button"
@@ -46,13 +60,13 @@ export default function HomeScreen({ onOpenAccounts }: { onOpenAccounts?: () => 
       <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.button}>
         <Text style={styles.buttonText}>Cerrar sesión</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,

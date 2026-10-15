@@ -2,7 +2,13 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 import { ApiError, resourceNotFound } from './errors';
 import { readJsonBody } from './json-body';
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_RESOURCE_BODY_BYTES } from './limits';
+import { isValidTransactionDate } from './dates';
+import {
+  DEFAULT_PAGE_SIZE,
+  DEFAULT_TRANSACTIONS_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+  MAX_RESOURCE_BODY_BYTES,
+} from './limits';
 
 export const invalidRequest = () =>
   new ApiError(400, 'INVALID_REQUEST', 'La solicitud no es válida.');
@@ -41,6 +47,65 @@ export const categoriesQuerySchema = z.object({
   tipo: z.enum(['ingreso', 'egreso']).optional(),
 });
 
+const UUID_LOWERCASE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export const uuidSchema = z.string().regex(UUID_LOWERCASE);
+export const transactionDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isValidTransactionDate);
+
+export const transactionsQuerySchema = z.object({
+  page: pageQueryShape.page,
+  page_size: pageQueryShape.page_size,
+  account_id: uuidSchema,
+  tipo: z.enum(['ingreso', 'gasto']).optional(),
+  category_id: uuidSchema.optional(),
+  desde: transactionDateSchema.optional(),
+  hasta: transactionDateSchema.optional(),
+});
+
+export interface TransactionsQuery {
+  accountId: string;
+  tipo?: 'ingreso' | 'gasto';
+  categoryId?: string;
+  desde?: string;
+  hasta?: string;
+  page: number;
+  pageSize: number;
+}
+
+// Un parámetro repetido o vacío es inválido; los desconocidos se ignoran.
+function collectQuery(c: Context, keys: readonly string[]): Record<string, string> {
+  const raw: Record<string, string> = {};
+  for (const key of keys) {
+    const values = c.req.queries(key);
+    if (!values) continue;
+    if (values.length !== 1) throw invalidRequest();
+    raw[key] = values[0] as string;
+  }
+  return raw;
+}
+
+// Query de GET /transactions: account_id obligatorio, page_size por defecto 20 y desde <= hasta.
+export function parseTransactionsQuery(c: Context): TransactionsQuery {
+  const parsed = transactionsQuerySchema.safeParse(
+    collectQuery(c, ['account_id', 'tipo', 'category_id', 'desde', 'hasta', 'page', 'page_size']),
+  );
+  if (!parsed.success) throw invalidRequest();
+  const { account_id, tipo, category_id, desde, hasta, page, page_size } = parsed.data;
+  if (desde !== undefined && hasta !== undefined && desde > hasta) throw invalidRequest();
+  return {
+    accountId: account_id,
+    ...(tipo ? { tipo } : {}),
+    ...(category_id ? { categoryId: category_id } : {}),
+    ...(desde ? { desde } : {}),
+    ...(hasta ? { hasta } : {}),
+    page: page ?? 1,
+    pageSize: page_size ?? DEFAULT_TRANSACTIONS_PAGE_SIZE,
+  };
+}
+
 export interface ListQuery {
   page: number;
   pageSize: number;
@@ -62,14 +127,7 @@ export function parseListQuery(
   schema: z.ZodType<RawListQuery>,
   keys: readonly string[],
 ): ListQuery {
-  const raw: Record<string, string> = {};
-  for (const key of keys) {
-    const values = c.req.queries(key);
-    if (!values) continue;
-    if (values.length !== 1) throw invalidRequest();
-    raw[key] = values[0] as string;
-  }
-  const parsed = schema.safeParse(raw);
+  const parsed = schema.safeParse(collectQuery(c, keys));
   if (!parsed.success) throw invalidRequest();
   const { page, page_size, incluirArchivadas, tipo } = parsed.data;
   return {
@@ -79,8 +137,6 @@ export function parseListQuery(
     ...(tipo ? { tipo } : {}),
   };
 }
-
-const UUID_LOWERCASE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // Un id de ruta que no es UUID no puede existir: 404 igual que un recurso inexistente.
 export function requireUuidParam(value: string): string {

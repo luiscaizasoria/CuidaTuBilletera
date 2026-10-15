@@ -17,6 +17,7 @@ import {
 } from '../lib/resource-http';
 import {
   createAccountWithDefaults,
+  getAccountBalance,
   listUserAccounts,
   updateUserAccount,
 } from '../services/account-service';
@@ -87,6 +88,11 @@ export function accountRoutes(deps: Partial<ResourceDeps> = {}, now?: () => Date
       deps,
     );
     return c.json({ account });
+  });
+
+  routes.get('/accounts/:id/balance', auth, async (c) => {
+    const id = requireUuidParam(c.req.param('id'));
+    return c.json(await getAccountBalance(c.env.DB as D1Database, c.get('user').id, id));
   });
 
   routes.get('/accounts/:id/categories', auth, async (c) => {

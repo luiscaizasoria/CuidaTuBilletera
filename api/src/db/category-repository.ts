@@ -212,15 +212,20 @@ export async function deleteCategory(db: D1Database, userId: string, id: string)
   return result.meta.changes > 0;
 }
 
-// PENDIENTE DE FASE 3: la tabla transactions todavía no existe, así que ninguna categoría puede
-// tener movimientos y esta función devuelve false de forma constante. Cuando exista, deberá
-// consultar TODOS los movimientos de la categoría, anulados incluidos (docs/001 §5), y
-// transactions.category_id llevará ON DELETE RESTRICT como respaldo en la base.
+// ¿Tiene la categoría algún movimiento? Cuenta TODOS, anulados incluidos (docs/001 §5): la
+// información histórica no se elimina y transactions.category_id lleva ON DELETE RESTRICT como
+// respaldo en la base. Se acota por la cuenta de la propia categoría.
 export async function categoryHasTransactions(
   db: D1Database,
   categoryId: string,
 ): Promise<boolean> {
-  void db;
-  void categoryId;
-  return false;
+  const row = await db
+    .prepare(
+      `SELECT 1 AS found FROM transactions
+        WHERE account_id = (SELECT account_id FROM categories WHERE id = ?1)
+          AND category_id = ?1 LIMIT 1`,
+    )
+    .bind(categoryId)
+    .first<{ found: number }>();
+  return row !== null;
 }

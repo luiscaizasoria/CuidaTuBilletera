@@ -6,7 +6,7 @@ import {
   updateAccount,
   type AccountListOptions,
   type AccountPatch,
-  type AccountRow,
+  type AccountWithTotalsRow,
 } from '../db/account-repository';
 import { insertCategoryStatement, listCategories } from '../db/category-repository';
 import { ApiError, resourceNotFound } from '../lib/errors';
@@ -19,16 +19,39 @@ export interface AccountDto {
   id: string;
   nombre: string;
   saldoInicial: number;
+  // Calculado (saldoInicial + ingresos - gastos de los movimientos vigentes); nunca se guarda.
+  saldo: number;
   archivada: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export function toAccountDto(row: AccountRow): AccountDto {
+// Saldo en centavos. Fail-closed: si algún total sale del rango entero seguro de JavaScript se
+// lanza un error genérico (500) en lugar de devolver cifras imprecisas (Decisión 3.1, D6).
+export function computeBalance(row: AccountWithTotalsRow): {
+  saldoInicial: number;
+  ingresos: number;
+  gastos: number;
+  saldo: number;
+} {
+  const saldo = row.saldo_inicial + row.ingresos - row.gastos;
+  if (
+    !Number.isSafeInteger(row.ingresos) ||
+    !Number.isSafeInteger(row.gastos) ||
+    !Number.isSafeInteger(saldo)
+  ) {
+    throw new Error('computeBalance: total fuera del rango entero seguro');
+  }
+  return { saldoInicial: row.saldo_inicial, ingresos: row.ingresos, gastos: row.gastos, saldo };
+}
+
+export function toAccountDto(row: AccountWithTotalsRow): AccountDto {
+  const { saldo } = computeBalance(row);
   return {
     id: row.id,
     nombre: row.nombre,
     saldoInicial: row.saldo_inicial,
+    saldo,
     archivada: row.archivada === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -104,4 +127,22 @@ export async function updateUserAccount(
   const row = await updateAccount(db, userId, id, patch, deps.now());
   if (!row) throw resourceNotFound();
   return toAccountDto(row);
+}
+
+export interface BalanceDto {
+  accountId: string;
+  saldoInicial: number;
+  ingresos: number;
+  gastos: number;
+  saldo: number;
+}
+
+export async function getAccountBalance(
+  db: D1Database,
+  userId: string,
+  id: string,
+): Promise<BalanceDto> {
+  const row = await findAccount(db, userId, id);
+  if (!row) throw resourceNotFound();
+  return { accountId: row.id, ...computeBalance(row) };
 }

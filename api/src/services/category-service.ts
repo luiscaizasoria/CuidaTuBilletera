@@ -45,6 +45,12 @@ export function toCategoryDto(row: CategoryRow): CategoryDto {
 }
 
 const accountArchived = () => new ApiError(409, 'ACCOUNT_ARCHIVED', 'La cuenta está archivada.');
+const categoryInUse = () =>
+  new ApiError(
+    409,
+    'CATEGORY_IN_USE',
+    'La categoría tiene movimientos asociados; puede archivarse.',
+  );
 const nameTaken = () =>
   new ApiError(409, 'CATEGORY_NAME_TAKEN', 'Ya existe una categoría con ese nombre y tipo.');
 
@@ -162,12 +168,14 @@ export async function deleteUserCategory(
 ): Promise<void> {
   const deps = resolveResourceDeps(overrides);
   if (!(await findCategory(db, userId, id))) throw resourceNotFound();
-  if (await deps.categoryHasTransactions(db, id)) {
-    throw new ApiError(
-      409,
-      'CATEGORY_IN_USE',
-      'La categoría tiene movimientos asociados; puede archivarse.',
-    );
+  if (await deps.categoryHasTransactions(db, id)) throw categoryInUse();
+  try {
+    if (!(await deleteCategory(db, userId, id))) throw resourceNotFound();
+  } catch (error) {
+    // Carrera: un movimiento se creó entre la comprobación y el DELETE (FK RESTRICT).
+    if (error instanceof Error && error.message.includes('FOREIGN KEY constraint failed')) {
+      throw categoryInUse();
+    }
+    throw error;
   }
-  if (!(await deleteCategory(db, userId, id))) throw resourceNotFound();
 }
