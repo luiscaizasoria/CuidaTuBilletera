@@ -15,7 +15,7 @@ Convención: EXISTENTE = ya en el código o la constitución; APROBADO = decidid
 
 ## 2. Fases propuestas (cada una: rama `feat/`, PR propio, pruebas con el código)
 
-Orden lógico `orchestrator` → `architect` (si se aprueba cambio de §7) → `mobile-engineer` → `qa-engineer`. Secuencial, no en paralelo.
+Orden lógico `orchestrator` → `architect` (§7 ya actualizado en R0) → `mobile-engineer` → `qa-engineer`. Secuencial, no en paralelo.
 
 | Fase | Contenido | Dependencias nuevas | Nueva build |
 | --- | --- | --- | --- |

@@ -3,7 +3,7 @@
 ## Estado actual
 
 Fase actual:
-Fase 2A - D1, usuarios y sesiones (en curso). La subfase 2A.1 (API) tiene su evidencia registrada con un pendiente de pruebas remotas; la subfase 2A.2 (Android) está validada en dispositivo con pendientes (cambio de cuenta, 409 en dispositivo y PR). Detalle y evidencia en «Plan de ejecución de Fase 2».
+Fases 3, 4 y 5 integradas en main (PR #13, #14 y #15). En ejecución: rediseño UX/UI (R0 a R6, sección al final; R0 documentación completada, R1 siguiente); la Fase 6 no está iniciada. La Fase 2A conserva pendientes de validación: la subfase 2A.1 (API) tiene su evidencia registrada con un pendiente de pruebas remotas; la subfase 2A.2 (Android) está validada en dispositivo con pendientes (cambio de cuenta, 409 en dispositivo y PR). Detalle y evidencia en «Plan de ejecución de Fase 2».
 
 Nomenclatura: «subfase 2A.1/2A.2» designa los bloques de este plan. Los encabezados «Fase 2A.1 … 2A.7» de docs/003 son decisiones numeradas (Decisión 2A.1 … 2A.7) y no equivalen a estas subfases.
 

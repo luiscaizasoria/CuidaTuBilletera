@@ -148,11 +148,11 @@ Cada criterio de aceptación se cubre con al menos un caso. «Caso» usa los có
 | 21 | Nombre de 60 caracteres y saldo negativo | Barra, Mis cuentas | AND-10, INF | A + R |
 | 22 | Accesibilidad de la barra (sin `header`, etiqueta, 48 dp, foco) | Barra de contexto | A11Y | A + D (TalkBack) |
 | 23 | Teclado abierto: barra compacta y Guardar visible | Nuevo movimiento | AND-03, AND-04 | D |
-| 24 | Selector rápido de cuenta (si se aprueba 14.14) | Barra, Detalle | CTX, NAV, AND-11 | A |
+| 24 | Selector rápido de cuenta (14.14 aprobada) | Barra, Detalle | CTX, NAV, AND-11 | A |
 | 25 | Encabezado de Mis cuentas, saludo, avatar 48 dp, alcancía decorativa | Mis cuentas | DIS, A11Y, INF | A + R |
 | 26 | Alcancía 72/48/ausente según fuente y ancho | Mis cuentas | TAM, AND-08, AND-10 | R + D |
 | 27 | Todo visible sin desplazar en 360 × 640; sin huecos > 24 dp en 412 × 915 | Mis cuentas | TAM, AND-08 | R + D |
-| 28 | Total = suma exacta; oculto en carga/error/0-1 cuentas (si 14.16) | Mis cuentas | INF, EST | A |
+| 28 | Total = suma exacta; oculto en carga/error/0-1 cuentas (14.16 aprobada) | Mis cuentas | INF, EST | A |
 | 29 | Tarjeta = un botón, ≥ 88 dp (92 con ≥ 400), etiqueta, color estable | Mis cuentas | DIS, A11Y, ACC | A + R (`.acard`) |
 | 30 | Una acción primaria; Cerrar sesión en hoja de perfil con confirmación | Mis cuentas | ACC, DIS | A + R |
 | 31 | Color por módulo: estado en escala de grises, título `header`, FAB uniforme | Detalle y pestañas | DIS, A11Y | T + R |

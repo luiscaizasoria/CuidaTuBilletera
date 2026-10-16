@@ -174,11 +174,13 @@ Registro de ejecución (al cerrar cada tarea importante):
 
 ## Fase actual
 
-Fase 2A - D1, usuarios y sesiones (en curso).
+Rediseño UX/UI de la app móvil (R0 a R6, línea de trabajo transversal): R0 (documentación) completada; R1 es la siguiente. La Fase 6 (conciliación) no está iniciada.
 
 Historial:
 
 - Fase 0 - Preparación del proyecto: completada.
 - Fase 1 - Autenticación con Google: completada funcionalmente. Es una implementación transitoria sin D1, con pendientes de seguimiento en docs/003 y docs/004.
+- Fase 2A - D1, usuarios y sesiones: implementada; conserva pendientes de validación registrados en docs/004.
+- Fases 3 (movimientos), 4 (calendario) y 5 (reportes y exportación): integradas en main (PR #13, #14 y #15, base 0e0b5f8).
 
 El detalle y la evidencia están en docs/004-ROADMAP-PROYECTO.md.

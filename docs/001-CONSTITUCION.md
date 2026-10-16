@@ -187,7 +187,7 @@ Límites de protección opcionales (para cuidar las cuotas gratuitas, no como pl
 Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle de flujos, estados y textos está en docs/007-DISENO-UX.md y la apariencia en docs/008-DISENO-VISUAL.md. Este apartado fija solo las normas.
 
 1. **Login**: botón de Google. Al abrir la app con sesión válida se entra directo a Mis cuentas.
-2. **Mis cuentas** (pantalla inicial autenticada): cuentas activas con su saldo actual, acción «Nueva cuenta» y acceso a las archivadas. Tocar una cuenta abre su Detalle. Sin cuentas, invita a crear la primera.
+2. **Mis cuentas** (pantalla inicial autenticada): cuentas activas con su saldo actual, acción «Nueva cuenta» y acceso a las archivadas. Con al menos dos cuentas activas muestra el total de sus saldos. Tocar una cuenta abre su Detalle. Sin cuentas, invita a crear la primera.
 3. **Crear cuenta**: nombre y saldo inicial opcional.
 4. **Detalle de cuenta**: contenedor con barra inferior de cinco pestañas (Cuenta, Movimientos, Calendario, Reportes y Más):
    - **Cuenta**: saldo y movimientos de la semana.
@@ -203,6 +203,8 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
 
 - La navegación se resuelve con estado local y pestañas propias, sin dependencias nuevas (Decisión R0 de docs/003, que ratifica 2B.1, 3.1 y 4.1).
 - La cuenta activa se conserva solo en memoria mientras dure la sesión; cerrar sesión la borra.
+- Tocar el nombre o el saldo de la barra de contexto abre un selector rápido de las cuentas activas; al cambiar de cuenta se conserva la pestaña y se reinicia el estado por pestaña (filtros, período).
+- Guías contextuales de primera vez, descartables y reactivables desde Más.
 - Atrás en una pestaña distinta de Cuenta vuelve a Cuenta; Atrás en Cuenta vuelve a Mis cuentas; Atrás en Mis cuentas sale de la app sin cerrar sesión. Una acción «‹ Mis cuentas» con zona táctil de 48 dp está siempre visible en el Detalle, además del Atrás del sistema.
 
 ### Cuenta activa visible
@@ -225,7 +227,7 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
 
 ### Android: safe areas, teclado y accesibilidad
 
-- La app respeta las barras del sistema (estado y navegación): ningún título, botón ni acción queda bajo ellas, con navegación por gestos o por tres botones. La técnica concreta se define y valida en R1 (docs/003, Decisión R0).
+- La app respeta las barras del sistema (estado y navegación): ningún título, botón ni acción queda bajo ellas, con navegación por gestos o por tres botones. Opción A aprobada (sin módulo nativo ni modo inmersivo; docs/003, Decisión R0 D7); se implementa y valida en R1 y en un Android real.
 - Con el teclado abierto, el campo activo y «Guardar» permanecen visibles; las pantallas se desplazan.
 - Todo objetivo táctil mide al menos 48 dp. Excepciones aprobadas y acotadas (docs/007 §10): chips pequeños de filtro de 36 dp con zona táctil efectiva de 48 dp; celdas de día del calendario de 52 dp de alto y al menos 44 dp de ancho con ancho de pantalla de hasta unos 400 dp.
 - El texto escala con el tamaño de fuente del sistema sin bloquearlo. El saldo, los importes, los botones, las pestañas y las categorías habituales no se truncan. Solo los nombres libres del usuario (cuenta, nota) se truncan con elipsis y su texto completo está en la etiqueta de accesibilidad.
