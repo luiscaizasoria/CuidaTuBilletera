@@ -13,7 +13,8 @@ export type Route =
   | { name: 'detail' }
   | { name: 'newTx'; fecha?: string }
   | { name: 'editTx'; transaction: Transaction }
-  | { name: 'categories' }
+  // `fromForm`: se llegó desde «Ir a Categorías» del formulario (la salida dice «‹ Volver»).
+  | { name: 'categories'; fromForm?: true }
   | { name: 'historyFiltered'; filters: HistoryFilters };
 
 export type BalanceStatus = 'ok' | 'refreshing' | 'error';

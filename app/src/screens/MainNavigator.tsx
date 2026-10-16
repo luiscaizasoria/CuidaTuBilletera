@@ -100,6 +100,17 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
 
   const push = (route: Route) =>
     setNav((current) => ({ ...current, stack: [...current.stack, route] }));
+  // «Ir a Categorías» desde el formulario: la categoría se crea en Más > Categorías y Atrás vuelve
+  // a la pestaña de origen (el formulario sin categorías no tiene nada que conservar).
+  const replaceTopWithCategories = () =>
+    setNav((current) => {
+      const top = current.stack[current.stack.length - 1];
+      if (top?.name !== 'newTx' && top?.name !== 'editTx') return current;
+      return {
+        ...current,
+        stack: [...current.stack.slice(0, -1), { name: 'categories', fromForm: true }],
+      };
+    });
   const pop = () => setNav((current) => resolveBackStack(current));
   const goToAccounts = () => {
     setSwitcherOpen(false);
@@ -224,16 +235,18 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
     } else if (route.name === 'newTx' || route.name === 'editTx') {
       const transaction = route.name === 'editTx' ? route.transaction : undefined;
       content = (
-        <Screen scroll={false} padded={false} statusBar="surface">
+        // `bottomBar`: el pie del formulario ya suma el margen inferior del sistema (una sola vez).
+        <Screen scroll={false} padded={false} statusBar="surface" bottomBar>
           <AccountContextBar account={account} balance={detail.balance} variant="compact" />
           <View style={styles.flex}>
             <TransactionFormScreen
-              key={transaction?.id ?? 'new'}
+              key={`${account.id}:${transaction?.id ?? 'new'}`}
               account={account}
               api={api}
               transaction={transaction}
               initialFecha={route.name === 'newTx' ? route.fecha : undefined}
-              onDone={(changed) =>
+              onDone={(changed, message) => {
+                if (message) setSnack(message);
                 setNav((current) => {
                   const top = current.stack[current.stack.length - 1];
                   if (top?.name !== 'newTx' && top?.name !== 'editTx') return current;
@@ -244,9 +257,10 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
                         detail: { ...next.detail, refreshKey: next.detail.refreshKey + 1 },
                       }
                     : next;
-                })
-              }
+                });
+              }}
               onAccountArchived={markArchived}
+              onOpenCategories={replaceTopWithCategories}
             />
           </View>
         </Screen>
@@ -258,8 +272,8 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
             account={account}
             balance={detail.balance}
             variant="readOnly"
-            exitLabel="‹ Más"
-            exitAccessibilityLabel="Volver a Más"
+            exitLabel={route.fromForm ? '‹ Volver' : '‹ Más'}
+            exitAccessibilityLabel={route.fromForm ? 'Volver' : 'Volver a Más'}
             onExit={pop}
             onRetry={() => retryBalance(account.id)}
           />

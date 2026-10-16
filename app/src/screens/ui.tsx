@@ -72,6 +72,8 @@ export function Chip({
   disabled = false,
   accessibilityLabel,
   size = 'md',
+  tone = 'neutral',
+  suffix,
 }: {
   label: string;
   selected: boolean;
@@ -79,8 +81,13 @@ export function Chip({
   disabled?: boolean;
   accessibilityLabel?: string;
   size?: 'md' | 'sm';
+  // `gasto` / `ingreso`: el elegido toma el tinte del tipo del formulario (docs/008 §6.13).
+  tone?: 'neutral' | 'gasto' | 'ingreso';
+  // Adorno decorativo tras la etiqueta (p. ej. «▾»), oculto a los lectores de pantalla.
+  suffix?: string;
 }) {
   const small = size === 'sm';
+  const tinted = selected && tone !== 'neutral';
   return (
     <Pressable
       accessibilityRole="radio"
@@ -93,6 +100,7 @@ export function Chip({
         styles.chip,
         small && styles.chipSm,
         selected && styles.chipSelected,
+        tinted && (tone === 'gasto' ? styles.chipExpense : styles.chipIncome),
         disabled && styles.disabled,
       ]}
     >
@@ -101,16 +109,35 @@ export function Chip({
           testID="chip-check"
           importantForAccessibility="no"
           accessibilityElementsHidden
-          style={[styles.chipText, small && styles.chipTextSm, styles.chipTextSelected]}
+          style={[
+            styles.chipText,
+            small && styles.chipTextSm,
+            styles.chipTextSelected,
+            tinted && (tone === 'gasto' ? styles.chipTextExpense : styles.chipTextIncome),
+          ]}
         >
           ✓
         </Text>
       ) : null}
       <Text
-        style={[styles.chipText, small && styles.chipTextSm, selected && styles.chipTextSelected]}
+        style={[
+          styles.chipText,
+          small && styles.chipTextSm,
+          selected && styles.chipTextSelected,
+          tinted && (tone === 'gasto' ? styles.chipTextExpense : styles.chipTextIncome),
+        ]}
       >
         {label}
       </Text>
+      {suffix ? (
+        <Text
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+          style={[styles.chipText, small && styles.chipTextSm, { color: colors.text2 }]}
+        >
+          {suffix}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -423,6 +450,10 @@ const styles = StyleSheet.create({
   },
   chipSm: { minHeight: sizes.chipSmHeight, paddingHorizontal: 12 },
   chipSelected: { borderWidth: 1.5, borderColor: colors.text, backgroundColor: colors.segBg },
+  chipExpense: { borderWidth: 2, borderColor: colors.expense, backgroundColor: colors.expenseSoft },
+  chipIncome: { borderWidth: 2, borderColor: colors.income, backgroundColor: colors.incomeSoft },
+  chipTextExpense: { color: colors.expenseText },
+  chipTextIncome: { color: colors.incomeText },
   chipText: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: colors.text },
   chipTextSm: { fontSize: 13, lineHeight: 18 },
   chipTextSelected: { fontWeight: '800' },

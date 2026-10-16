@@ -23,7 +23,7 @@ Orden lógico `orchestrator` → `architect` (§7 ya actualizado en R0) → `mob
 | R1 | Tokens y base: `theme/tokens.ts`, `Screen` (safe areas y teclado, opción A), `Button` 48 dp, `Card`, `Segmented`, `Snackbar`, StatusBar explícita. | No | No |
 | R2 | Navegación: nuevo `MainNavigator`, Mis cuentas, Crear cuenta, Detalle con barra inferior, «Más». Retirar HomeScreen/HomeDashboard. | No | No |
 | R3 | Nuevo movimiento (orden, categoría visual, teclado numérico, selector de fecha, anti doble envío, confirmación). | No | No |
-| R4 | Historial, Calendario, Reportes, Categorías con el nuevo sistema visual (sin cambiar cálculos). | Decisión 15.3 de docs/008 (dona: SVG o barras sin dependencia) | Solo si se elige `react-native-svg` |
+| R4 | Historial, Calendario, Reportes, Categorías con el nuevo sistema visual (sin cambiar cálculos). | Ninguna: barras sin dependencia (docs/003 R4 D1) | No |
 | R5 | Guías contextuales y estados vacíos. | No | No |
 | R6 | Ícono, ícono adaptable, splash y nombre: `app.json` + `app/assets/`. | `expo-splash-screen` si se decide | **Sí** |
 

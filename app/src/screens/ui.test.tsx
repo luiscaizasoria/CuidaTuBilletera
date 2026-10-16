@@ -122,6 +122,37 @@ describe('Chip', () => {
     expect(screen.getByRole('radio', { name: 'Todos' }).props.hitSlop).toBeUndefined();
   });
 
+  it('tono de tipo (R3): el elegido toma el tinte del gasto o del ingreso; sin elegir no cambia', async () => {
+    const { rerender } = await render(
+      <Chip label="Hoy" tone="gasto" selected onPress={() => undefined} />,
+    );
+    expect(screen.getByRole('radio', { name: 'Hoy' })).toHaveStyle({
+      borderWidth: 2,
+      borderColor: colors.expense,
+      backgroundColor: colors.expenseSoft,
+    });
+    expect(screen.getByText('Hoy')).toHaveStyle({ color: colors.expenseText });
+    await rerender(<Chip label="Hoy" tone="ingreso" selected onPress={() => undefined} />);
+    expect(screen.getByRole('radio', { name: 'Hoy' })).toHaveStyle({
+      borderColor: colors.income,
+      backgroundColor: colors.incomeSoft,
+    });
+    await rerender(<Chip label="Hoy" tone="ingreso" selected={false} onPress={() => undefined} />);
+    expect(screen.getByRole('radio', { name: 'Hoy' })).toHaveStyle({
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.surface,
+    });
+  });
+
+  it('suffix: adorno decorativo oculto a la accesibilidad', async () => {
+    await render(
+      <Chip label="Otra fecha…" suffix="▾" selected={false} onPress={() => undefined} />,
+    );
+    const suffix = screen.getByText('▾', { includeHiddenElements: true });
+    expect(suffix.props.importantForAccessibility).toBe('no');
+    expect(screen.getByRole('radio', { name: 'Otra fecha…' })).toBeTruthy();
+  });
+
   it('disabled no ejecuta onPress y marca el estado', async () => {
     const onPress = jest.fn();
     await render(<Chip label="Todos" selected={false} disabled onPress={onPress} />);

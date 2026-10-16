@@ -1,30 +1,57 @@
+// Nuevo / Editar movimiento (R3; docs/007 §5.5.1, docs/008 §6.13). Orden: Tipo, Categoría, Monto,
+// Fecha, Detalle y pie fijo con Guardar y Cancelar. La API sigue validando las reglas de negocio.
 import { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
-  BackHandler,
+  findNodeHandle,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
+  type TextInput,
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { useDiscardGuard } from '../hooks/use-discard-guard';
 import { useLoader, useMutation } from '../hooks/use-loader';
-import { isValidDateString, todayLocal, yesterdayLocal } from '../lib/dates';
-import { formatCents, parseCentsFromInput } from '../lib/money';
+import { isValidDateString, formatDateEs, todayLocal, yesterdayLocal } from '../lib/dates';
+import { isFormDirty } from '../lib/form-dirty';
+import { formatCents, AMOUNT_REJECTION_MESSAGES, validateAmountText } from '../lib/money';
+import {
+  ACCOUNT_ARCHIVED_ON_SAVE,
+  isUncertainWriteFailure,
+  LOST_RESPONSE_MOVEMENT,
+} from '../lib/resources-messages';
 import {
   ApiRequestError,
   type Account,
+  type Category,
   type ResourcesApi,
   type Transaction,
   type TransactionType,
   type UpdateTransactionInput,
 } from '../lib/resources-api';
-import { Button, Chip, ErrorBox, screenStyles as s } from './ui';
+import { colors, radii, shadows, sizes, typography } from '../theme/tokens';
+import { useSystemInsets } from '../theme/useSystemInsets';
+import DatePickerSheet from './DatePickerSheet';
+import {
+  AmountField,
+  CategoryIcon,
+  CategoryOption,
+  FieldError,
+  FormTextInput,
+  formStyles,
+  TypeToggle,
+} from './form-ui';
+import { Button, Chip, ErrorBox } from './ui';
 
 export const MAX_AMOUNT_CENTS = 99_999_999_999;
 export const NOTE_MAX = 500;
+const NOTE_COUNTER_WARNING = 450;
+// El campo conserva lo pegado (con margen para separadores) y la validación lo rechaza al guardar.
+const AMOUNT_MAX_LENGTH = 24;
 
 // 1250 -> "12.50" (sin símbolo, para editar en el campo de texto).
 function centsToInput(cents: number): string {
@@ -34,6 +61,9 @@ function centsToInput(cents: number): string {
 // Errores tras los cuales la lista de categorías mostrada puede estar desactualizada.
 const STALE_CATEGORY_CODES = new Set(['NOT_FOUND', 'CATEGORY_ARCHIVED', 'CATEGORY_MISMATCH']);
 
+type FieldName = 'categoria' | 'monto' | 'fecha';
+type FieldErrors = Partial<Record<FieldName, string>>;
+
 export default function TransactionFormScreen({
   account,
   api,
@@ -41,6 +71,7 @@ export default function TransactionFormScreen({
   initialFecha,
   onDone,
   onAccountArchived,
+  onOpenCategories,
 }: {
   account: Account;
   api: ResourcesApi;
@@ -48,11 +79,15 @@ export default function TransactionFormScreen({
   // Fecha preseleccionada al crear (p. ej. el día elegido en el calendario); si no es válida, hoy.
   initialFecha?: string | undefined;
   // `changed` = hubo escritura (crear, editar con cambios o anular): el contenedor relee el saldo.
-  onDone: (changed: boolean) => void;
+  // `message`: aviso de éxito que el contenedor muestra en su Snackbar único.
+  onDone: (changed: boolean, message?: string) => void;
   // 409 ACCOUNT_ARCHIVED al crear: el servidor confirma que la cuenta está archivada.
   onAccountArchived?: (accountId: string) => void;
+  // «Ir a Categorías» cuando no hay categorías activas del tipo elegido.
+  onOpenCategories?: () => void;
 }) {
   const { authorizedCall } = useAuth();
+  const insets = useSystemInsets();
   const editing = transaction !== undefined;
   const [montoText, setMontoText] = useState(transaction ? centsToInput(transaction.monto) : '');
   const [tipo, setTipo] = useState<TransactionType>(transaction?.tipo ?? 'gasto');
@@ -62,18 +97,74 @@ export default function TransactionFormScreen({
       (initialFecha !== undefined && isValidDateString(initialFecha) ? initialFecha : todayLocal()),
   );
   const [nota, setNota] = useState(transaction?.nota ?? '');
-  const [errors, setErrors] = useState<{ monto?: string; categoria?: string; fecha?: string }>({});
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [dateSheetOpen, setDateSheetOpen] = useState(false);
+  const [archivedBlocked, setArchivedBlocked] = useState(false);
+  // La creación falló sin certeza de si el servidor la grabó (red o 5xx): no se invita a reintentar.
+  const [lostResponse, setLostResponse] = useState(false);
+  const [focusRequest, setFocusRequest] = useState<{
+    n: number;
+    field: FieldName;
+    message: string;
+  } | null>(null);
   const mutation = useMutation();
   const staleCategories = useRef(false);
   const accountArchived = useRef(false);
+  const uncertain = useRef(false);
   const busy = mutation.pending;
 
-  // Mientras se guarda, Atrás se ignora (el listener más reciente tiene prioridad).
+  // Instantánea inicial (al montar): lo prefijado no cuenta como cambio.
+  const initial = useRef({
+    categoryId,
+    monto: montoText,
+    fecha,
+    nota,
+  }).current;
+  // Con la cuenta archivada (409) los datos ya no se pueden enviar: se sale sin preguntar.
+  const dirty =
+    !archivedBlocked && isFormDirty(initial, { categoryId, monto: montoText, fecha, nota });
+  const { requestLeave } = useDiscardGuard({
+    dirty,
+    busy,
+    onLeave: () => onDone(false),
+    title: editing ? '¿Descartar los cambios?' : '¿Descartar este movimiento?',
+    message: editing ? 'Los cambios que hiciste no se guardarán.' : 'Lo que escribiste se perderá.',
+  });
+
+  const scrollRef = useRef<ScrollView>(null);
+  const montoRef = useRef<TextInput>(null);
+  const categoryErrorRef = useRef<Text>(null);
+  const dateErrorRef = useRef<Text>(null);
+  const submitErrorRef = useRef<Text>(null);
+  const sectionY = useRef<Partial<Record<FieldName, number>>>({});
+
+  // Foco y anuncio del primer error tras un intento fallido (un solo anuncio por intento).
   useEffect(() => {
-    if (!busy) return undefined;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
-    return () => subscription.remove();
-  }, [busy]);
+    if (focusRequest === null) return;
+    const y = sectionY.current[focusRequest.field];
+    if (y !== undefined) scrollRef.current?.scrollTo?.({ y: Math.max(0, y - 8), animated: true });
+    if (focusRequest.field === 'monto') montoRef.current?.focus();
+    else {
+      const node = findNodeHandle(
+        focusRequest.field === 'categoria' ? categoryErrorRef.current : dateErrorRef.current,
+      );
+      if (node !== null) AccessibilityInfo.setAccessibilityFocus?.(node);
+    }
+    AccessibilityInfo.announceForAccessibility?.(focusRequest.message);
+  }, [focusRequest]);
+
+  // Error de envío: el texto específico de respuesta perdida o de cuenta archivada manda sobre el genérico.
+  const submitError = archivedBlocked
+    ? ACCOUNT_ARCHIVED_ON_SAVE
+    : lostResponse
+      ? LOST_RESPONSE_MOVEMENT
+      : mutation.error;
+  // El foco va al mensaje de error de envío.
+  useEffect(() => {
+    if (!submitError) return;
+    const node = findNodeHandle(submitErrorRef.current);
+    if (node !== null) AccessibilityInfo.setAccessibilityFocus?.(node);
+  }, [submitError]);
 
   // Creación: categorías activas del tipo elegido (gasto -> egreso). Edición: todas, solo para el nombre.
   const {
@@ -93,26 +184,45 @@ export default function TransactionFormScreen({
     editing ? `edit:${account.id}` : `${account.id}:${tipo}`,
   );
 
+  const clearError = (field: FieldName) =>
+    setErrors((current) =>
+      current[field] === undefined ? current : { ...current, [field]: undefined },
+    );
+
   function changeTipo(next: TransactionType) {
     if (next === tipo) return;
     setTipo(next);
     setCategoryId(null);
-    setErrors((current) => ({ ...current, categoria: undefined }));
+    clearError('categoria');
   }
 
   function validate() {
-    const next: typeof errors = {};
-    const cents = parseCentsFromInput(montoText);
-    if (cents === null || cents <= 0)
-      next.monto = 'Ingresa un monto mayor a cero, por ejemplo 12.50.';
+    const next: FieldErrors = {};
+    const amount = validateAmountText(montoText);
+    const cents = amount.ok ? amount.cents : 0;
+    if (!editing && categoryId === null) next.categoria = 'Elige una categoría.';
+    if (!amount.ok) {
+      next.monto =
+        amount.reason === 'empty'
+          ? 'Ingresa un monto mayor a cero, por ejemplo 12.50.'
+          : amount.reason === 'too-large'
+            ? `El monto máximo es ${formatCents(MAX_AMOUNT_CENTS)}.`
+            : AMOUNT_REJECTION_MESSAGES[amount.reason];
+    } else if (cents <= 0) next.monto = 'Ingresa un monto mayor a cero, por ejemplo 12.50.';
     else if (cents > MAX_AMOUNT_CENTS)
       next.monto = `El monto máximo es ${formatCents(MAX_AMOUNT_CENTS)}.`;
-    if (!editing && categoryId === null) next.categoria = 'Elige una categoría.';
-    if (!isValidDateString(fecha)) {
-      next.fecha = 'Escribe una fecha válida con formato AAAA-MM-DD (años 2000 a 2100).';
-    }
+    if (!isValidDateString(fecha)) next.fecha = 'Elige una fecha válida (años 2000 a 2100).';
     setErrors(next);
-    return { ok: Object.keys(next).length === 0, cents: cents ?? 0 };
+    // Orden de revisión = orden visual: Categoría, Monto, Fecha.
+    const first = (['categoria', 'monto', 'fecha'] as const).find((field) => next[field]);
+    if (first) {
+      setFocusRequest((current) => ({
+        n: (current?.n ?? 0) + 1,
+        field: first,
+        message: next[first]!,
+      }));
+    }
+    return { ok: first === undefined, cents };
   }
 
   async function submit() {
@@ -138,6 +248,8 @@ export default function TransactionFormScreen({
 
     staleCategories.current = false;
     accountArchived.current = false;
+    uncertain.current = false;
+    setLostResponse(false);
     const ok = await mutation.run(async () => {
       try {
         await authorizedCall((token) =>
@@ -151,6 +263,7 @@ export default function TransactionFormScreen({
           }),
         );
       } catch (error) {
+        uncertain.current = isUncertainWriteFailure(error);
         if (error instanceof ApiRequestError && STALE_CATEGORY_CODES.has(error.code)) {
           staleCategories.current = true;
         }
@@ -165,12 +278,23 @@ export default function TransactionFormScreen({
       }
     });
     if (ok) {
-      onDone(true);
+      const name = options.find((c) => c.id === categoryId)?.nombre;
+      onDone(
+        true,
+        name
+          ? `${tipo === 'gasto' ? 'Gasto' : 'Ingreso'} de ${formatCents(cents)} guardado en ${name}`
+          : undefined,
+      );
       return;
     }
-    if (accountArchived.current) onAccountArchived?.(account.id);
+    if (uncertain.current) setLostResponse(true);
+    if (accountArchived.current) {
+      setArchivedBlocked(true);
+      onAccountArchived?.(account.id);
+    }
     if (staleCategories.current) {
       setCategoryId(null);
+      setErrors((current) => ({ ...current, categoria: 'Esa categoría cambió. Elige otra.' }));
       refresh();
     }
   }
@@ -202,139 +326,308 @@ export default function TransactionFormScreen({
       ? categories.data.items.find((c) => c.id === transaction?.categoryId)
       : undefined;
 
+  const today = todayLocal();
+  const yesterday = yesterdayLocal();
+  const customDate = fecha !== today && fecha !== yesterday;
+  const tone = tipo === 'gasto' ? 'gasto' : 'ingreso';
+  const saveLabel = busy
+    ? 'Guardando…'
+    : editing
+      ? 'Guardar cambios'
+      : tipo === 'gasto'
+        ? 'Guardar gasto'
+        : 'Guardar ingreso';
+  const rows: Category[][] = [];
+  for (let i = 0; i < options.length; i += 2) rows.push(options.slice(i, i + 2));
+
+  const markSection = (field: FieldName) => ({
+    onLayout: (event: { nativeEvent: { layout: { y: number } } }) => {
+      sectionY.current[field] = event.nativeEvent.layout.y;
+    },
+  });
+
   return (
-    <ScrollView style={s.container} keyboardShouldPersistTaps="handled">
-      <Text accessibilityRole="header" style={s.title}>
-        {editing ? 'Editar movimiento' : 'Nuevo movimiento'}
-      </Text>
-      <Text style={s.rowSubtitle}>Cuenta: {account.nombre}</Text>
-
-      <Text style={s.section}>Monto</Text>
-      <TextInput
-        accessibilityLabel="Monto"
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-        autoFocus
-        value={montoText}
-        onChangeText={setMontoText}
-        editable={!busy}
-        style={s.input}
-      />
-      {errors.monto ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {errors.monto}
-        </Text>
-      ) : null}
-
-      <Text style={s.section}>Tipo</Text>
-      {editing ? (
-        <Text accessibilityLabel="Tipo">{tipo === 'gasto' ? 'Gasto' : 'Ingreso'}</Text>
-      ) : (
-        <View style={s.actions} accessibilityRole="radiogroup">
-          <Chip
-            label="Gasto"
-            selected={tipo === 'gasto'}
+    <View style={styles.root}>
+      <ScrollView
+        ref={scrollRef}
+        testID="transaction-form-scroll"
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <Text accessibilityRole="header" style={styles.title}>
+            {editing ? 'Editar movimiento' : 'Nuevo movimiento'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar formulario"
+            accessibilityState={{ disabled: busy }}
             disabled={busy}
-            onPress={() => changeTipo('gasto')}
-          />
-          <Chip
-            label="Ingreso"
-            selected={tipo === 'ingreso'}
-            disabled={busy}
-            onPress={() => changeTipo('ingreso')}
-          />
+            onPress={() => requestLeave()}
+            style={[styles.close, busy && styles.closeDisabled]}
+          >
+            <Text style={styles.closeText} importantForAccessibility="no">
+              ✕
+            </Text>
+          </Pressable>
         </View>
-      )}
 
-      <Text style={s.section}>Categoría</Text>
-      {editing ? (
-        <Text accessibilityLabel="Categoría">
-          {currentCategory?.nombre ?? 'Categoría del movimiento'}
-        </Text>
-      ) : categories.status === 'loading' ? (
-        <ActivityIndicator testID="form-categories-loading" />
-      ) : categories.status === 'error' ? (
-        <ErrorBox message={categories.message} onRetry={reload} />
-      ) : options.length === 0 ? (
-        <Text style={s.muted}>No hay categorías activas de este tipo. Crea una desde Cuentas.</Text>
-      ) : (
-        <View style={s.actions} accessibilityRole="radiogroup">
-          {options.map((category) => (
+        <Text style={formStyles.label}>Tipo</Text>
+        {editing ? (
+          <View
+            style={[
+              styles.readOnly,
+              { backgroundColor: tipo === 'gasto' ? colors.expenseSoft : colors.incomeSoft },
+            ]}
+          >
+            <Text
+              accessibilityLabel={`Tipo: ${tipo === 'gasto' ? 'Gasto' : 'Ingreso'}`}
+              style={[
+                styles.readOnlyType,
+                { color: tipo === 'gasto' ? colors.expenseText : colors.incomeText },
+              ]}
+            >
+              {tipo === 'gasto' ? 'Gasto' : 'Ingreso'}
+            </Text>
+          </View>
+        ) : (
+          <TypeToggle value={tipo} onChange={changeTipo} disabled={busy} />
+        )}
+
+        <View {...markSection('categoria')}>
+          <Text style={formStyles.label}>Categoría</Text>
+          {editing ? (
+            <View style={styles.readOnlyCategory}>
+              {currentCategory ? (
+                <CategoryIcon icono={currentCategory.icono} color={currentCategory.color} />
+              ) : null}
+              <Text
+                accessibilityLabel={`Categoría: ${currentCategory?.nombre ?? 'Categoría del movimiento'}`}
+                style={styles.readOnlyName}
+              >
+                {currentCategory?.nombre ?? 'Categoría del movimiento'}
+              </Text>
+            </View>
+          ) : categories.status === 'loading' ? (
+            <ActivityIndicator testID="form-categories-loading" />
+          ) : categories.status === 'error' ? (
+            <ErrorBox message={categories.message} onRetry={reload} />
+          ) : options.length === 0 ? (
+            <View style={styles.emptyCategories}>
+              <Text style={styles.emptyText}>
+                {`No tienes categorías de ${tipo === 'gasto' ? 'gasto' : 'ingreso'} activas. Crea una en Más > Categorías.`}
+              </Text>
+              {onOpenCategories ? (
+                <Button
+                  label="Ir a Categorías"
+                  disabled={busy}
+                  onPress={() => requestLeave(onOpenCategories)}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <View accessibilityRole="radiogroup" accessibilityLabel="Categoría" style={styles.grid}>
+              {rows.map((row) => (
+                <View key={row[0]!.id} style={styles.gridRow}>
+                  {row.map((category) => (
+                    <CategoryOption
+                      key={category.id}
+                      nombre={category.nombre}
+                      icono={category.icono}
+                      color={category.color}
+                      tipo={tipo}
+                      selected={categoryId === category.id}
+                      disabled={busy}
+                      onPress={() => {
+                        setCategoryId(category.id);
+                        clearError('categoria');
+                      }}
+                    />
+                  ))}
+                  {row.length === 1 ? <View style={styles.gridSpacer} /> : null}
+                </View>
+              ))}
+            </View>
+          )}
+          {errors.categoria ? (
+            <FieldError ref={categoryErrorRef} message={errors.categoria} />
+          ) : null}
+        </View>
+
+        <View {...markSection('monto')}>
+          <Text style={formStyles.label}>Monto</Text>
+          <AmountField
+            ref={montoRef}
+            accessibilityLabel="Monto"
+            value={montoText}
+            onChangeText={(text) => {
+              setMontoText(text);
+              clearError('monto');
+            }}
+            maxLength={AMOUNT_MAX_LENGTH}
+            editable={!busy}
+            error={errors.monto !== undefined}
+          />
+          {errors.monto ? <FieldError message={errors.monto} /> : null}
+        </View>
+
+        <View {...markSection('fecha')}>
+          <Text style={formStyles.label}>Fecha</Text>
+          <View
+            accessibilityRole="radiogroup"
+            accessibilityLabel={`Fecha: ${formatDateEs(fecha)}`}
+            style={styles.dateRow}
+          >
             <Chip
-              key={category.id}
-              label={category.nombre}
-              accessibilityLabel={`Categoría ${category.nombre}`}
-              selected={categoryId === category.id}
+              label="Hoy"
+              tone={tone}
+              selected={fecha === today}
               disabled={busy}
               onPress={() => {
-                setCategoryId(category.id);
-                setErrors((current) => ({ ...current, categoria: undefined }));
+                setFecha(today);
+                clearError('fecha');
               }}
             />
-          ))}
+            <Chip
+              label="Ayer"
+              tone={tone}
+              selected={fecha === yesterday}
+              disabled={busy}
+              onPress={() => {
+                setFecha(yesterday);
+                clearError('fecha');
+              }}
+            />
+            <Chip
+              label={customDate ? formatDateEs(fecha) : 'Otra fecha…'}
+              accessibilityLabel={customDate ? `Otra fecha, ${formatDateEs(fecha)}` : 'Otra fecha'}
+              tone={tone}
+              selected={customDate}
+              disabled={busy}
+              suffix={customDate ? undefined : '▾'}
+              onPress={() => setDateSheetOpen(true)}
+            />
+          </View>
+          {errors.fecha ? <FieldError ref={dateErrorRef} message={errors.fecha} /> : null}
         </View>
-      )}
-      {errors.categoria ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {errors.categoria}
-        </Text>
-      ) : null}
 
-      <Text style={s.section}>Fecha</Text>
-      <TextInput
-        accessibilityLabel="Fecha"
-        placeholder="AAAA-MM-DD"
-        value={fecha}
-        onChangeText={setFecha}
-        editable={!busy}
-        maxLength={10}
-        autoCapitalize="none"
-        style={s.input}
-      />
-      <View style={s.actions}>
-        <Button label="Hoy" disabled={busy} onPress={() => setFecha(todayLocal())} />
-        <Button label="Ayer" disabled={busy} onPress={() => setFecha(yesterdayLocal())} />
-      </View>
-      {errors.fecha ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {errors.fecha}
-        </Text>
-      ) : null}
+        <Text style={formStyles.label}>Detalle (opcional)</Text>
+        <FormTextInput
+          accessibilityLabel="Detalle"
+          placeholder="Detalle"
+          value={nota}
+          onChangeText={setNota}
+          editable={!busy}
+          maxLength={NOTE_MAX}
+          multiline
+        />
+        <Text
+          style={[styles.counter, nota.length >= NOTE_COUNTER_WARNING && styles.counterNear]}
+        >{`${nota.length}/${NOTE_MAX}`}</Text>
 
-      <Text style={s.section}>Nota (opcional)</Text>
-      <TextInput
-        accessibilityLabel="Nota"
-        placeholder="Nota"
-        value={nota}
-        onChangeText={setNota}
-        editable={!busy}
-        maxLength={NOTE_MAX}
-        multiline
-        style={s.input}
-      />
-
-      {mutation.error ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {mutation.error}
-        </Text>
-      ) : null}
-
-      <View style={s.actions}>
-        <Button label="Guardar" variant="primary" disabled={busy} onPress={() => void submit()} />
-        <Button label="Cancelar" disabled={busy} onPress={() => onDone(false)} />
         {transaction ? (
-          <Button
-            label="Anular movimiento"
-            variant="danger"
-            disabled={busy}
-            onPress={() => confirmVoid(transaction)}
-          />
+          <View style={styles.voidWrap}>
+            <Button
+              label="Anular movimiento"
+              variant="danger"
+              disabled={busy}
+              onPress={() => confirmVoid(transaction)}
+            />
+          </View>
         ) : null}
+      </ScrollView>
+
+      <View
+        testID="transaction-form-footer"
+        style={[styles.footer, shadows.raised, { paddingBottom: 12 + insets.bottom }]}
+      >
+        {submitError ? (
+          <Text
+            ref={submitErrorRef}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={styles.submitError}
+          >
+            {submitError}
+          </Text>
+        ) : null}
+        {archivedBlocked ? (
+          <Button label="Volver a la cuenta" variant="primary" tall onPress={() => onDone(false)} />
+        ) : (
+          <>
+            <Button
+              label={saveLabel}
+              variant="primary"
+              tall
+              busy={busy}
+              onPress={() => void submit()}
+            />
+            <Button
+              label="Cancelar"
+              variant="ghost"
+              disabled={busy}
+              onPress={() => requestLeave()}
+            />
+          </>
+        )}
       </View>
-    </ScrollView>
+
+      <DatePickerSheet
+        visible={dateSheetOpen}
+        value={fecha}
+        today={today}
+        tipo={tipo}
+        onClose={() => setDateSheetOpen(false)}
+        onSelect={(date) => {
+          setFecha(date);
+          clearError('fecha');
+          setDateSheetOpen(false);
+        }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  error: { color: '#b3261e', marginBottom: 4 },
+  root: { flex: 1, backgroundColor: colors.bg },
+  scroll: { flex: 1 },
+  content: { padding: 16, paddingBottom: 24 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 56,
+  },
+  title: { ...typography.title, flex: 1, color: colors.text },
+  close: {
+    width: sizes.touchMin,
+    height: sizes.touchMin,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeDisabled: { opacity: 0.5 },
+  closeText: { fontSize: 22, fontWeight: '800', color: colors.text },
+  readOnly: { borderRadius: radii.md, paddingHorizontal: 12, paddingVertical: 10 },
+  readOnlyType: { ...typography.button },
+  readOnlyCategory: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40 },
+  readOnlyName: { ...typography.greeting, color: colors.text },
+  emptyCategories: { gap: 8, alignItems: 'flex-start' },
+  emptyText: { ...typography.body, color: colors.text2 },
+  grid: { gap: 8 },
+  gridRow: { flexDirection: 'row', gap: 8 },
+  gridSpacer: { flex: 1 },
+  dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  counter: { ...typography.small, color: colors.text3, textAlign: 'right', marginTop: 4 },
+  counterNear: { color: colors.text, fontWeight: '700' },
+  voidWrap: { marginTop: 24 },
+  footer: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 8,
+  },
+  submitError: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.expenseText },
 });

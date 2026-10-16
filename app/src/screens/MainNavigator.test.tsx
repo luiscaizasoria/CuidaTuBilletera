@@ -393,7 +393,7 @@ describe('MainNavigator: pestañas y Atrás', () => {
     await fireEvent.press(screen.getByTestId('fab'));
     await fireEvent.changeText(await screen.findByLabelText('Monto'), '5');
     await fireEvent.press(await screen.findByLabelText('Categoría Comida'));
-    await fireEvent.press(screen.getByText('Guardar'));
+    await fireEvent.press(screen.getByText('Guardar gasto'));
     expect(await back()).toBe(true);
     expect(screen.getByLabelText('Monto')).toBeTruthy();
     await act(async () => gate.resolve(transaction()));
@@ -417,7 +417,7 @@ describe('MainNavigator: saldo como fuente única', () => {
     await fireEvent.press(screen.getByTestId('fab'));
     await fireEvent.changeText(await screen.findByLabelText('Monto'), '2.50');
     await fireEvent.press(await screen.findByLabelText('Categoría Comida'));
-    await fireEvent.press(screen.getByText('Guardar'));
+    await fireEvent.press(screen.getByText('Guardar gasto'));
   };
 
   it('guardar (changed=true) relee el saldo exactamente una vez y lo muestra', async () => {
@@ -440,7 +440,7 @@ describe('MainNavigator: saldo como fuente única', () => {
     await fireEvent.press(screen.getByTestId('fab'));
     await fireEvent.press(await screen.findByText('Cancelar'));
     await fireEvent.press(await screen.findByLabelText(/Editar movimiento de Comida/));
-    await fireEvent.press(await screen.findByText('Guardar'));
+    await fireEvent.press(await screen.findByText('Guardar cambios'));
     await screen.findByLabelText('Secciones de la cuenta');
     expect(api.updateTransaction).not.toHaveBeenCalled();
     expect(api.getAccountBalance).not.toHaveBeenCalled();
@@ -539,9 +539,11 @@ describe('MainNavigator: saldo como fuente única', () => {
     await render(<MainNavigator api={api} />);
     await openEfectivo();
     await saveExpense();
-    expect(await screen.findByText(/La cuenta está archivada/)).toBeTruthy();
+    expect(
+      await screen.findByText(/Esta cuenta está archivada, por eso no se guardó/),
+    ).toBeTruthy();
     expect(screen.getByText('Archivada')).toBeTruthy();
-    await fireEvent.press(screen.getByText('Cancelar'));
+    await fireEvent.press(screen.getByText('Volver a la cuenta'));
     await screen.findByLabelText('Secciones de la cuenta');
     expect(screen.getByTestId('fab').props.accessibilityState.disabled).toBe(true);
     expect(screen.getByText('Cuenta archivada: no admite movimientos nuevos')).toBeTruthy();
@@ -714,5 +716,230 @@ describe('MainNavigator: un solo Screen por ruta y Snackbar', () => {
     const snackbar = await screen.findByTestId('snackbar');
     // tabHeight (62) + FAB (56 + 16) + 8 de separación; el margen del sistema es 0 en Jest.
     expect(snackbar).toHaveStyle({ bottom: 62 + 56 + 16 + 8 });
+  });
+});
+
+describe('MainNavigator: R3 confirmación de descarte con Atrás', () => {
+  const openForm = async () => {
+    await fireEvent.press(screen.getByTestId('fab'));
+    return screen.findByLabelText('Monto');
+  };
+  const dialogButtons = (call = 0) =>
+    (Alert.alert as jest.Mock).mock.calls[call]![2] as { text: string; onPress?: () => void }[];
+
+  it('G12: con cambios Atrás no cierra el formulario hasta confirmar [Descartar]', async () => {
+    const api = makeApi();
+    await render(<MainNavigator api={api} />);
+    await openEfectivo();
+    await goTab('Calendario');
+    await openForm();
+    await fireEvent.changeText(screen.getByLabelText('Monto'), '5');
+    expect(await back()).toBe(true);
+    // Sin pop: el formulario sigue abierto con lo escrito y el navegador sigue en el formulario.
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '¿Descartar este movimiento?',
+      'Lo que escribiste se perderá.',
+      expect.any(Array),
+      expect.objectContaining({ cancelable: true }),
+    );
+    expect(screen.getByLabelText('Monto').props.value).toBe('5');
+    expect(screen.queryByLabelText('Secciones de la cuenta')).toBeNull();
+    // [Seguir editando] permanece.
+    await act(async () => dialogButtons()[0]!.onPress!());
+    expect(screen.getByLabelText('Monto').props.value).toBe('5');
+    expect(screen.queryByLabelText('Secciones de la cuenta')).toBeNull();
+    // [Descartar] vuelve a la pestaña de origen sin releer el saldo.
+    expect(await back()).toBe(true);
+    await act(async () => dialogButtons(1)[1]!.onPress!());
+    expect(await screen.findByLabelText('Secciones de la cuenta')).toBeTruthy();
+    expect(selectedTab()).toBe('Calendario');
+    expect(api.createTransaction).not.toHaveBeenCalled();
+    expect(api.getAccountBalance).not.toHaveBeenCalled();
+  });
+
+  it('G11: sin cambios (fecha prefijada desde el calendario incluida) Atrás sale sin diálogo', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await goTab('Calendario');
+    await openForm();
+    expect(await back()).toBe(true);
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(await screen.findByLabelText('Secciones de la cuenta')).toBeTruthy();
+    expect(selectedTab()).toBe('Calendario');
+  });
+
+  it('G12: «✕» y Cancelar con cambios piden confirmar y [Descartar] los cierra', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await openForm();
+    await fireEvent.changeText(screen.getByLabelText('Detalle'), 'algo');
+    await fireEvent.press(screen.getByRole('button', { name: 'Cerrar formulario' }));
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Monto')).toBeTruthy();
+    await act(async () => dialogButtons()[1]!.onPress!());
+    await screen.findByLabelText('Secciones de la cuenta');
+
+    await openForm();
+    await fireEvent.changeText(screen.getByLabelText('Monto'), '3');
+    await fireEvent.press(screen.getByText('Cancelar'));
+    expect(Alert.alert).toHaveBeenCalledTimes(2);
+    await act(async () => dialogButtons(1)[1]!.onPress!());
+    await screen.findByLabelText('Secciones de la cuenta');
+  });
+
+  it('G10: Atrás se ignora mientras guarda y no abre el diálogo', async () => {
+    const gate = controlledPromise<ReturnType<typeof transaction>>();
+    const api = makeApi({ createTransaction: jest.fn(() => gate.promise) });
+    await render(<MainNavigator api={api} />);
+    await openEfectivo();
+    await openForm();
+    await fireEvent.changeText(screen.getByLabelText('Monto'), '5');
+    await fireEvent.press(await screen.findByLabelText('Categoría Comida'));
+    await fireEvent.press(screen.getByText('Guardar gasto'));
+    expect(await back()).toBe(true);
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Monto')).toBeTruthy();
+    await act(async () => gate.resolve(transaction()));
+    await waitFor(() => expect(screen.queryByLabelText('Monto')).toBeNull());
+    expect(Alert.alert).not.toHaveBeenCalled(); // guardar con éxito no pregunta
+  });
+
+  it('G15: Editar con cambios usa el texto de «cambios»; sin cambios Atrás sale sin diálogo', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await fireEvent.press(await screen.findByLabelText(/Editar movimiento de Comida/));
+    await screen.findByText('Editar movimiento');
+    expect(await back()).toBe(true);
+    expect(Alert.alert).not.toHaveBeenCalled();
+    await screen.findByLabelText('Secciones de la cuenta');
+    await fireEvent.press(await screen.findByLabelText(/Editar movimiento de Comida/));
+    await fireEvent.changeText(await screen.findByLabelText('Monto'), '99');
+    expect(await back()).toBe(true);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '¿Descartar los cambios?',
+      'Los cambios que hiciste no se guardarán.',
+      expect.any(Array),
+      expect.any(Object),
+    );
+    expect(screen.getByLabelText('Monto').props.value).toBe('99');
+  });
+
+  it('cambio de cuenta durante la edición: con el formulario abierto no hay selector accesible', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await openForm();
+    // Solo la barra compacta de solo lectura: ni botón de cuenta ni hoja de cambio de cuenta.
+    expect(screen.getByLabelText('Cuenta Efectivo, saldo $12.50')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Cuenta Efectivo/ })).toBeNull();
+    expect(screen.queryByRole('header', { name: 'Cambiar de cuenta' })).toBeNull();
+    expect(screen.queryByLabelText('Secciones de la cuenta')).toBeNull();
+  });
+
+  it('cambio de cuenta durante la edición: un movimiento de otra cuenta no abre Editar', async () => {
+    const api = makeApi({
+      listTransactions: jest.fn(async () => pageOf([transaction({ accountId: 'acc-2' })])),
+    });
+    await render(<MainNavigator api={api} />);
+    await openEfectivo();
+    await fireEvent.press(await screen.findByLabelText(/Editar movimiento de Comida/));
+    expect(screen.queryByLabelText('Monto')).toBeNull();
+    expect(screen.queryByText('Editar movimiento')).toBeNull();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('Crear cuenta: Atrás con texto no vuelve a Mis cuentas hasta confirmar', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Nueva cuenta' }));
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la cuenta'), 'Ahorros');
+    expect(await back()).toBe(true);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '¿Descartar esta cuenta?',
+      'Lo que escribiste se perderá.',
+      expect.any(Array),
+      expect.any(Object),
+    );
+    expect(screen.getByRole('header', { name: 'Nueva cuenta' })).toBeTruthy();
+    await act(async () => dialogButtons()[0]!.onPress!());
+    expect(screen.getByLabelText('Nombre de la cuenta').props.value).toBe('Ahorros');
+    await fireEvent.press(screen.getByRole('button', { name: 'Volver' }));
+    expect(Alert.alert).toHaveBeenCalledTimes(2);
+    await act(async () => dialogButtons(1)[1]!.onPress!());
+    await onAccounts();
+    expect(screen.queryByRole('header', { name: 'Nueva cuenta' })).toBeNull();
+  });
+
+  it('[Ir a Categorías] sin categorías lleva a Categorías y Atrás vuelve a la pestaña de origen', async () => {
+    const api = makeApi({
+      listCategories: jest.fn(async (_t, _a, options) =>
+        pageOf(options?.tipo === undefined && !options?.incluirArchivadas ? [comida] : []),
+      ),
+    });
+    await render(<MainNavigator api={api} />);
+    await openEfectivo();
+    await openForm();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Ir a Categorías' }));
+    expect(await screen.findByText('Categorías de Efectivo')).toBeTruthy();
+    expect(screen.queryByLabelText('Monto')).toBeNull();
+    expect(await back()).toBe(true);
+    expect(await screen.findByLabelText('Secciones de la cuenta')).toBeTruthy();
+    expect(selectedTab()).toBe('Cuenta');
+  });
+
+  it('UXQA-R3-02: guardar muestra el aviso de éxito en el Snackbar único del navegador', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await openForm();
+    await fireEvent.changeText(screen.getByLabelText('Monto'), '12.50');
+    await fireEvent.press(await screen.findByLabelText('Categoría Comida'));
+    await fireEvent.press(screen.getByText('Guardar gasto'));
+    const snackbar = await screen.findByTestId('snackbar');
+    expect(snackbar).toHaveTextContent('Gasto de $12.50 guardado en Comida');
+    expect(screen.getAllByTestId('snackbar')).toHaveLength(1);
+  });
+
+  it('UXQA-R3-02: Cancelar y editar sin cambios no muestran aviso', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await openForm();
+    await fireEvent.press(screen.getByText('Cancelar'));
+    await screen.findByLabelText('Secciones de la cuenta');
+    expect(screen.queryByTestId('snackbar')).toBeNull();
+  });
+
+  it('UXQA-R3-03: Categorías desde el formulario dice «‹ Volver» y Atrás vuelve a donde dice', async () => {
+    const api = makeApi({
+      listCategories: jest.fn(async (_t, _a, options) =>
+        pageOf(options?.tipo === undefined && !options?.incluirArchivadas ? [comida] : []),
+      ),
+    });
+    await render(<MainNavigator api={api} />);
+    await openEfectivo();
+    await goTab('Calendario');
+    await openForm();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Ir a Categorías' }));
+    await screen.findByText('Categorías de Efectivo');
+    expect(screen.getByRole('button', { name: 'Volver' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Volver a Más' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Volver' }));
+    await screen.findByLabelText('Secciones de la cuenta');
+    expect(selectedTab()).toBe('Calendario');
+  });
+
+  it('UXQA-R3-03: Categorías desde Más conserva «‹ Más»', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await goTab('Más');
+    await fireEvent.press(screen.getByRole('button', { name: 'Categorías' }));
+    await screen.findByText('Categorías de Efectivo');
+    expect(screen.getByRole('button', { name: 'Volver a Más' })).toBeTruthy();
+  });
+
+  it('UXQA-R3-04: el formulario no añade un segundo margen inferior (solo el del pie)', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await openForm();
+    expect(screen.queryByTestId('screen-bottom-inset')).toBeNull();
+    expect(screen.getByTestId('transaction-form-footer')).toBeTruthy();
   });
 });

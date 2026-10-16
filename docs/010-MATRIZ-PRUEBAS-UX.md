@@ -2,7 +2,7 @@
 
 Matriz reutilizable con la que `mobile-ux-qa` valida cualquier cambio visible de la interfaz móvil (política de CLAUDE.md, «Coordinación y delegación»). Se aplica al rediseño (docs/007, docs/008 y docs/009) y a las fases siguientes. Los criterios detallados de cada pantalla están en docs/007 §11.2 (criterios 1 a 31, trazados en §9) y los tokens y contrastes en docs/008.
 
-Estado actual: **R2 validada por código y pruebas Jest (nivel A y T) y sin dispositivo**; el resultado está en el §11. Las demás fases (R3 a R6) no están ejecutadas. Ninguna fila está validada en dispositivo Android real (nivel D) ni con TalkBack.
+Estado actual: **R2 validada por código y pruebas Jest (nivel A y T) y sin dispositivo**; el resultado está en el §11. **R3 revisada por código y Jest (nivel A y T), sin dispositivo: primera revisión RECHAZADA; revalidada tras las correcciones: APROBADA CON OBSERVACIONES (sin defectos altos ni críticos abiertos; cierre condicionado a nivel D)**; el resultado está en el §12 y la revalidación en el §12.8. Las demás fases (R4 a R6) no están ejecutadas. Ninguna fila está validada en dispositivo Android real (nivel D) ni con TalkBack.
 
 ## 1. Niveles de evidencia
 
@@ -295,3 +295,158 @@ Sin defectos críticos ni altos. No bloquean el cierre ni el PR por regla de sev
 Todo el nivel D (safe areas, teclado, gestos, tres botones, 360/412 dp, fuente 130/200 %, TalkBack, `Modal` con edge-to-edge) y el nivel R (comparación con `docs/design/capturas/`) por falta de emulador, dispositivo y de la build; no se ejecutó `verify.js` porque valida el prototipo, no la app. Capturas: ninguna.
 
 Regresión: la suite completa (1168 pruebas, incluidas Calendario, Reportes y exportación) pasa; lo repetirá `qa-engineer` como validación técnica.
+
+## 12. Informe de ejecución R3 (formulario de movimiento y Crear cuenta)
+
+```
+Informe de ejecución UX-QA - R3
+Fecha: 2026-10-16
+Rama y commit evaluados: feat/rediseno-ux-ui sobre 94e37e0 (R2), con los cambios de R3 de app/src SIN commit
+Ejecutor: mobile-ux-qa (agentId: lo registra quien coordina; no se dispone aquí)
+Alcance: docs/007 §5.5.1 (A a G, criterios 1 a 21), docs/008 §6.13, docs/003 Rediseño R3 D1 a D7.
+         TransactionFormScreen, NewAccountScreen, form-ui, DatePickerSheet, MainNavigator (onOpenCategories),
+         use-discard-guard, form-dirty, money (sanitizeAmountInput), category-appearance, tokens.
+Entorno: niveles A (Jest) y T (contrast.js y cálculo WCAG propio) y revisión de código. Sin R ni D: no hay
+         emulador, dispositivo ni TalkBack; no se probó 360/412 dp, teclado real, gestos, tres botones ni fuente 200 %.
+Resumen R3: criterios 1 a 20 con nivel A: OK salvo los matizados abajo; 21 (nivel D) PENDIENTE. Defectos: 1 alto, 6 medios, 2 bajos.
+Decisión de la primera revisión (superada por el §12.8): RECHAZADO (BLOQUEADO). El defecto alto UXQA-R3-01 (doble registro posible) bloquea cierre, PR y build hasta su
+          corrección y nueva validación. Los medios se corrigen o se aceptan expresamente. Sin defectos críticos.
+```
+
+### 12.1 Comandos y resultados (nivel A/T)
+
+| Comando | Resultado |
+| --- | --- |
+| `cd app && npx jest --ci --maxWorkers=2 src/screens/TransactionFormScreen.test.tsx src/screens/NewAccountScreen.test.tsx src/screens/MainNavigator.test.tsx src/lib/money.test.ts src/lib/form-dirty.test.ts src/lib/category-appearance.test.ts src/screens/ui.test.tsx src/theme/tokens.test.ts` | 8 suites, **326 pruebas, todas en verde** |
+| `cd app && npx jest --ci --maxWorkers=2` (todo) | 36 suites, **1287 pruebas, todas en verde** |
+| `cd app && npx tsc --noEmit` | sin errores |
+| `cd app && npx eslint src --max-warnings=0` | sin avisos |
+| `node docs/design/contrast.js --check` | código de salida 0 (tabla de `catFill` coincide con `categoryFill`) |
+| Cálculo WCAG propio (scratchpad, no versionado) de los pares nuevos | `expenseText`/`expenseSoft` 5,17; `incomeText`/`incomeSoft` 5,72; `expenseText`/blanco 6,38 y /`bg` 6,19 y /`segBg` 5,52; blanco/`expense` 4,82 y blanco/`income` 4,99 (día elegido); borde `borderStrong`/blanco 3,58 y /`bg` 3,47 (componente, mínimo 3); `expense`/`expenseSoft` 3,91 e `income`/`incomeSoft` 4,28 (bordes de elegido, componente); `text3` sobre blanco 5,54, sobre `bg` 5,38 y sobre `segBg` 4,80 (placeholder, contador, campo bloqueado); `text` sobre `segBg` 14,28; `brand700`/`brand100` 6,03 (borde de foco frente al halo). Todos los textos ≥ 4,5 y los componentes ≥ 3 |
+| Prueba aleatoria de `categoryFill` (5000 colores `#RRGGBB`, scratchpad) | blanco sobre el fondo ≥ 3,000:1 siempre (mínimo 3,000); las 11 categorías por defecto dan 3,04 a 4,83:1, idéntico a `contrast.js`. Color no `#RRGGBB` usa `#6B7280` (4,83:1). El glifo de texto blanco (`⋯`, `＋`) es gráfico de 16 sp: se acepta el umbral de 3:1 del diseño; los emojis llevan su propio color |
+| Sondeo de `sanitizeAmountInput` (scratchpad, 36 entradas) | Ver 12.4 y UXQA-R3-07 |
+
+Colores literales: `grep` de `#hex`/`rgb(` en `TransactionFormScreen.tsx`, `NewAccountScreen.tsx`, `form-ui.tsx`, `DatePickerSheet.tsx` y `use-discard-guard.ts`: **0 coincidencias** (el `#b3261e` literal de R2 ya no existe; se usa `colors.expenseText`). Solo tokens (`colors.white` para el glifo y el día elegido).
+
+### 12.2 Resultados por criterio de docs/007 §5.5.1 G
+
+| Criterio | Nivel exigido | Nivel ejecutado | Resultado | Evidencia (archivo: prueba o línea) | Defecto |
+| --- | --- | --- | --- | --- | --- |
+| G1 Orden Tipo, Categoría, Monto, Fecha, Detalle, Guardar | A | A + código | OK | `TransactionFormScreen.test.tsx` «G1: orden...»; el JSX sigue ese orden (`TransactionFormScreen.tsx` líneas 349 a 533) | - |
+| G2 Monto sin foco al abrir | A | A + código | OK | «G2: el monto no recibe foco...»; ningún `autoFocus` en `form-ui.tsx` ni en la pantalla; `decimal-pad`, prefijo «$» oculto, sin campo de fecha de texto | - |
+| G3 Filtro «a1b2.3,45» -> «12.34», «abc» -> '', «.5» -> «0.5», «007» -> «7», «1,234.56» -> «1234.56», 3.er decimal | A | A + sondeo | OK con matiz | `money.test.ts`; sondeo propio: coinciden los 6 ejemplos. Casos ambiguos con un solo separador: UXQA-R3-07 | UXQA-R3-07 |
+| G4 Tope de dígitos: monto 9, saldo 14 | A | A | OK | `money.test.ts`; sondeo: «1234567890» -> «123456789», 15 enteros de saldo -> 14; `TransactionFormScreen.tsx` líneas 53 a 54, `NewAccountScreen.tsx` líneas 19 a 20 | - |
+| G5 Monto vacío/0: error, sin API, foco, rol `alert` | A | A | OK | «G5: monto vacío o cero...» | - |
+| G6 Sin categoría antes que el monto, sin llamada | A | A | OK | «G6: sin categoría muestra...» | - |
+| G7 El error desaparece al editar; ninguno mientras se escribe | A | A | OK | «G7: el error de un campo desaparece...»; `clearError` en `onChangeText`, fecha y categoría | - |
+| G8 Fecha: Hoy/`initialFecha`, Ayer, «Otra fecha…», elegir cierra, Atrás/Cerrar no cambian, sin texto libre | A | A | OK | seis pruebas «G8: ...» (hoy/ayer, selector, Atrás y «Cerrar», `initialFecha` válida e inválida, celdas de 48 dp, límites 2000/2100, «hoy»). `DatePickerSheet.tsx`: `Sheet` con `onRequestClose` | - |
+| G9 Doble toque = una llamada | A | A + código | OK | «G9: doble toque...»; además `useMutation.run` descarta una segunda ejecución con `running` (ref) aunque el re-render llegue tarde (`use-loader.ts`) | - |
+| G10 Durante el guardado: «Guardando…», `busy`, campos `editable` falso, Cancelar y «✕» deshabilitados, Atrás `true` sin diálogo; tras fallo se rehabilita | A | A | OK | «G10: durante el guardado todo queda bloqueado...»; `MainNavigator.test.tsx` «G10: Atrás se ignora mientras guarda...». Chips, categorías, tipo, «Ir a Categorías» y Anular llevan `disabled={busy}` | - |
+| G11 Sin cambios: Atrás, ✕ y Cancelar salen sin `Alert`; prefijados no cuentan | A | A | OK | «G11: Cancelar, ✕ y Atrás sin cambios...», `form-dirty.test.ts`, `MainNavigator.test.tsx` «G11: ... fecha prefijada desde el calendario» | - |
+| G12 Con cambios: `Alert` con los textos de §B; [Seguir editando] conserva; [Descartar] llama `onDone(false)`; `onDismiss` = Seguir editando | A | A | OK | `TransactionFormScreen.test.tsx` líneas 691 a 725; `NewAccountScreen.test.tsx` «G12»; `MainNavigator.test.tsx` «G12». Textos exactos en `TransactionFormScreen.tsx` líneas 126 a 127 y `NewAccountScreen.tsx` líneas 48 a 49 (idénticos a docs/007 §B y docs/003 R3 D7). `use-discard-guard.ts`: `cancelable: true`, `onDismiss: close`, `dialogOpen` evita un segundo diálogo (Atrás repetido o Cancelar con el diálogo abierto) | - |
+| G13 Volver al valor inicial o Gasto -> Ingreso -> Gasto: sin diálogo | A | A | OK | «G13: ...»; `isFormDirty` compara en centavos y no compara el tipo | - |
+| G14 Éxito, anulación y 409 `ACCOUNT_ARCHIVED` salen sin diálogo | A | A | OK con matiz | «G14» (3 pruebas); la salida de éxito/anulación llama a `onDone` sin pasar por `requestLeave`. Matiz del 409: UXQA-R3-06 | UXQA-R3-06 |
+| G15 Editar: tipo y categoría de solo lectura; sin cambios no llama a la API; texto de «cambios» | A | A | OK con matiz | «G15: ...» (2 pruebas), «sin cambios no llama a la API». Matiz: etiqueta accesible de los valores de solo lectura, UXQA-R3-05 | UXQA-R3-05 |
+| G16 Crear cuenta: nombre vacío, saldo vacío = 0, filtro, 14 enteros, saldo en contra negativo en centavos, tope de la API, guard solo con texto, «Creando…» bloquea Volver y Atrás | A | A | OK | `NewAccountScreen.test.tsx` (G16 x7, G11, G12, «guardando...»). Signo: `enContra && cents !== 0 ? -cents : cents`; prefijo «-$»; `isAccountFormDirty` cuenta el signo y el saldo, no el espacio en blanco | - |
+| G17 Pie fuera del `ScrollView`; roles y etiquetas §E; «Detalle (opcional)» 0/500 | A | A | OK | «G17: ...» (3 pruebas); `transaction-form-footer` es hermano del `ScrollView`; Anular va dentro del scroll al final (no en el pie) | - |
+| G18 Sin categorías: texto exacto + [Ir a Categorías] | A | A | OK con matiz | «G18: ...» (2 pruebas); `MainNavigator.test.tsx` «[Ir a Categorías]...». Clasificación del destino: UXQA-R3-03 | UXQA-R3-03 |
+| G19 409 de categoría obsoleta | A | A | OK | «G19: ...»; mensaje «Esa categoría cambió. Elige otra.» y recarga con `refresh()` | - |
+| G20 `money.test.ts`, typecheck, lint | A | A | OK | 12.1 | - |
+| G21 Guardar visible con teclado abierto (gestos y tres botones); TalkBack lee etiquetas y anuncia el error | D | - | **PENDIENTE (D)** | No hay dispositivo. Riesgos de código en UXQA-R3-04 | UXQA-R3-04 |
+
+### 12.3 Verificaciones solicitadas con atención
+
+| Tema | Resultado | Evidencia |
+| --- | --- | --- |
+| Textos exactos | OK | «Guardar gasto» / «Guardar ingreso» / «Guardar cambios» / «Guardando…» / «Creando…»; «Ingresa un monto mayor a cero, por ejemplo 12.50.»; «Elige una categoría.»; «Escribe un nombre.»; «El saldo inicial es demasiado grande. Revisa la cifra.»; «Es un saldo en contra (debo dinero)»; «No tienes categorías de gasto activas. Crea una en Más > Categorías.»; títulos y cuerpos del descarte; [Seguir editando] [Descartar]. Variante: el error de fecha dice «Elige una fecha válida (años 2000 a 2100).» (no figura en docs/007; comprensible) y la ayuda del saldo añade una frase a «Déjalo vacío si empiezas en 0» |
+| Monto enviado = monto escrito | OK | El estado `montoText` es lo que se ve; se envía `parseCentsFromInput(trimTrailingSeparator(montoText))`. En Editar, `centsToInput` ida y vuelta exacto. El filtro nunca deja pasar algo distinto de lo mostrado. Reserva: lo que el filtro hace con textos pegados ambiguos (UXQA-R3-07) |
+| Saldo en contra (signo, «-$») | OK | Prefijo «-$» al marcar; el campo nunca escribe «-»; con importe 0 o vacío no se envía negativo; la casilla cuenta como cambio. Pendiente de nivel R la apariencia |
+| Descarte | OK (A) | Solo con cambios; Atrás, ✕, Cancelar, «‹» y [Ir a Categorías] pasan por el guard; con `busy` no hay diálogo; sin diálogo tras éxito, anular o 409. El listener del formulario se registra después del navegador (efecto con dependencias estables), así que Android lo llama primero; sin cambios devuelve `false` y el navegador resuelve Atrás (`MainNavigator.test.tsx` y «registra una sola suscripción...») |
+| Cambio de cuenta durante la edición | OK (inalcanzable, A + código) | `AccountSwitcherSheet` solo se monta en la rama `detail`; la ruta del formulario usa la barra `compact` sin `onOpenSwitcher`; `openAccount` solo existe en Mis cuentas. Pruebas: «con el formulario abierto no hay selector accesible», «un movimiento de otra cuenta no abre Editar». Cerrar sesión desmonta el navegador. Sin fuga de datos entre cuentas hoy. Defensa en profundidad ausente: UXQA-R3-09 |
+| Objetivos táctiles ≥ 48 dp | OK (A, código) | ✕ 48×48; tipo 48; categoría ≥ 56; `Chip` 48; casilla 48; `Button` 48/52; flechas de mes 48×48; celdas 48 de alto y 49,1 de ancho a 360 dp (`(360 - 16) / 7`; a < 336 dp bajarían de 48: fuera del alcance de 360 dp). Medición real: PENDIENTE (D) |
+| Roles y anuncios de errores | OK con matices | `FieldError` con `alert` + `polite` + una sola `announceForAccessibility` por intento (Movimiento); foco en el campo o en el mensaje. Matices: UXQA-R3-05 y UXQA-R3-08 |
+| Selector de fecha | OK | Rango 2000 a 2100 (flechas deshabilitadas al borde), hoy marcado, futuras permitidas, tocar elige y cierra, Atrás/«Cerrar»/velo no cambian. «Fuera de rango» (celdas deshabilitadas, docs/008 punto 4) no existe en el código y es inalcanzable: cada mes mostrado está entero dentro del rango y `initialMonthFor` acota. No es defecto; el texto de docs/008 puede simplificarse (ver 12.5) |
+| Pie fuera del `ScrollView` | OK | Prueba G17 por `testID`; pie con borde, sombra y margen inferior. Problema de margen doble: UXQA-R3-04 |
+| «Ir a Categorías» desde el formulario | **Clasificado: navegación de reemplazo con etiqueta engañosa (media)** | `replaceTopWithCategories` sustituye la ruta del formulario por `categories`; Atrás vuelve a la pestaña de origen (prueba: queda en «Cuenta»), pero la pantalla se titula «‹ Más» / «Volver a Más». Se descarta el formulario (con confirmación si hay cambios). UXQA-R3-03 |
+| Omisión declarada: aviso de éxito | **FALLA (media)** | `onDone` solo retira la ruta y relee el saldo; no hay `setSnack` en la salida del formulario (`MainNavigator.tsx`). UXQA-R3-02 |
+| Omisión declarada: respuesta perdida | **FALLA (alta)** | Un error de red al crear muestra «No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.»; no existe «No pudimos confirmar si se guardó...». UXQA-R3-01 |
+| Omisión declarada: estado fuera de rango | Sin defecto | Ver «Selector de fecha» |
+
+### 12.4 Sondeo de `sanitizeAmountInput` (nivel A, scratchpad, 36 entradas; límite de 9 enteros)
+
+Coinciden con docs/007 §C y G3: «a1b2.3,45» -> «12.34»; «abc» -> ''; «.5» y «,5» -> «0.5»; «007» -> «7»; «00» -> «0»; «1,234.56» y «1.234,56» -> «1234.56»; «1,234,567» -> «1234567»; «12.345» -> «12.34»; «-5» -> «5»; «$12.50» -> «12.50»; cifras árabes o de ancho completo -> ''; idempotente sobre sus propias salidas. Ambiguos (ver UXQA-R3-07): «1,234» -> «1.23» y «1.000» -> «1.00» (un pegado de «mil doscientos treinta y cuatro» queda en $1.23), «1e5» -> «15», «1,2345,678» -> «1.23».
+
+### 12.5 Defectos
+
+| ID | Pantalla | Caso | Severidad | Pasos | Esperado | Obtenido | Evidencia / archivo |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| UXQA-R3-01 | Nuevo movimiento | ACC, EST (doble registro) | **Alta (bloquea)** | Con la API sin clave de idempotencia, crear un movimiento y que la conexión se corte después de que el servidor lo grabó (o expire la respuesta); la app muestra el error de red y conserva los datos | docs/007 §5.5 «Doble envío»: «el texto de error de red debe invitar a revisar el historial antes de reintentar: No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.»; docs/007 §5.5.1 A punto 13 lo lista como trabajo de R3; docs/010 §7: «doble registro posible» es alta | El mensaje es «No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.», que invita a reintentar y puede duplicar el gasto. Ninguna prueba cubre el texto de respuesta perdida | `app/src/lib/resources-messages.ts` (caso `network`); `app/src/screens/TransactionFormScreen.tsx` (`mutation.error`); `TransactionFormScreen.test.tsx` «error de red no cierra el formulario» afirma el mensaje genérico. Nivel A (código y Jest). Para `mobile-engineer`: texto específico en la creación (y en cualquier fallo en que el servidor pudo recibir la solicitud), con prueba. Cierre posible también con aceptación expresa del usuario |
+| UXQA-R3-02 | Nuevo / Editar movimiento | EST (éxito), ACC | Media | Guardar un gasto de $12.50 en Alimentación | docs/007 §5.5 «Confirmación» y §5.5.1 A punto 12: aviso breve no bloqueante «Gasto de $12.50 guardado en Alimentación» (3 s); docs/007 línea 1008 asigna `MainNavigator` | El formulario se cierra y el saldo cambia, sin aviso de éxito. La omisión está declarada, no aprobada | `app/src/screens/MainNavigator.tsx` (`onDone` del formulario); el `Snackbar` existe y se usa en otros flujos. Nivel A. Implementar o aceptar expresamente y registrar en docs/003 |
+| UXQA-R3-03 | Nuevo movimiento -> Categorías | NAV, DIS | Media | Abrir Nuevo movimiento desde Calendario o Cuenta en una cuenta sin categorías del tipo; tocar [Ir a Categorías]; tocar «‹ Más» o Atrás | docs/007 §3.4 (Categorías -> Más) y la etiqueta de la propia pantalla: «‹ Más» / «Volver a Más» deben llevar a Más | Vuelve a la pestaña de origen (Cuenta, Movimientos o Calendario), no a Más; la etiqueta miente. Además el formulario se descarta y hay que volver a abrirlo tras crear la categoría | `app/src/screens/MainNavigator.tsx` (`replaceTopWithCategories`, rama `categories`); `MainNavigator.test.tsx` «[Ir a Categorías]...» afirma `Cuenta`. Opciones para quien coordina: etiqueta neutra según el origen (p. ej. «‹ Volver») o dejar la pestaña en Más al reemplazar. Si se cambia el comportamiento, lo decide `mobile-ux-designer` |
+| UXQA-R3-04 | Nuevo / Editar movimiento | SAFE, DIS | Media | Abrir el formulario con barra del sistema inferior (gestos o tres botones) | docs/007 §5.5.1 E y docs/008 §6.13 punto 6: pie fijo con margen inferior del sistema una sola vez | `Screen scroll={false}` sin `bottomBar` añade `screen-bottom-inset` (altura = `insets.bottom`) y además el pie suma `12 + insets.bottom` de relleno: el margen inferior se cuenta dos veces (24 a 48 dp de más con el respaldo de 48 dp), con una franja de `bg` bajo el pie blanco. Con el teclado abierto y `adjustResize`, `useSystemInsets` calcula `screenH - windowH - top` y podría tomar la altura del teclado como margen (dos veces): riesgo no verificable aquí | `app/src/screens/TransactionFormScreen.tsx` (pie, `paddingBottom: 12 + insets.bottom`); `app/src/screens/ui.tsx` (`Screen`, `bottomSpacer`); `app/src/screens/MainNavigator.tsx` (rama `newTx`/`editTx`); `app/src/theme/useSystemInsets.ts`. Nivel A (código). Confirmar en dispositivo (G21); corregir pasando `bottomBar` o quitando el relleno inferior del pie |
+| UXQA-R3-05 | Editar movimiento | A11Y | Media | Con TalkBack, abrir Editar y enfocar Tipo y Categoría de solo lectura | docs/007 §5.5.1 E: etiquetas con el valor («Tipo» y su valor, «Categoría {nombre}») | El `Text` con el valor lleva `accessibilityLabel="Tipo"` / `"Categoría"`, que sustituye al contenido: el lector dice «Tipo» y «Categoría», no «Gasto» ni el nombre. Información que solo se lee de ese texto queda sin acceso para TalkBack | `app/src/screens/TransactionFormScreen.tsx` (`readOnlyType`, `readOnlyName`, líneas 357 a 380). Nivel A (código); TalkBack real PENDIENTE. Usar el valor como etiqueta («Tipo: Gasto», «Categoría: Comida») |
+| UXQA-R3-06 | Nuevo movimiento | EST, ACC | Media | Crear un movimiento en una cuenta archivada en otro dispositivo (409 `ACCOUNT_ARCHIVED`) | docs/007 §3.5.3 / §5.5 / criterio 20: mensaje «Esta cuenta está archivada, por eso no se guardó el movimiento. Desarchívala desde Mis cuentas...» + [Volver a la cuenta]; datos sin enviar | Muestra el mensaje genérico «La cuenta está archivada. Desarchívala para modificarla.»; no hay [Volver a la cuenta]; Guardar sigue activo (reintento posible con el mismo 409). Se puede salir con Cancelar o Atrás sin diálogo | `app/src/lib/resources-messages.ts` (`ACCOUNT_ARCHIVED`); `app/src/screens/TransactionFormScreen.tsx` (`archivedBlocked` solo anula el guard); `TransactionFormScreen.test.tsx` «R2 (cuenta archivada)». Nivel A. El criterio 14 de G (salida sin diálogo) sí se cumple |
+| UXQA-R3-07 | Nuevo movimiento, Crear cuenta | INF, ACC | Media | (a) Pegar «1,234» o «1.000» en Monto. (b) Pegar «12,345,678.90» (13 caracteres) | docs/007 §C: lo pegado se filtra y el usuario no debe recibir un monto distinto del que quiso escribir (docs/010 «dato financiero incorrecto»); el texto visible = el enviado | (a) «1,234» queda en «$1.23» y «1.000» en «$1.00»: un solo separador con tres dígitos se interpreta como decimal y se descarta el tercer dígito, sin aviso (magnitud ×1000). (b) `maxLength` (12 y 17) cuenta los caracteres antes del filtro, así que un pegado con separadores de miles se recorta antes de limpiarse («12,345,678.9» -> «12345678.9»). El monto mostrado coincide siempre con el enviado, y es visible antes de guardar. «1e5» -> «15» | `app/src/lib/money.ts` (`THOUSANDS_ONLY`, `THOUSANDS_WITH_DECIMAL`, regla del decimal único); `TransactionFormScreen.tsx` (`AMOUNT_MAX_LENGTH`), `NewAccountScreen.tsx` (`BALANCE_MAX_LENGTH`). Nivel A (sondeo). Decisión de diseño para `mobile-ux-designer`: cómo tratar un pegado ambiguo (p. ej. rechazarlo o dejar el texto sin filtrar los separadores y avisar) y si `maxLength` debe subir para admitir pegados con miles. El recorte por `maxLength` solo se puede confirmar en dispositivo |
+| UXQA-R3-08 | Crear cuenta | A11Y | Baja | Guardar con nombre vacío o saldo inválido, con TalkBack | docs/007 §5.5.1 E: cada error con `announceForAccessibility` (una vez por intento); error de envío con `polite` | `NewAccountScreen` no llama a `announceForAccessibility`; el error de envío tiene `alert` pero no `accessibilityLiveRegion`; solo el foco del campo guía. El formulario de movimiento sí lo hace | `app/src/screens/NewAccountScreen.tsx` (`submit`, `styles.error`). Nivel A (código) |
+| UXQA-R3-09 | Editar / Nuevo movimiento | NAV (robustez) | Baja | Hoy no reproducible: ninguna ruta cambia la cuenta con el formulario abierto | docs/003 R3 D4: si un cambio futuro permitiera cambiar de cuenta, el guard confirma y descarta | `TransactionFormScreen` tiene `key={transaction?.id ?? 'new'}` sin `account.id` (las demás pantallas usan `key={account.id}`); si algún día se alcanzara el selector, el estado (`categoryId`, monto) sobreviviría al cambio y la API respondería con `CATEGORY_MISMATCH` en vez de descartar. Hoy sin fuga | `app/src/screens/MainNavigator.tsx` (rama `newTx`/`editTx`). Nivel A (código). Añadir `account.id` a la `key` y, si se abre el selector, pasar por el guard |
+
+### 12.6 Observaciones sin defecto
+
+- Contraste: ningún par nuevo de R3 incumple AA (12.1). El texto blanco del glifo sobre `categoryFill` se mide como gráfico (3:1), no como texto.
+- docs/007 §5.5.1 E pide nombres de categoría «de dos líneas o más, sin elipsis» al 200 % y docs/008 §6.13 punto 2 fija `numberOfLines={2}`: con fuente 200 % y nombres muy largos habría elipsis. El código sigue docs/008; la discrepancia entre documentos se devuelve a `mobile-visual-designer`/`mobile-ux-designer`. Se valida en dispositivo.
+- docs/008 §6.13 punto 4 describe celdas «fuera de rango» deshabilitadas, que no ocurren (los meses de los extremos están enteros dentro del rango); basta retirar la frase o dejarla como defensa.
+- El encabezado con «✕» está dentro del `ScrollView` (se desplaza con el contenido); «Cancelar» siempre queda en el pie fijo, así que hay salida visible en todo momento.
+- Los títulos del formulario usan `typography.title` (24/30, 800) y el monto `typography.amountInput` (28/34, 800, cifras tabulares), conforme a docs/008 §6.13.
+- En Editar, si la categoría no carga (o hay más de 100 categorías) el nombre cae en «Categoría del movimiento»; sin reintento visible. Baja probabilidad.
+
+### 12.7 Pendientes (no demostrados) y motivo
+
+Todo nivel D por falta de emulador, dispositivo y TalkBack: G21 (Guardar sobre el teclado con gestos y con tres botones, TalkBack leyendo etiquetas y anunciando errores), margen inferior real y posible doble margen (UXQA-R3-04), `maxLength` frente a pegados con separadores (UXQA-R3-07 b), `Modal` del selector de fecha con edge-to-edge, desplazamiento al primer error, foco con `setAccessibilityFocus`, fuente 130 % y 200 %, 360 y 412 dp (celdas de 49,1 dp), Atrás con gestos predictivos, aspecto del halo de foco y del tinte del tipo. Nivel R (comparación con `docs/design/capturas/`): no ejecutado; `verify.js` valida el prototipo, no la app. Capturas: ninguna.
+
+Regresión: suite completa en verde (36 suites, 1287 pruebas), tsc y eslint sin avisos; la repetirá `qa-engineer` como validación técnica. Los archivos del scratchpad (sondeos) no están versionados y no modifican `/app`.
+
+### 12.8 Revalidación tras las correcciones de mobile-engineer
+
+```
+Fecha: 2026-10-16 · Rama: feat/rediseno-ux-ui sobre 94e37e0, cambios sin commit · Niveles: A y T (código y Jest); sin R ni D
+Comandos: cd app && npx jest --ci --maxWorkers=2 -> 36 suites, 1303 pruebas, todas en verde
+          npx tsc --noEmit -> sin errores · npx eslint src --max-warnings=0 -> sin avisos
+Decisión: APROBADO CON OBSERVACIONES. No queda ningún defecto alto ni crítico. Abiertos: UXQA-R3-07 (media, decisión pendiente
+          del usuario) y G21 / validación de teclado y TalkBack (nivel D, pendiente). El cierre de R3 sigue condicionado a D.
+```
+
+| ID | Estado | Verificación independiente (código y prueba) |
+| --- | --- | --- |
+| UXQA-R3-01 (alta) | **Cerrado (A)** | `resources-messages.ts`: `LOST_RESPONSE_MOVEMENT` («No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.») y `LOST_RESPONSE_ACCOUNT`. `isUncertainWriteFailure`: `ApiRequestError` solo si `status >= 500` (todo 4xx, incluidos 409, 413 y 429, garantiza que no se guardó y no usa el texto); `AuthError` solo `network` y `server` (`rejected`, `conflict`, `storage` no); error desconocido cuenta como dudoso (criterio conservador); `ExportFileError` no. Se aplica solo al CREAR movimiento y cuenta (`uncertain.current` en el `catch`; se reinicia en cada intento). Al EDITAR no se usa: el fallo de red o 5xx conserva el mensaje genérico de `mutation.error` (el PATCH no duplica) y no se pierde. Pruebas: `TransactionFormScreen.test.tsx` «UXQA-R3-01» x3 (red, 5xx y desconocido; 4xx no; se retira al reintentar), `NewAccountScreen.test.tsx` «UXQA-R3-01». Sin regresión: el 409 de cuenta archivada y de categoría obsoleta mantienen su flujo |
+| UXQA-R3-02 (media) | **Cerrado (A)** | `onDone(changed, message?)`; solo la creación exitosa entrega «Gasto/Ingreso de $X guardado en {categoría}» y `MainNavigator` lo envía a `setSnack`. Cancelar, descartar, editar, anular y el 409 llaman a `onDone(false)` o `onDone(true)` sin mensaje. Pruebas: `MainNavigator.test.tsx` «UXQA-R3-02: guardar muestra el aviso…» y «Cancelar y editar sin cambios no muestran aviso»; `TransactionFormScreen.test.tsx` «el éxito entrega el aviso…» y «editar y anular no emiten aviso». Observación: sin nombre de categoría resoluble no hay aviso (caso improbable) |
+| UXQA-R3-03 (media) | **Cerrado (A)** | La ruta `categories` lleva `fromForm`; la barra dice «‹ Volver» (etiqueta accesible «Volver») y Atrás/«‹» llevan a la pestaña de origen, ahora coherente. «‹ Más» se conserva cuando se llega desde Más. Sigue descartándose el formulario (con confirmación si hay cambios), comportamiento aceptado |
+| UXQA-R3-04 (media) | **Cerrado a nivel A; riesgo de teclado PENDIENTE (D)** | La rama del formulario pasa `bottomBar` a `Screen`: ya no se añade `screen-bottom-inset` y el margen inferior se cuenta una sola vez en el pie. Queda sin verificar en dispositivo cómo calcula `useSystemInsets` el margen con el teclado abierto (parte de G21) |
+| UXQA-R3-05 (media) | **Cerrado (A); TalkBack PENDIENTE (D)** | Etiquetas «Tipo: Gasto/Ingreso» y «Categoría: {nombre}» en los valores de solo lectura. Observación baja: si la categoría aún no cargó se lee «Categoría: Categoría del movimiento» |
+| UXQA-R3-06 (media) | **Cerrado (A)** | Con 409 `ACCOUNT_ARCHIVED` el error es `ACCOUNT_ARCHIVED_ON_SAVE` (texto de §3.5.3, rol `alert`), el pie muestra solo [Volver a la cuenta] (`onDone(false)`, sin mensaje de éxito), sin Guardar ni Cancelar. No queda atrapado: [Volver a la cuenta], «✕» y Atrás salen sin diálogo (`dirty` es falso con `archivedBlocked`). El 409 al EDITAR no activa este modo. Prueba «UXQA-R3-06» |
+| UXQA-R3-07 (media) | **Cerrado (A)** (ver §12.9) | Decidido en docs/003 R3 D8 y corregido con `validateAmountText`; revalidado |
+| UXQA-R3-08 (baja) | **Cerrado (A)** | `NewAccountScreen` anuncia los errores con `announceForAccessibility` y el error de envío lleva `accessibilityLiveRegion="polite"` |
+| UXQA-R3-09 (baja) | **Cerrado (A)** | `key={`${account.id}:${transaction?.id ?? 'new'}`}` en `MainNavigator`: un cambio de cuenta remontaría el formulario. El selector sigue siendo inalcanzable con el formulario abierto |
+
+Pendientes que impiden declarar R3 cerrada: G21 y todo el nivel D listado en el §12.7 (teclado real, margen inferior, TalkBack, fuente 200 %, 360/412 dp, `Modal` del selector de fecha) y el nivel R. Defectos abiertos por severidad: críticos 0, altos 0, medios 1 (R3-07, aceptado-pendiente), bajos 0.
+
+### 12.9 Revalidación de UXQA-R3-07 (montos ambiguos, docs/003 R3 D8)
+
+```
+Fecha: 2026-10-16 · Niveles: A y T (código, Jest y sondeo propio en scratchpad); sin R ni D
+Comandos: cd app && npx jest --ci --maxWorkers=2 -> 36 suites, 1348 pruebas, todas en verde
+          npx tsc --noEmit -> sin errores · npx eslint src --max-warnings=0 -> sin avisos
+Decisión: APROBADO CON OBSERVACIONES. UXQA-R3-07 CERRADO (A). Sin defectos altos ni críticos abiertos.
+```
+
+| Verificación | Resultado | Evidencia |
+| --- | --- | --- |
+| Rechazar «1.000», «1,234», «1e5»; aceptar «1000», «1234», «12.50», «12,50» | OK (A) | Sondeo de `validateAmountText`: «1.000» y «1,234» -> `thousands`; «1e5» -> `chars`; «1000» -> 100000, «1234» -> 123400, «12.50» y «12,50» -> 1250. Extras: «1,234.56», «1.234.567», «100.000», «12.345» -> `thousands`; «0.123», «1234.567» -> `decimals`; «-5», «$5», «12 50», cifras árabes o de ancho completo -> `chars`; «» y «.» -> `empty`. Ambos formularios llaman a la misma función: `TransactionFormScreen.validate` y `NewAccountScreen.submit` (saldo vacío = 0 sin error; el resto de rechazos no llama a la API) |
+| Coherencia de «007», «.5», «5.», «0.07» | OK | «007» -> 700 (7,00), «.5» y «,5» -> 50, «5.» -> 500, «0.07» -> 7, «00.5» -> 50, « 12 » -> 1200. El texto crudo se conserva y siempre se envía el importe que ese texto representa; no hay reinterpretación silenciosa. «0» y «0.00» pasan el formato y el movimiento los rechaza con «mayor a cero» |
+| Monto mostrado = enviado | OK | El estado guarda el texto crudo (`maxLength` 24); `validate()` y `submit()` usan el mismo `validateAmountText(montoText)`; un valor ambiguo nunca llega a la API. Tope: 9 enteros del movimiento por `MAX_AMOUNT_CENTS` («El monto máximo es $999999999.99.») y saldo hasta 9 007 199 254 740 991 centavos, sobre él «El saldo inicial es demasiado grande. Revisa la cifra.» (sondeo: «90071992547409.92» -> `too-large`) |
+| Claridad y tono | OK | «Escribe solo números, por ejemplo 12.50.» · «Escribe el monto sin separador de miles, por ejemplo 1000 o 12.50.» · «Usa como máximo 2 decimales, por ejemplo 12.50.» · «Ingresa un monto mayor a cero, por ejemplo 12.50.»: español cotidiano, de «tú», con ejemplo y acción. Observación baja: «12.345» recibe el mensaje de miles aunque quien lo escribe pudo pensar en decimales; el mensaje ofrece ambos ejemplos, aceptable |
+| Descarte con texto crudo | OK | `isFormDirty` compara en centavos cuando el texto se puede interpretar («12,50» frente a «12.50» no es cambio) y por texto si no («1.000» o «1e5» cuentan como cambio, «.» también); espacios solos no cuentan. `isAccountFormDirty` usa `saldo.trim()` |
+| Accesibilidad del error | OK (A); TalkBack PENDIENTE (D) | Mismo `FieldError` (rol `alert`, `polite`), foco al campo y un `announceForAccessibility` por intento en el movimiento; en Crear cuenta foco al saldo y anuncio. El error se borra al editar |
+| Regresiones en G1 a G20 | Sin regresión | Suite completa en verde (1348). `sanitizeAmountInput` ya no existe en `app/src` |
+| Documentación | Observación baja | docs/007 §5.5.1 C conserva el párrafo «Helper PROPUESTA: `sanitizeAmountInput`…» (línea 561) y el criterio 20 sigue citándolo; el resto (C.1 y criterios 3 y 4) ya describe `validateAmountText`. Devolver a quien coordina para alinear el texto |
+
+Estado de defectos tras esta revalidación: críticos 0, altos 0, medios 0, bajos 0 de código (R3-07 cerrado); queda la observación documental y los pendientes de nivel D del §12.7 (G21: teclado real, margen inferior, TalkBack, fuente 200 %, 360/412 dp, comportamiento de pegado con `maxLength` 24 en Android). El cierre de R3 sigue condicionado a ese nivel D.

@@ -501,6 +501,138 @@ Reglas y estados:
 - **Sin categorías del tipo:** «No tienes categorías de gasto activas. Crea una en Más > Categorías.» + [Ir a Categorías] (hoy dice «desde Cuentas»; cambia).
 - **Errores 409 de categoría obsoleta** (EXISTENTE `STALE_CATEGORY_CODES`): se recargan categorías y se pide elegir de nuevo con el mensaje «Esa categoría cambió. Elige otra.»
 
+### 5.5.1 Especificación de implementación de R3 (formulario de movimiento y Crear cuenta)
+
+Ámbito: `TransactionFormScreen.tsx`, `NewAccountScreen.tsx` y un helper nuevo de entrada monetaria. Marcas: EXISTENTE = ya está en el código; APROBADO = docs/003 (Rediseño D5 y R3 D1) o docs/001 §7; PROPUESTA = nuevo en esta sección, pendiente de la aprobación del usuario junto con R3.
+
+#### A. Orden y comportamiento aprobados, y conformidad del código actual (HEAD 94e37e0)
+
+Orden APROBADO (docs/003 Rediseño D5): **Tipo, Categoría, Monto, Fecha, Detalle, Guardar**. En Editar, tipo y categoría son de solo lectura (docs/001 §5).
+
+Ya cumple (EXISTENTE):
+
+- Tipo y categoría inmutables al editar; «Anular movimiento» al final, en rojo, con `Alert` de confirmación.
+- `changeTipo` limpia la categoría; solo categorías activas del tipo elegido; recarga si llegan 409 de categoría obsoleta.
+- Hoy / Ayer rápidos y validación de fecha con `isValidDateString` (2000 a 2100); fechas futuras permitidas.
+- Validación de monto en cliente (`parseCentsFromInput`, máximo 99 999 999 999 centavos) y de categoría; la API sigue validando.
+- Bloqueo durante el guardado: `busy` deshabilita Guardar/Cancelar/Anular/chips/«Hoy»/«Ayer» y pone `editable={false}`; Atrás se ignora con `BackHandler` (en el formulario y en Crear cuenta).
+- Editar sin cambios no llama a la API; 409 `ACCOUNT_ARCHIVED` avisa al contenedor.
+- Crear cuenta: «Creando…» con botón ocupado, «Volver» deshabilitado al guardar, teclado `decimal-pad`, texto de ayuda de saldo inicial.
+
+No cumple todavía (trabajo de R3):
+
+1. Orden: hoy es Monto, Tipo, Categoría, Fecha, Nota.
+2. `autoFocus` en el monto (el diseño lo quita; el teclado se abre al tocar el campo o tras elegir categoría).
+3. Categoría como chips de texto; falta rejilla visual con color de la categoría (e icono si lo define docs/008), nombre siempre visible.
+4. Tipo con `Chip` en lugar de `Segmented` de 48 dp.
+5. Monto sin filtrado de caracteres (acepta letras hasta guardar), sin prefijo «$» y sin límite de dígitos (§C).
+6. Fecha como texto libre AAAA-MM-DD; falta «Otra fecha…» con selector (§F).
+7. Etiqueta «Nota (opcional)» debe ser «Detalle (opcional)»; falta contador 0/500.
+8. Botón «Guardar» genérico: debe ser «Guardar gasto» / «Guardar ingreso» / «Guardar cambios» y «Guardando…» al enviar; no usa la variante `busy` ni `tall`.
+9. Guardar no es fijo: va dentro del `ScrollView`, puede quedar bajo el teclado.
+10. Sin confirmación de descarte: Cancelar sale directo y Atrás no se intercepta (APROBADO R3 D1). Igual en Crear cuenta.
+11. Sin encabezado propio con «✕» (48 dp) ni barra compacta de solo lectura (hoy un `Text` «Cuenta: …»).
+12. Sin aviso de éxito «Gasto de $12.50 guardado en Alimentación» (el contenedor recibe solo `onDone(changed)`; el aviso viaja con el resultado o lo emite el contenedor con el Snackbar único del navegador, decisión de `architect`).
+13. Sin foco ni anuncio al primer error; mensajes de categoría obsoleta («Esa categoría cambió. Elige otra.») y de respuesta perdida no existen; el vacío de categorías dice «desde Cuentas» y debe decir «Más > Categorías» con [Ir a Categorías].
+14. Crear cuenta: saldo sin filtrado ni límite, sin guard de descarte, sin forma de indicar saldo negativo en Android (§C.3).
+
+#### B. Confirmación de descarte (APROBADO R3 D1; textos PROPUESTA salvo el de movimiento)
+
+Mecanismo recomendado por `architect`: hook local `useDiscardGuard` por pantalla, `Alert.alert` nativo.
+
+| Pantalla | Título | Cuerpo | Botones |
+| --- | --- | --- | --- |
+| Nuevo movimiento | «¿Descartar este movimiento?» (APROBADO) | «Lo que escribiste se perderá.» (APROBADO) | [Seguir editando] (`cancel`) [Descartar] (`destructive`) |
+| Editar movimiento (ajuste) | «¿Descartar los cambios?» | «Los cambios que hiciste no se guardarán.» | igual |
+| Nueva cuenta | «¿Descartar esta cuenta?» | «Lo que escribiste se perderá.» | igual |
+
+Ajuste para Editar: el movimiento ya existe, por lo que «Descartar este movimiento» sugeriría borrarlo; el texto de «cambios» evita el malentendido. Si el usuario prefiere un solo texto, se usa el de Nuevo.
+
+Reglas:
+
+- «Cambio» = el estado actual difiere de la **instantánea inicial** tomada al abrir. La fecha prefijada (`initialFecha` o hoy) y una categoría prefijada no cuentan. Comparación normalizada: monto en centavos (o texto vacío), `nota.trim()`, tipo, categoría y fecha. Volver al valor inicial deja de contar como cambio. Nuevo movimiento: cambia si hay categoría elegida, monto no vacío, nota no vacía, fecha distinta de la inicial o tipo distinto de Gasto con categoría elegida (solo cambiar el tipo sin más no pierde nada). Editar: monto, fecha o nota distintos del movimiento. Nueva cuenta: nombre con texto (tras `trim`) o saldo no vacío o signo negativo marcado.
+- Puntos de salida que pasan por el guard: Atrás del sistema, «✕»/«‹ Volver» y «Cancelar». Sin cambios: se sale sin diálogo. Con cambios: diálogo; `cancelable` verdadero y Atrás sobre el diálogo = Seguir editando.
+- No pasan por el guard: éxito de guardar, «Anular» confirmado, 409 `ACCOUNT_ARCHIVED` con «Volver a la cuenta» (los datos ya no se pueden enviar; ahí sí se descartan sin preguntar).
+- Cambiar de pestaña o de cuenta es inalcanzable con el formulario abierto (pantalla de pila sin barra inferior ni selector); no requiere guard.
+- Con `busy` no hay diálogo: Atrás se ignora.
+
+#### C. Entrada monetaria (monto de movimiento y saldo inicial)
+
+Helper: `validateAmountText(text)` en `app/src/lib/money.ts`, puro y probado (docs/003 R3 D8). Valida al guardar y no normaliza en silencio. `parseCentsFromInput` no cambia.
+
+1. **Entrada y validación (docs/003 Rediseño R3 D8; sustituye al filtrado y a la normalización de miles):** el campo conserva lo escrito o pegado, hasta 24 caracteres, y no descarta ni reinterpreta nada en silencio. La función pura `validateAmountText` (`lib/money.ts`) valida al guardar. Se aceptan solo enteros y decimales con punto o coma y hasta 2 decimales: «1000», «1234», «12.50», «12,50», «.5», «5.», «0.07». Se rechazan, con mensaje y sin llamar a la API: (a) un separador seguido de 3 o más dígitos («1.000», «1,234», «12.345»; «1234.567» como exceso de decimales); (b) varios separadores («1,234.56», «1.234,56», «1.234.567»); (c) cualquier carácter que no sea dígito o separador (notación exponencial «1e5», letras, signos, espacios internos, «$»). El texto mostrado es siempre el validado y enviado (la coma se envía como punto decimal). Vacío o «.» equivale a «sin monto» (monto: error de «mayor a cero»; saldo: 0).
+2. **Decimales:** máximo 2 (se valida al guardar, ver el punto 1).
+3. **Signo negativo:** el teclado `decimal-pad` de Android no tiene «-»; por eso el campo **no** admite el signo. Solo el saldo inicial puede ser negativo (APROBADO docs/003 2A D7, API acepta de −9 007 199 254 740 991 a +9 007 199 254 740 991 centavos). PROPUESTA, requiere aprobación: interruptor visible bajo el campo, `Chip` con rol `checkbox` de 48 dp, «Es un saldo en contra (debo dinero)», que antepone «-» al valor enviado y se muestra como «-$» en el prefijo. El monto de movimiento nunca es negativo (tipo y signo los da Gasto/Ingreso).
+4. **Máximo de cifras:** movimiento, `MAX_AMOUNT_CENTS` = 99 999 999 999 centavos ($999999999.99): mayor se rechaza al guardar con «El monto máximo es $999999999.99.». Saldo inicial, 14 dígitos enteros caben en un entero seguro; el tope exacto de la API (9 007 199 254 740 991 centavos, `Number.isSafeInteger`) se valida al guardar con «El saldo inicial es demasiado grande. Revisa la cifra.».
+5. **Prefijo:** «$» fijo fuera del texto editable (o «-$» si el saldo es en contra), no forma parte del valor. Teclado `decimal-pad`; `maxLength` 24 (margen para pegados).
+6. **Cuándo se valida:** al guardar (no al salir del campo ni en cada tecla); sin errores mientras se escribe. Tras un intento fallido, el error de un campo se borra en cuanto ese campo cambia. Un separador final («12.») es válido y equivale a «12»; un separador inicial («.5») equivale a «0.5».
+
+Mensajes exactos (español cotidiano):
+
+| Caso | Dónde | Texto |
+| --- | --- | --- |
+| Monto vacío, «.» o igual a 0 | Monto | «Ingresa un monto mayor a cero, por ejemplo 12.50.» (EXISTENTE) |
+| Monto sobre el máximo (se rechaza al guardar) | Monto | «El monto máximo es $999999999.99.» (EXISTENTE con `formatCents`; en pantalla igual que `formatCents`, sin separador de miles; si 007 §7.4 exhibe comas, prevalece el formato real del código) |
+| Separador de miles o varios separadores (monto y saldo) | Monto, Saldo inicial | «Escribe el monto sin separador de miles, por ejemplo 1000 o 12.50.» |
+| Caracteres que no son números (letras, «1e5», signos, espacios) | Monto, Saldo inicial | «Escribe solo números, por ejemplo 12.50.» |
+| Más de 2 decimales (p. ej. «1234.567») | Monto, Saldo inicial | «Usa como máximo 2 decimales, por ejemplo 12.50.» |
+| Saldo sobre el tope de la API | Saldo inicial | «El saldo inicial es demasiado grande. Revisa la cifra.» (PROPUESTA) |
+| Saldo vacío | Saldo inicial | sin error: vacío = 0 (APROBADO docs/001 §5) |
+| Nombre vacío | Nombre | «Escribe un nombre.» (EXISTENTE) |
+| Sin categoría | Categoría | «Elige una categoría.» (EXISTENTE) |
+
+#### D. Estados durante el guardado
+
+- Botón principal: texto «Guardando…» (en Crear cuenta se conserva «Creando…»), `busy`, `accessibilityState={{ busy: true, disabled: true }}`; el segundo toque no genera segunda llamada.
+- Campos de texto `editable={false}`; chips, Tipo, Hoy/Ayer/Otra fecha y Anular deshabilitados.
+- «✕»/«‹ Volver» y «Cancelar» deshabilitados; Atrás del sistema se ignora. El diálogo de descarte no aparece.
+- Si falla: se rehabilita todo, los datos se conservan, el error aparece sobre el botón (rol `alert`) y el foco va al mensaje; texto de red perdida de §5.5. Error 401/sesión: lo gestiona `authorizedCall` como hoy.
+- El guard y `busy` son independientes: `busy` bloquea y el guard solo actúa en reposo.
+
+#### E. Accesibilidad
+
+- Etiquetas: «Tipo» (grupo, opciones «Gasto» y «Ingreso» con rol `radio` y estado `selected`), «Categoría» (grupo; cada botón «Categoría {nombre}», `selected`), «Monto» (con valor, el «$» decorativo se oculta a lectores), «Fecha» (botón/valor «Fecha: {formatDateEs}»), «Detalle», «Nombre de la cuenta», «Saldo inicial».
+- Objetivos táctiles ≥ 48 dp en todos los controles, incluidos «✕»/«Volver», celdas del selector de fecha y el interruptor de saldo en contra.
+- Errores: cada mensaje con `accessibilityRole="alert"` y `accessibilityLiveRegion="polite"`; además se anuncia con `AccessibilityInfo.announceForAccessibility`. Orden de revisión = orden visual (Categoría, Monto, Fecha); el foco va al primer campo con error: el campo de texto con `ref.focus()`, la rejilla de categorías con `AccessibilityInfo.setAccessibilityFocus` sobre su mensaje y desplazamiento hasta verla. Un solo anuncio por intento.
+- Teclado: `keyboardType="decimal-pad"` en monto y saldo; nombre y detalle con teclado de texto; detalle multilínea con `returnKeyType` por defecto; sin `autoFocus`; `keyboardShouldPersistTaps="handled"`.
+- Guardar visible con teclado abierto: el botón vive en un pie fijo **fuera del `ScrollView`**, bajo el contenido y sobre el teclado, con el margen inferior del `Screen` (D7 bis, 48 dp de respaldo). El campo activo se desplaza a la vista. El mecanismo (ajuste de ventana o `KeyboardAvoidingView`) lo decide `architect`/`mobile-engineer`; validar en Android real (nivel D) con gestos y con tres botones.
+- Fuente al 200 %: nombres de categoría de dos líneas o más, sin elipsis; el pie fijo no tapa campos (el contenido se desplaza).
+- Contraste y color: la categoría lleva siempre nombre; error en `colors.expenseText`, no solo color (el texto lo acompaña).
+
+#### F. Selector de fecha «Otra fecha…» (decisión 14.5 ABIERTA; esta es la PROPUESTA (a))
+
+- Fila `Hoy` (seleccionado por defecto, o la fecha prefijada si es otra) / `Ayer` / `Otra fecha…`. Si la fecha no es hoy ni ayer, el tercer botón muestra la fecha elegida (`formatDateEs`) como seleccionado.
+- «Otra fecha…» abre un `Sheet` modal (`sheets.tsx`) con cuadrícula mensual propia (reutiliza `lib/calendar.ts`: `buildMonthGrid`, `shiftMonth`, `monthTitle`, `WEEK_START`), mes inicial = el de la fecha actual del formulario, «‹ ›» de 48 dp acotados a 2000 a 2100, celdas de día de 48 dp, fechas futuras permitidas. Tocar un día selecciona y cierra. Atrás o tocar fuera cierra sin cambiar. Sin dependencias nativas.
+- Sin 14.5 aprobada, R3 no puede quitar el texto AAAA-MM-DD sin dejar al usuario sin entrada de fechas lejanas: se necesita la aprobación del usuario antes de implementarlo.
+
+#### G. Criterios de aceptación de R3 (verificables en Jest; N = nivel D solo en teléfono)
+
+1. Nuevo movimiento: el orden de los grupos en el árbol es Tipo, Categoría, Monto, Fecha, Detalle, Guardar (comparar posiciones por `testID`/etiquetas).
+2. El monto no recibe foco al abrir (sin `autoFocus`).
+3. Montos (R3 D8): el campo conserva lo escrito o pegado. Válidos al guardar: «1000», «12.50», «12,50», «.5», «5.», «0.07». Rechazados con su mensaje y sin llamar a la API: «1.000», «1,234», «1,234.56», «1.234.567» (separador de miles), «1234.567» (decimales), «1e5», «abc», «-5» (solo números).
+4. Monto con 10 dígitos enteros se rechaza al guardar con «El monto máximo es $999999999.99.»; saldo de 14 enteros admitido hasta el tope seguro y, sobre él, «El saldo inicial es demasiado grande. Revisa la cifra.».
+5. Monto vacío o 0 al guardar: muestra «Ingresa un monto mayor a cero, por ejemplo 12.50.», no llama a la API, enfoca el campo y el mensaje tiene rol `alert`.
+6. Sin categoría al guardar: «Elige una categoría.» antes que el error de monto, sin llamada.
+7. El error de un campo desaparece al editarlo; no hay error mientras se escribe.
+8. Fecha: Hoy preseleccionado (o `initialFecha`); «Ayer» fija ayer; «Otra fecha…» abre el selector, elegir un día cambia la fecha y cierra; Atrás en el selector no cambia la fecha; no hay campo de texto libre (si se aprueba 14.5).
+9. Doble toque en Guardar produce exactamente una llamada a `createTransaction`.
+10. Durante el guardado: botón con «Guardando…» y `busy`; campos `editable` falso; Cancelar y «✕» deshabilitados; `BackHandler` devuelve `true` y no aparece diálogo; tras fallo todo se rehabilita y los datos persisten.
+11. Guard sin cambios: Atrás, «✕» y Cancelar llaman `onDone(false)` sin `Alert.alert`. Con prefijo de fecha o de categoría y sin tocar nada: igual, sin diálogo.
+12. Guard con cambios (monto, nota, categoría elegida o fecha distinta): Atrás, «✕» y Cancelar llaman `Alert.alert` con los textos de §B y no salen; [Seguir editando] conserva los datos; [Descartar] llama `onDone(false)`.
+13. Escribir y borrar para volver al valor inicial: sin diálogo. Cambiar de Gasto a Ingreso y volver sin más: sin diálogo.
+14. Éxito de guardar, anular confirmado y 409 `ACCOUNT_ARCHIVED` salen sin diálogo.
+15. Editar: tipo y categoría de solo lectura; sin cambios no llama a la API; el diálogo usa el texto de «cambios».
+16. Crear cuenta: «Escribe un nombre.» con nombre vacío; saldo vacío crea con 0; saldo con letras filtrado; saldo de 14 enteros admitido; saldo en contra (si se aprueba) envía importe negativo en centavos; saldo sobre el tope de la API muestra «El saldo inicial es demasiado grande. Revisa la cifra.»; guard con «¿Descartar esta cuenta?» solo si hay texto; «Creando…» bloquea Volver y Atrás.
+17. El pie con Guardar no es descendiente del `ScrollView` del formulario (testID); los controles tienen etiquetas y roles de §E; «Detalle (opcional)» reemplaza a «Nota (opcional)» con contador 0/500.
+18. Sin categorías del tipo: texto «No tienes categorías de gasto activas. Crea una en Más > Categorías.» con [Ir a Categorías].
+19. 409 de categoría obsoleta: categoría limpiada, recarga y mensaje «Esa categoría cambió. Elige otra.».
+20. `validateAmountText` y `parseCentsFromInput`: pruebas unitarias de tabla en `money.test.ts`; typecheck, lint y Prettier en verde.
+21. N: Guardar visible con teclado abierto con gestos y con tres botones; TalkBack lee etiquetas y anuncia el error.
+
+Archivos que tocaría (PROPUESTA): `app/src/screens/TransactionFormScreen.tsx`, `app/src/screens/NewAccountScreen.tsx`, `app/src/lib/money.ts`, `app/src/hooks/use-discard-guard.ts` (nuevo), un selector de fecha en `app/src/screens/` (nuevo, si se aprueba 14.5), `app/src/screens/MainNavigator.tsx` (aviso de éxito y «Ir a Categorías»), y las pruebas correspondientes.
+
+Preguntas para el usuario: (1) aprobar 14.5 (a); (2) aprobar el interruptor de saldo en contra; (3) aprobar el texto de Editar «¿Descartar los cambios?».
+
 ### 5.6 Historial = pestaña Movimientos (EXISTENTE; filtros discretos)
 
 ```
@@ -678,6 +810,8 @@ Descarte: botón «Entendido» (48 dp) y gesto de cerrar; el estado «vista» se
 | Anular movimiento | «Anular movimiento» / «¿Anular este movimiento? Dejará de contar en tu saldo y en los reportes. Queda guardado como anulado.» / [Cancelar] [Anular] |
 | Eliminar categoría | «Eliminar categoría» / «¿Eliminar «{nombre}»? No se puede deshacer.» / [Cancelar] [Eliminar] |
 | Descartar movimiento | «¿Descartar este movimiento?» / «Lo que escribiste se perderá.» / [Seguir editando] [Descartar] (con cambios sin guardar; aprobado en docs/003 R3 D1, se implementa en R3) |
+| Descartar cuenta nueva | «¿Descartar esta cuenta?» / «Lo que escribiste se perderá.» / [Seguir editando] [Descartar] (PROPUESTA R3, §5.5.1 B) |
+| Descartar cambios de un movimiento | «¿Descartar los cambios?» / «Los cambios que hiciste no se guardarán.» / [Seguir editando] [Descartar] (PROPUESTA R3, §5.5.1 B) |
 | Cerrar sesión (si hay envío en curso) | «Cerrar sesión» / «Hay un cambio sin terminar. ¿Cerrar sesión de todos modos?» / [Cancelar] [Cerrar sesión] |
 
 Guardar un movimiento no pide confirmación (docs/001 §7): se confirma con aviso breve después.

@@ -72,6 +72,7 @@ export const radii = { sm: 8, md: 12, lg: 16, accountCard: 20, xl: 24, pill: 999
 
 export const typography = {
   amountXl: { fontSize: 34, lineHeight: 40, fontWeight: '800' },
+  amountInput: { fontSize: 28, lineHeight: 34, fontWeight: '800' },
   rootTitle: { fontSize: 26, lineHeight: 32, fontWeight: '800' },
   title: { fontSize: 24, lineHeight: 30, fontWeight: '800' },
   totalAmount: { fontSize: 24, lineHeight: 30, fontWeight: '800' },
@@ -126,6 +127,8 @@ export const sizes = {
   chipHitSlop: 6,
   segmentOption: 48,
   categoryOptionMin: 56,
+  categoryIcon: 32,
+  dateCell: 48,
   calendarCellHeight: 52,
   headerPig: 72,
   headerPigWide: 96,

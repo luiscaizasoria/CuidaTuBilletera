@@ -21,8 +21,8 @@ function ratio(a: string, b: string): number {
 }
 
 describe('tokens', () => {
-  it('sizes tiene exactamente 23 claves con los valores aprobados', () => {
-    expect(Object.keys(sizes)).toHaveLength(23);
+  it('sizes tiene exactamente 25 claves con los valores aprobados', () => {
+    expect(Object.keys(sizes)).toHaveLength(25);
     expect(sizes).toEqual({
       touchMin: 48,
       tabHeight: 62,
@@ -40,6 +40,8 @@ describe('tokens', () => {
       chipHitSlop: 6,
       segmentOption: 48,
       categoryOptionMin: 56,
+      categoryIcon: 32,
+      dateCell: 48,
       calendarCellHeight: 52,
       headerPig: 72,
       headerPigWide: 96,
@@ -75,7 +77,7 @@ describe('tokens', () => {
     expect(accountPalette).toHaveLength(6);
     expect(Object.keys(moduleColors)).toHaveLength(5);
     expect(spacing.xxl).toBe(32);
-    expect(Object.keys(typography)).toHaveLength(13);
+    expect(Object.keys(typography)).toHaveLength(14);
     expect(shadows.card.elevation).toBe(1);
     expect(shadows.raised.elevation).toBe(4);
   });
@@ -95,6 +97,12 @@ describe('tokens', () => {
     ['white', 'text'],
   ] as const)('contraste %s sobre %s >= 4.5', (fg, bg) => {
     expect(ratio(colors[fg], colors[bg])).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('tokens no cromáticos de R3 (docs/008 §6.13)', () => {
+    expect(typography.amountInput).toEqual({ fontSize: 28, lineHeight: 34, fontWeight: '800' });
+    expect(sizes.dateCell).toBe(48);
+    expect(sizes.categoryIcon).toBe(32);
   });
 
   it('borde fuerte >= 3:1 sobre superficie', () => {

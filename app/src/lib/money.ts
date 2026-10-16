@@ -39,3 +39,45 @@ export function formatCompactCents(cents: number): string {
   if (dollars < 1_000_000_000) return scale(1_000_000, 'M');
   return scale(1_000_000_000, 'B');
 }
+
+export type AmountRejection = 'empty' | 'chars' | 'thousands' | 'decimals' | 'too-large';
+export type AmountValidation = { ok: true; cents: number } | { ok: false; reason: AmountRejection };
+
+// Mensajes en español por motivo (docs/003 Rediseño R3 D8). `empty` y `too-large` los redacta cada
+// pantalla (monto mayor a cero, tope del monto o del saldo).
+export const AMOUNT_REJECTION_MESSAGES = {
+  chars: 'Escribe solo números, por ejemplo 12.50.',
+  thousands: 'Escribe el monto sin separador de miles, por ejemplo 1000 o 12.50.',
+  decimals: 'Usa como máximo 2 decimales, por ejemplo 12.50.',
+} as const;
+
+// Valida lo escrito o pegado en un campo de monto SIN interpretar nada en silencio (docs/003 R3 D8).
+// Acepta enteros y decimales con punto o coma y hasta 2 decimales («1000», «12.50», «12,50», «.5»,
+// «5.»). Rechaza: caracteres que no son dígitos ni separador (letras, «1e5», signos, espacios
+// internos), varios separadores («1,234.56», «1.234.567») y un separador seguido de 3 o más dígitos
+// («1.000», «1,234»; «1234.567» se rechaza como exceso de decimales). El signo lo da solo el
+// interruptor de saldo en contra. La validación final de la cifra es `parseCentsFromInput`.
+export function validateAmountText(text: string): AmountValidation {
+  const value = text.trim();
+  if (value === '' || value === '.' || value === ',') return { ok: false, reason: 'empty' };
+  if (!/^[\d.,]+$/.test(value)) return { ok: false, reason: 'chars' };
+  const separators = value.match(/[.,]/g)?.length ?? 0;
+  if (separators > 1) return { ok: false, reason: 'thousands' };
+  if (separators === 1) {
+    const at = value.search(/[.,]/);
+    if (value.length - at - 1 >= 3) {
+      return {
+        ok: false,
+        reason: /^[1-9]\d{0,2}$/.test(value.slice(0, at)) ? 'thousands' : 'decimals',
+      };
+    }
+  }
+  const normalized = /^[.,]/.test(value) ? `0${value}` : value;
+  const cents = parseCentsFromInput(trimTrailingSeparator(normalized));
+  return cents === null ? { ok: false, reason: 'too-large' } : { ok: true, cents };
+}
+
+// «12.» -> «12»: un separador final no cambia el monto, pero `parseCentsFromInput` lo rechaza.
+export function trimTrailingSeparator(text: string): string {
+  return text.trim().replace(/[.,]$/, '');
+}

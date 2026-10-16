@@ -51,3 +51,21 @@ export function resourceErrorMessage(error: unknown): string {
   }
   return GENERIC_MESSAGE;
 }
+
+// Respuesta perdida al CREAR (docs/007 §5.5): el servidor pudo haber guardado el registro y la API no
+// tiene clave de idempotencia; el mensaje no invita a reintentar a ciegas.
+export const LOST_RESPONSE_MOVEMENT =
+  'No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.';
+export const LOST_RESPONSE_ACCOUNT =
+  'No pudimos confirmar si se creó. Revisa Mis cuentas antes de volver a intentar.';
+// Cuenta archivada en otro dispositivo (docs/007 §3.5.3): el movimiento no se guardó.
+export const ACCOUNT_ARCHIVED_ON_SAVE =
+  'Esta cuenta está archivada, por eso no se guardó el movimiento. Desarchívala desde Mis cuentas para anotar movimientos.';
+
+// true si la escritura pudo haber llegado al servidor sin que la app lo sepa (sin conexión o respuesta
+// perdida, error 5xx o fallo desconocido). Un 4xx de la API garantiza que no se guardó.
+export function isUncertainWriteFailure(error: unknown): boolean {
+  if (error instanceof ApiRequestError) return error.status >= 500;
+  if (error instanceof AuthError) return error.kind === 'network' || error.kind === 'server';
+  return !(error instanceof ExportFileError);
+}
