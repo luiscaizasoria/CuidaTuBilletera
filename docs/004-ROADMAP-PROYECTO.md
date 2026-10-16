@@ -41,6 +41,9 @@ Agents:
 - qa-engineer
 - devops-engineer
 - mobile-engineer
+- mobile-ux-designer
+- mobile-visual-designer
+- mobile-ux-qa
 
 Rules:
 - architecture

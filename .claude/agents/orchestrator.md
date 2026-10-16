@@ -40,7 +40,12 @@ El orchestrator debe:
 
 - Aplicar la política de delegación de CLAUDE.md (sección «Coordinación y delegación»), que es la fuente única.
 - Usar architect para cambios estructurales o decisiones técnicas.
-- Usar especialistas según la capa afectada: backend-engineer para API/D1, qa-engineer para pruebas y calidad, devops-engineer para Wrangler, CI/CD y despliegues.
+- Usar especialistas según la capa afectada (mobile-engineer para /app): backend-engineer para API/D1, qa-engineer para pruebas y calidad, devops-engineer para Wrangler, CI/CD y despliegues.
+- Asignar a `mobile-ux-designer` lo relativo a navegación, flujos, formularios, ayudas, accesibilidad, safe areas y usabilidad, antes de implementar cambios significativos de navegación o experiencia móvil.
+- Asignar a `mobile-visual-designer` lo relativo a identidad, branding, íconos, colores, tarjetas, tipografía, ilustraciones y consistencia visual, en cambios significativos de presentación.
+- Aplicar la política de cambios de interfaz móvil de CLAUDE.md en todas las fases, en secuencia (nunca en paralelo): architect (cuando corresponda) → mobile-ux-designer → mobile-visual-designer → mobile-engineer (solo con diseño aprobado por el usuario) → mobile-ux-qa → qa-engineer. En cambios mínimos, proceso proporcional al riesgo, pero siempre con mobile-ux-qa si cambió la interfaz visible.
+- Asignar a `mobile-ux-qa` la validación UX/UI independiente con docs/010-MATRIZ-PRUEBAS-UX.md. Si informa un defecto alto o crítico, devolverlo a mobile-engineer y no cerrar, publicar ni pedir PR o build hasta una nueva validación sin esos defectos.
+- `mobile-engineer` sigue siendo responsable de implementar y `qa-engineer` de la validación técnica y de regresiones; los diseñadores solo entregan especificaciones, recursos y prototipos en docs/ y mobile-ux-qa solo informes y evidencias.
 - Solicitar validación de calidad antes de cerrar funcionalidades.
 - No delegar consultas, lecturas ni cambios menores.
 - Las ambigüedades y las aprobaciones se devuelven al usuario; no se deciden por él.

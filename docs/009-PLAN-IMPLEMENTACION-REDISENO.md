@@ -1,0 +1,113 @@
+# Plan de implementación del rediseño UX/UI (propuesta, pendiente de aprobación)
+
+Estado: el usuario **aprobó el prototipo y la navegación con dos observaciones** (2026-10-15): rehacer la paleta inspirándose en el póster de referencia y mostrar la cuenta activa en todas las pantallas internas. Ambas ya están incorporadas en docs/007 §3.5, docs/008 y el prototipo. La **paleta nueva está pendiente de aprobación** (docs/008, decisión 15.0). Nada de este plan está implementado. Complementa docs/007-DISENO-UX.md (experiencia) y docs/008-DISENO-VISUAL.md (apariencia). Prototipo: `docs/design/prototipo/index.html` (datos ficticios, sin red). Recursos de ícono generados: `docs/design/assets/` (no sustituyen los assets activos).
+
+Convención: EXISTENTE = ya en el código o la constitución; APROBADO = decidido por el usuario; PROPUESTA = nuevo.
+
+## 1. Restricciones verificadas (architect y lectura de código)
+
+- EXISTENTE: no hay `DELETE /accounts`; las cuentas se archivan con `PATCH {archivada}`; `PATCH /accounts/:id` solo acepta `nombre` y `archivada` (no `saldoInicial`). La eliminación de cuenta y la edición del saldo inicial no se muestran en el diseño.
+- EXISTENTE: React Navigation y TanStack Query están nombradas en docs/001 §4 pero **diferidas** (docs/003, decisiones 2B.1 D8, 3.1 D8 y 4.1 D5) por requerir módulos nativos. El diseño usa pila propia y barra inferior propia sin dependencias.
+- EXISTENTE: sin metas, presupuestos ni conciliación (Fase 6). No se diseñan.
+- EXISTENTE: ningún dato del usuario se cachea fuera de los componentes (docs/001 §4.7); se mantiene.
+- EXISTENTE: `app.json` no define `icon`, `adaptiveIcon` ni splash; no hay carpeta `app/assets`.
+- Pendiente de verificar: qué módulos nativos (`expo-font`, `@expo/vector-icons`) vienen enlazados en la build actual.
+
+## 2. Fases propuestas (cada una: rama `feat/`, PR propio, pruebas con el código)
+
+Orden lógico `orchestrator` → `architect` (si se aprueba cambio de §7) → `mobile-engineer` → `qa-engineer`. Secuencial, no en paralelo.
+
+| Fase | Contenido | Dependencias nuevas | Nueva build |
+| --- | --- | --- | --- |
+| R0 | Documentación primero: docs/003 (paleta revisada sin degradado nativo, barra de contexto de cuenta como fuente única con relectura por `GET /accounts/:id/balance`, cuenta archivada o renombrada estando dentro, ratificación de la navegación local 2B.1/3.1 D8 y 4.1 D5, decisiones aprobadas de docs/007 §14 y docs/008 §15); docs/001 §7 solo si cambia una norma (orden del formulario, estructura de pantallas); docs/004 con R0 a R6. | No | No |
+| R1 | Tokens y base: `theme/tokens.ts`, `Screen` (safe areas y teclado, opción A), `Button` 48 dp, `Card`, `Segmented`, `Snackbar`, StatusBar explícita. | No | No |
+| R2 | Navegación: nuevo `MainNavigator`, Mis cuentas, Crear cuenta, Detalle con barra inferior, «Más». Retirar HomeScreen/HomeDashboard. | No | No |
+| R3 | Nuevo movimiento (orden, categoría visual, teclado numérico, selector de fecha, anti doble envío, confirmación). | No | No |
+| R4 | Historial, Calendario, Reportes, Categorías con el nuevo sistema visual (sin cambiar cálculos). | Decisión 15.3 de docs/008 (dona: SVG o barras sin dependencia) | Solo si se elige `react-native-svg` |
+| R5 | Guías contextuales y estados vacíos. | No | No |
+| R6 | Ícono, ícono adaptable, splash y nombre: `app.json` + `app/assets/`. | `expo-splash-screen` si se decide | **Sí** |
+
+R1 a R5 se pueden entregar con la development build actual. R6 y, según decisión, R4 exigen una nueva build de Android (autorización expresa previa).
+
+## 3. Matriz de cambios por archivo
+
+La matriz detallada por archivo de `app/src` está en docs/007-DISENO-UX.md §13.1. Resumen por fase:
+
+| Fase | Archivos principales |
+| --- | --- |
+| R1 | `app/src/theme/tokens.ts` (nuevo), `app/src/screens/ui.tsx`, `app/src/App.tsx` |
+| R2 | `AccountContextBar.tsx` (nuevo), `lib/resources-api.ts` (`getAccountBalance`, endpoint existente) y `resources-test-utils.ts`, `MainNavigator.tsx` (`refreshKey`), `AccountsScreen.tsx`, `AccountDetailScreen.tsx`, `AccountSummaryTab.tsx`, `MoreScreen.tsx` (nuevos), `HomeScreen.tsx` y `HomeDashboard.tsx` (retirar), `lib/dates.ts` |
+| R3 | `TransactionFormScreen.tsx` |
+| R4 | `HistoryScreen.tsx`, `CalendarScreen.tsx`, `ReportsScreen.tsx`, `CategoriesScreen.tsx`, `TransactionRow.tsx` |
+| R5 | `lib/guides.ts` (nuevo), pantallas con ayudas |
+| R6 | `app/app.json`, `app/assets/*` (copiados desde `docs/design/assets/` tras aprobar) |
+
+No se tocan `/api`, D1, sesión y autenticación, `.github/workflows` ni `tsconfig.json` de la raíz.
+
+## 4. Impacto en pruebas
+
+Ver docs/007-DISENO-UX.md §12. Se reescriben casi por completo `MainNavigator.test` y `HomeScreen.test`; se ajustan `App.test`, `App.resources.test`, `AccountsScreen.test`, `TransactionFormScreen.test` e `HistoryScreen.test`; Calendario y Reportes cambian poco. Mantener los `accessibilityLabel` y `testID` actuales reduce el costo. Línea base actual (docs/004, cierre de Fase 5): app 990 pruebas y API 979.
+
+## 5. Cambios nativos (no aplicados)
+
+- Ícono, ícono adaptable, splash y nombre visible: configuración nativa; exigen nueva development build, no se entregan por OTA.
+- `react-native-svg` (dona), `expo-navigation-bar` (modo inmersivo, opción B no recomendada) y `expo-splash-screen`: módulos nativos si se eligen.
+- Safe areas con la opción A recomendada: sin módulo nativo (insets con `StatusBar.currentHeight` y relleno propio). Su causa raíz (edge-to-edge sin relleno superior) es una hipótesis que hay que confirmar en el teléfono antes de implementar.
+
+## 6. Riesgos técnicos
+
+- Pestañas propias sin React Navigation: foco de TalkBack, restauración de estado y botón Atrás son más frágiles; el diseño permite migrar después.
+- Reescritura de la navegación y de decenas de pruebas: riesgo de regresiones; mitigar con fases pequeñas y `qa-engineer` independiente.
+- Cuenta archivada mientras se está en su detalle: manejar `409 ACCOUNT_ARCHIVED`.
+- Los recursos de ícono salen de una imagen de baja resolución: no aptos para publicar en tienda; regenerar en vector.
+- Los colores de categoría reales (API) y los del selector de la app no coinciden (docs/008, decisión 15.4).
+- Sin navegador visual en el entorno: el prototipo y los recursos no se revisaron en un teléfono ni en un lanzador Android.
+
+## 7. Decisiones que requieren aprobación
+
+Las listas numeradas con recomendación están en docs/007-DISENO-UX.md §14 (13 decisiones UX, entre ellas el orden del formulario de movimiento, que contradice «monto primero» de docs/001 §7) y en docs/008-DISENO-VISUAL.md §15 (visuales: íconos de categoría, dona, colores de categoría, fuentes, ícono). Además:
+
+1. Aprobar la opción A (barras del sistema respetadas) para Android.
+2. Aprobar el plan R0 a R6 y su orden, y si R4 usa `react-native-svg` (nueva build).
+3. Autorizar la nueva development build para R6.
+4. Confirmar que «solicitar eliminación de cuenta» se resuelve con Archivar (sin cambio de contrato).
+
+## 8. Registro de ejecución del paso de diseño
+
+| Agente | Trabajo realizado | Evidencia de invocación (agentId) |
+| --- | --- | --- |
+| architect | Restricciones de arquitectura, contrato de cuentas y dependencias nativas. | a3c1d529bb0daabdd |
+| general-purpose con el rol de mobile-ux-designer (sustituto) | docs/007-DISENO-UX.md. | a00780c5c7365d0b3 |
+| general-purpose con el rol de mobile-visual-designer (sustituto) | docs/008-DISENO-VISUAL.md, recursos de ícono, script de contraste y prototipo. | abf0610e0aeec20b9 |
+
+Iteración 2 (observaciones del usuario: paleta y cuenta activa visible):
+
+| Agente | Trabajo realizado | Evidencia de invocación (agentId) |
+| --- | --- | --- |
+| architect | Restricciones para la barra de cuenta (fuente única, relectura de saldo, archivada/renombrada), sin cambio de contrato; degradados sin dependencia; contenido de R0. | af59ad590ed09a94f |
+| mobile-ux-designer | docs/007 §3.5 (barra de contexto de cuenta), wireframes, criterios 14 a 24, §12 a §14. | a9cd24cb5f6579b9e |
+| mobile-visual-designer | docs/008 (paleta nueva, contraste de 54 pares, tokens, `AccountContextBar`), `docs/design/contrast.js` y prototipo. | ad9ae3852a9416551 |
+
+En esta iteración los dos diseñadores se invocaron con su propio tipo de agente: queda verificada su integración.
+
+Iteración 3 (el usuario aprueba el prototipo funcional pero no su apariencia: exceso de verde, poco fiel al póster):
+
+| Agente | Trabajo realizado | Evidencia de invocación (agentId) |
+| --- | --- | --- |
+| mobile-ux-designer | docs/007 §5.2 (composición de Mis cuentas), §3.6 (color por módulo), criterios 25 a 31, decisiones 14.16 a 14.19. | a549012ca9f602e33 |
+| mobile-visual-designer | docs/008 (paleta, color por módulo, §16 comparación 2 → 3), prototipo, renders SVG en `docs/design/capturas/` y auditoría jsdom. | af534942affe32341 |
+
+architect no se convocó en esta iteración: solo cambia la apariencia, sin dependencias ni contratos.
+
+Paso 342 (agente `mobile-ux-qa`, política de interfaz móvil y matriz docs/010): se creó `.claude/agents/mobile-ux-qa.md` y se registró en CLAUDE.md y en el orquestador. La invocación nativa falló con «Agent type 'mobile-ux-qa' not found», porque el registro de agentes se carga al iniciar la sesión. **Integración pendiente de verificar en una sesión nueva**; no se usó un agente `general-purpose` como sustituto.
+
+- Skills usadas: ninguna.
+- MCP usados: ninguno.
+- No utilizados: `mobile-ux-designer` y `mobile-visual-designer` como tipos de agente, porque el registro de agentes se carga al iniciar la sesión y la invocación directa falló con «Agent type not found». Se ejecutaron con agentes `general-purpose` siguiendo sus archivos de definición. `mobile-engineer`, `qa-engineer`, `backend-engineer` y `devops-engineer`: fuera del alcance de este paso. No hubo agente `orchestrator` subordinado: la coordinación la hizo la conversación principal.
+
+## 9. Estado previo a R0 (paso 346)
+
+- Defectos de la validación UX del prototipo: D1 y D2 (altos) corregidos y revalidados por `mobile-ux-qa` a 360 y 412 px; D3, D4, D6, D7 corregidos; D5 resuelto como excepción aprobada P-3. P-1 y P-2 aprobadas (docs/007 §14.A). No quedan defectos críticos ni altos abiertos a nivel de render.
+- Brecha UXQA-D2-02 de `audit.js` (recorte vertical aceptado como accesible): corregida (el recorte vertical ahora es bloqueante) y verificada reintroduciendo el defecto en una copia.
+- Condiciones para R0: la validación de Android real (niveles A y D de docs/010: safe areas, teclado, Atrás con gestos y tres botones, fuente 130 % y 200 %, TalkBack, emojis y fuente Nunito reales) sigue PENDIENTE y se ejecutará con el teléfono del usuario; las mediciones de texto deben repetirse allí. Los valores de `sizes` de docs/008 §11 marcados como PROPUESTA requieren confirmación antes de volcarse a tokens de la app.
+- Herramientas: `docs/design/{render,audit,verify}.js` con Chromium fuera del repo (docs/010 §8); sin script de instalación versionado.

@@ -129,8 +129,19 @@ Política de delegación:
 - `architect`: diseño y revisión estructural. Se consulta antes de implementar cambios estructurales. Es de solo lectura: propone el texto de las decisiones y quien coordina las documenta tras la aprobación del usuario (primero en docs/001 si cambia una norma; el motivo se registra en docs/003).
 - `backend-engineer`: implementación API/D1 (Hono, Zod, servicios y acceso a datos) con sus pruebas. No toma decisiones arquitectónicas.
 - `mobile-engineer`: implementación y revisión de la app móvil (React Native, Expo, TypeScript y Android) con sus pruebas. Se usa de forma proactiva en las tareas de /app. No toma decisiones arquitectónicas: el diseño arquitectónico móvil se coordina con `architect` y las pruebas móviles con `qa-engineer`.
+- `mobile-ux-designer`: experiencia de uso móvil (navegación, flujos, formularios, ayudas, accesibilidad, safe areas, usabilidad). Se consulta ANTES de implementar cambios significativos de navegación o experiencia. Produce especificaciones y prototipos aislados en docs/; no implementa pantallas.
+- `mobile-visual-designer`: apariencia móvil (identidad, íconos, colores, tipografía, tarjetas, ilustraciones, consistencia visual). Se consulta en cambios significativos de presentación. Produce tokens, recursos y especificaciones en docs/; no implementa pantallas ni reemplaza assets activos.
+- `mobile-ux-qa`: validación UX/UI independiente de la app móvil (fidelidad al diseño aprobado, navegación y Atrás, cuenta activa, formularios, textos, contraste, áreas táctiles, safe areas, teclado y estados) con la matriz de docs/010-MATRIZ-PRUEBAS-UX.md. No modifica pantallas: registra defectos con evidencia y los devuelve al implementador.
 - `qa-engineer`: pruebas, regresiones y calidad. Ejecuta pruebas, typecheck y lint y aporta la evidencia con la que se cierra una tarea.
 - `devops-engineer`: Wrangler, CI/CD, entornos y despliegues.
+
+Política de cambios de interfaz móvil (permanente, aplica a todas las fases). Los agentes se ejecutan de forma secuencial, nunca en paralelo, para proteger la memoria del Dev Container:
+
+1. Cambio significativo de interfaz (navegación, flujos, pantallas nuevas o rediseño): `architect` cuando haya restricciones estructurales → `mobile-ux-designer` define o revisa el flujo → `mobile-visual-designer` define o revisa la presentación → `mobile-engineer` implementa solo el diseño aprobado por el usuario → `mobile-ux-qa` valida UX/UI de forma independiente → `qa-engineer` valida regresiones técnicas.
+2. Cambio mínimo de texto o presentación: proceso proporcional al riesgo (sin diseñadores si no cambia el diseño), pero toda modificación de la interfaz visible exige al menos la revisión de `mobile-ux-qa`.
+3. Un defecto alto o crítico de `mobile-ux-qa` detiene el cierre y la publicación (PR, build o entrega) hasta su corrección y nueva validación.
+
+Los diseñadores no modifican reglas financieras, endpoints, D1, sesiones, dependencias nativas, infraestructura ni pantallas funcionales.
 
 Ningún agente hace commit, push, PR, migración remota ni despliegue sin autorización expresa del usuario.
 

@@ -1,0 +1,657 @@
+# 008 - Diseño visual del rediseño de CuidaTuBilletera
+
+Estado: PROPUESTA para aprobación del usuario, **iteración 3**. La apariencia de la iteración 2 fue **rechazada** («la pantalla inicial sigue dominada por el verde; aunque cambiaste tokens, visualmente no refleja la imagen de referencia; quiero una app más alegre, colorida y atractiva»). Esta versión rehace la composición, no solo los tokens (sección 16). Autor: `mobile-visual-designer`. Complementa docs/007-DISENO-UX.md (navegación, flujos, textos, §3.6 color por módulo y §5.2 Mis cuentas) y no lo contradice. No se modificó nada en `/app` ni en `/api`, ni `app.json`, ni los assets activos, ni se instaló nada.
+
+Recursos reales de esta propuesta (generados y verificados):
+
+- `docs/design/assets/` (ícono y variantes, sección 13; sin cambios en esta iteración).
+- `docs/design/prototipo/index.html` (prototipo navegable sin dependencias ni red; datos de ejemplo; selector de tamaño 360 × 640 / 390 × 800 / 412 × 915).
+- `docs/design/contrast.js` (contraste WCAG y distinguibilidad con daltonismo; sección 3).
+- `docs/design/capturas/` (renders **SVG aproximados**, no capturas de navegador; sección 14).
+- Referencia de dirección artística: el póster aprobado (fondos casi blancos, verde solo en la tarjeta protagonista y el botón, mosaicos pastel por función, ilustraciones, tarjetas de cuenta con ilustración a la izquierda, segmentado coral/menta, íconos de categoría vivos). Se usa como inspiración: **no se incluyen metas** ni la frase «Pequeños hábitos, grandes logros» (no existen en el producto).
+
+Decisiones pendientes: sección 15.
+
+Sincronización con docs/007 (D1, D2, P-1, P-2 y P-3, aprobadas por el usuario en el paso 346; fuente: docs/007 §10 y §14.A y el prototipo): pestañas inferiores (6.8), selector de categorías y `CategoryIcon` (6.7 y 7), chips y segmentados (6.7), calendario (6.10), tarjetas de cuenta 88/92 (6.3), regla de texto truncado (6.12) y objetivos táctiles (5). No cambian colores, tokens de color, composición ni identidad.
+
+---
+
+## 1. Identidad de marca
+
+Alegre y colorida sin perder credibilidad financiera, con el espíritu del póster: **fondo casi blanco cálido con manchas de color suaves**, **la alcancía como personaje** (bienvenida, encabezado de Mis cuentas, tarjeta de saldo, estado vacío), **tarjetas de cuenta de colores suaves** con ícono a la izquierda, **un color distintivo por módulo** (docs/007 §3.6) y **cuadrados de categoría vivos**. El **verde azulado de marca** (`brand700` `#0F5F5A`, el mismo del ícono) deja de ser el color de fondo de la app y queda reservado a la **acción primaria**, al **FAB** y a la **tarjeta de saldo** (la única superficie fuerte, solo en la pestaña Cuenta). El amarillo es el acento alegre (moneda, subrayado del título, destellos, «+» del FAB).
+
+Reglas fijas:
+
+1. **Ingreso = verde. Gasto = coral/rojo.** Solo significan ingreso y gasto (más el rojo de peligro en Archivar/Anular, decisión 15.8). La marca es verde azulado, distinta del verde de ingreso (verificado también con protanopia y deuteranopia, sección 3.2), y nunca se usa para importes.
+2. **Una sola superficie fuerte por pantalla** (docs/007 §3.6): la tarjeta de saldo en Cuenta. En el resto, el color fuerte se limita al botón primario o al FAB.
+3. El color nunca es el único portador de significado: signo en importes (`+` / `−`), palabra del tipo, nombre de categoría y de cuenta siempre visibles, «✓» en la opción elegida.
+4. **Color por módulo = orientación, no dato** (docs/007 §3.6): Cuenta = marca (verde azulado suave), Movimientos = ámbar, Calendario = azul, Reportes = violeta, Más/Categorías = pizarra. Se manifiesta solo en la píldora de la pestaña activa, el mosaico del título y los acentos de controles del módulo. **Nunca** en la barra de cuenta activa, en importes ni en el FAB.
+5. **Nuevo/Editar movimiento no tiene color de módulo: manda el tipo** (Gasto en coral suave, Ingreso en verde suave), también en la categoría y la fecha elegidas.
+6. Sin degradados reales ni dependencias: la profundidad se construye con **color sólido + capas semitransparentes** (`View` con `opacity`, bandas giradas y círculos con `borderRadius`), sin `expo-linear-gradient` (restricción de `architect`, agentId af59ad590ed09a94f). Las manchas del fondo son círculos con opacidad.
+7. Solo modo claro (`userInterfaceStyle: "light"` ya está en `app.json`). Fuentes del sistema. Emojis para íconos mientras siga la decisión 15.2.
+
+## 2. Paleta
+
+**Estado: PENDIENTE DE APROBACIÓN (iteración 3).** Historial: paleta de la iteración 1 (fondo `#F4F9F8`, acentos azul/violeta) **rechazada**; paleta de la iteración 2 (esmeralda `#0D6152` en bienvenida a sangre, barra de contexto `brand100` verde, mosaicos pastel con melocotón en Movimientos) **rechazada por segunda vez** por dominancia del verde. Todos los valores se verifican en la sección 3 con `node docs/design/contrast.js --check` y coinciden con el `:root` del prototipo (comprobado por script: 47 valores, 0 diferencias).
+
+### 2.1 Marca (verde azulado del ícono) - uso restringido
+
+| Token | Hex | Uso (lista cerrada) |
+| --- | --- | --- |
+| `brand800` | `#0B4A46` | Botón primario presionado; `brandInk` (nombre «CuidaTuBilletera» del encabezado, tinta del módulo Cuenta) |
+| `brand700` | `#0F5F5A` | **Botón primario**, **FAB**, **tarjeta de saldo**, borde de foco, botón secundario (borde y texto), enlaces de texto. Igual al fondo del ícono (`#0F5F5A`) |
+| `brand500` | `#1F8A80` | Solo decorativo: banda al 35 % sobre la tarjeta de saldo |
+| `brand100` | `#D3EBF0` | Halo de foco de campos; = `cuentaTile` |
+| `onBrandSoft` | `#E6F7F4` | «Saldo actual» y «Actualizando…» sobre la tarjeta de saldo |
+
+### 2.2 Superficies y texto
+
+| Token | Hex | Uso |
+| --- | --- | --- |
+| `bg` | `#FFFBF5` | Fondo de pantalla (casi blanco cálido) |
+| `surface` | `#FFFFFF` | Tarjetas, campos, barra inferior, **barra de contexto de cuenta** |
+| `segBg` | `#F3EEE6` | Pista de segmentados neutros, píldora de saldo de la barra de contexto, chip neutro elegido |
+| `text` | `#17211F` | Texto principal |
+| `text2` | `#4B5653` | Texto secundario, pestaña inactiva, chevrón |
+| `text3` | `#5F6B68` | Ayuda y placeholder |
+| `border` | `#EEE7DC` | Separadores (decorativo) |
+| `borderStrong` | `#7E8A86` | Borde de campos y chips (componente, 3:1) |
+
+### 2.3 Color por módulo (docs/007 §3.6)
+
+| Módulo | Mosaico (`*Tile`) | Tinta (`*Ink`) | Fuerte (solo decorativo o fondo de texto blanco) | Dónde |
+| --- | --- | --- | --- | --- |
+| Cuenta | `cuentaTile` `#D3EBF0` | `cuentaInk` `#0B4A46` | `brand700` (tarjeta de saldo) | Píldora de la pestaña, ícono «Datos de cuenta» |
+| Movimientos (ámbar) | `movTile` `#FFEDA6` | `movInk` `#5C4000` | `movStrong` `#F5A524` (decorativo) | Píldora, mosaico del título, segmentado y chips de filtro activos, ilustración vacía |
+| Calendario (azul) | `calTile` `#DCEBFF` | `calInk` `#174C86` | `calStrong` `#2563C9` | Píldora, mosaico del título, **día elegido** (fondo, texto blanco) y borde de **hoy** |
+| Reportes (violeta) | `repTile` `#ECE4FF` | `repInk` `#4E2DA3` | — | Píldora, mosaico del título, **segmentado Mes/Año/Rango elegido**. Ingresos/Gastos/Balance no usan violeta |
+| Más / Categorías (pizarra) | `masTile` `#E3E8EF` | `masInk` `#334155` | — | Píldora, mosaico del título de Más y Categorías, ícono «Categorías» |
+
+El ámbar sustituye al melocotón de la iteración 2 en Movimientos porque el melocotón se confundía con el coral de gasto (sección 3.2).
+
+### 2.4 Paleta de cuentas (docs/007 §5.2.4, decisiones 14.18 y 14.19)
+
+Seis tonos suaves, asignados por `hash(id) mod 6` (hash de cadena estilo Java: `x = x * 31 + código`, sin signo) para que el color **no cambie** al crear o archivar otras cuentas. **Excluye** el verde de ingreso, el coral de gasto y la marca (por eso no hay «menta»; el «melocotón» pasa a albaricoque, más amarillo). Colisiones permitidas: el nombre es el identificador.
+
+| Índice | Nombre | Fondo de tarjeta (`acc*Card`) | Mosaico del ícono (`acc*Tile`) |
+| --- | --- | --- | --- |
+| 0 | aguamarina | `#E3F6F8` | `#BDE9EF` |
+| 1 | lavanda | `#F0EBFF` | `#D9CCFF` |
+| 2 | albaricoque | `#FFF0E0` | `#FFD6A8` |
+| 3 | celeste | `#E7F1FF` | `#C5DBFF` |
+| 4 | rosa | `#FDEAF2` | `#F8CADD` |
+| 5 | limón | `#FFF6D6` | `#FFE58A` |
+
+Ícono decorativo por palabra clave del nombre (14.19 b): «tarjeta» → 💳, «banco» → 🏦, «ahorro» → la **alcancía** (`adaptive-icon-foreground.png`, la misma del personaje), resto → 👛. El mismo mosaico (color + ícono) aparece en la barra de contexto para reconocer la cuenta en las pantallas internas (es color **de la cuenta**, no del módulo).
+
+### 2.5 Semánticos y acento
+
+| Token | Hex | Soft (fondo) | Texto sobre soft | Uso |
+| --- | --- | --- | --- | --- |
+| `income` (ingreso) | `#12804A` | `incomeSoft` `#D9F4E4` | `incomeText` `#0E6A3D` | Importes `+`, burbuja ↑ de Ingresos, «✓ Ingreso» elegido |
+| `expense` (gasto, peligro) | `#D13A2F` | `expenseSoft` `#FFE1D9` | `expenseText` `#B42A20` | Importes `−`, burbuja ↓ de Gastos, «✓ Gasto» elegido, Archivar/Anular |
+| `yellow` (acento) | `#FFC93C` | `yellowSoft` `#FFF1C2` | `yellowText` `#6B4E00` | Moneda del Total, subrayado de títulos, destellos, «+» del FAB; guías, avisos, «Archivada», círculo de la bienvenida |
+
+### 2.6 Manchas decorativas del fondo
+
+Círculos de 120-220 dp parcialmente fuera de pantalla, detrás del contenido (`pointerEvents="none"`, ocultos a accesibilidad): amarillo `#FFD966` al 35 %, melocotón `#FFB59A` al 25 %, celeste `#9CC4FF` al 25 %. Solo en Bienvenida y Mis cuentas (se desplazan con el contenido). El contraste se verificó en el peor caso de las tres apiladas (`#E6DACB`).
+
+### 2.7 Categorías: color de la API como fondo del cuadrado
+
+Sin cambios respecto a la iteración 2: las 11 categorías iniciales (`api/src/services/default-categories.ts`) traen `icono` y `color`; el fondo del cuadrado es `catFill = categoryFill(color)` (el color oscurecido en pasos de 1 % hasta que un glifo blanco alcance 3:1; el dato `color` de la API no se toca). La paleta del selector de `CategoriesScreen` (`CATEGORY_COLORS`, 7 colores) no coincide con ellas (decisión 15.4). Valores en la sección 3.3. Los importes usan `income`/`expense`, nunca el color de la categoría; la dona usa `catFill` con leyenda de nombre y porcentaje.
+
+## 3. Contraste WCAG y distinguibilidad (verificado con script)
+
+`node docs/design/contrast.js --check` (sale con código 1 si un par no cumple; salida de esta versión: **código 0**). Mínimos: 4.5:1 texto normal; 3:1 componentes y objetos gráficos. Las capas semitransparentes se evalúan **compuestas** (mezcla alfa, igual que una `View` con `opacity`) y en el **peor caso**: banda = `#156E67`, banda + círculo = `#287A73`, círculo solo = `#226C67`; manchas: amarilla `#FFEFC3`, melocotón `#FFEADE`, celeste `#E6EDF8`, las tres apiladas `#E6DACB`; círculo de la tarjeta de cuenta = fondo de la tarjeta + blanco al 45 %.
+
+### 3.1 Pares de texto y componentes (salida del script, 82 pares)
+
+| Par (texto sobre fondo) | Texto | Fondo | Ratio | Resultado |
+| --- | --- | --- | --- | --- |
+| Texto principal sobre fondo cálido | `#17211F` | `#FFFBF5` | 15.99:1 | Cumple |
+| Texto principal sobre tarjeta | `#17211F` | `#FFFFFF` | 16.49:1 | Cumple |
+| Texto secundario sobre tarjeta | `#4B5653` | `#FFFFFF` | 7.62:1 | Cumple |
+| Texto secundario sobre fondo cálido | `#4B5653` | `#FFFBF5` | 7.39:1 | Cumple |
+| Ayuda/placeholder sobre tarjeta | `#5F6B68` | `#FFFFFF` | 5.54:1 | Cumple |
+| Ayuda/placeholder sobre fondo cálido | `#5F6B68` | `#FFFBF5` | 5.38:1 | Cumple |
+| Título sobre manchas apiladas (peor caso) | `#17211F` | `#E6DACB` | 11.98:1 | Cumple |
+| Texto secundario sobre manchas apiladas (peor caso) | `#4B5653` | `#E6DACB` | 5.54:1 | Cumple |
+| brandInk (marca «CuidaTuBilletera») sobre manchas (peor caso) | `#0B4A46` | `#E6DACB` | 7.33:1 | Cumple |
+| Texto secundario sobre mancha amarilla | `#4B5653` | `#FFEFC3` | 6.67:1 | Cumple |
+| Texto secundario sobre mancha melocotón | `#4B5653` | `#FFEADE` | 6.56:1 | Cumple |
+| Texto secundario sobre mancha celeste | `#4B5653` | `#E6EDF8` | 6.47:1 | Cumple |
+| Blanco sobre brand700 (botón primario, FAB) | `#FFFFFF` | `#0F5F5A` | 7.49:1 | Cumple |
+| Blanco sobre brand800 (botón presionado) | `#FFFFFF` | `#0B4A46` | 10.09:1 | Cumple |
+| brand700 como enlace sobre tarjeta | `#0F5F5A` | `#FFFFFF` | 7.49:1 | Cumple |
+| brand700 como enlace sobre fondo cálido | `#0F5F5A` | `#FFFBF5` | 7.26:1 | Cumple |
+| Subtítulo onBrandSoft sobre brand700 | `#E6F7F4` | `#0F5F5A` | 6.77:1 | Cumple |
+| Blanco sobre tarjeta de saldo: banda brand500 35 % | `#FFFFFF` | `#156E67` | 6.07:1 | Cumple |
+| Blanco sobre tarjeta de saldo: banda + círculo 8 % (peor caso) | `#FFFFFF` | `#287A73` | 5.10:1 | Cumple |
+| onBrandSoft sobre tarjeta de saldo (peor caso) | `#E6F7F4` | `#287A73` | 4.60:1 | Cumple |
+| onBrandSoft sobre círculo 8 % sin banda | `#E6F7F4` | `#226C67` | 5.57:1 | Cumple |
+| Texto oscuro sobre amarillo («+» del FAB, moneda) | `#17211F` | `#FFC93C` | 10.73:1 | Cumple |
+| Segmentado neutro: text2 sobre segBg | `#4B5653` | `#F3EEE6` | 6.60:1 | Cumple |
+| Segmentado neutro: texto sobre tarjeta (opción elegida) | `#17211F` | `#FFFFFF` | 16.49:1 | Cumple |
+| Aviso breve: blanco sobre texto principal (snackbar) | `#FFFFFF` | `#17211F` | 16.49:1 | Cumple |
+| Barra: texto (nombre, ‹ Mis cuentas) sobre superficie | `#17211F` | `#FFFFFF` | 16.49:1 | Cumple |
+| Barra: texto principal sobre píldora de saldo segBg | `#17211F` | `#F3EEE6` | 14.28:1 | Cumple |
+| Barra: saldo negativo expenseText sobre píldora segBg | `#B42A20` | `#F3EEE6` | 5.52:1 | Cumple |
+| Barra: «Archivada» yellowText sobre yellowSoft | `#6B4E00` | `#FFF1C2` | 6.86:1 | Cumple |
+| Barra: «Saldo no disponible» expenseText sobre superficie | `#B42A20` | `#FFFFFF` | 6.38:1 | Cumple |
+| Ingreso (importe) sobre tarjeta | `#12804A` | `#FFFFFF` | 4.99:1 | Cumple |
+| Ingreso (importe) sobre fondo cálido | `#12804A` | `#FFFBF5` | 4.84:1 | Cumple |
+| incomeText sobre incomeSoft (burbuja ↑, Ingreso elegido) | `#0E6A3D` | `#D9F4E4` | 5.72:1 | Cumple |
+| Gasto (importe) sobre tarjeta | `#D13A2F` | `#FFFFFF` | 4.82:1 | Cumple |
+| Gasto (importe) sobre fondo cálido | `#D13A2F` | `#FFFBF5` | 4.67:1 | Cumple |
+| expenseText sobre expenseSoft (burbuja ↓, Gasto elegido) | `#B42A20` | `#FFE1D9` | 5.17:1 | Cumple |
+| Blanco sobre expense (Anular/Archivar sólido) | `#FFFFFF` | `#D13A2F` | 4.82:1 | Cumple |
+| yellowText sobre yellowSoft (aviso, guía) | `#6B4E00` | `#FFF1C2` | 6.86:1 | Cumple |
+| cuentaInk sobre cuentaTile (Cuenta) | `#0B4A46` | `#D3EBF0` | 8.12:1 | Cumple |
+| movInk sobre movTile (Movimientos, ámbar) | `#5C4000` | `#FFEDA6` | 8.19:1 | Cumple |
+| calInk sobre calTile (Calendario) | `#174C86` | `#DCEBFF` | 7.19:1 | Cumple |
+| repInk sobre repTile (Reportes, segmentado elegido) | `#4E2DA3` | `#ECE4FF` | 7.68:1 | Cumple |
+| masInk sobre masTile (Más, Categorías) | `#334155` | `#E3E8EF` | 8.41:1 | Cumple |
+| cuentaInk sobre barra blanca (pestaña activa) | `#0B4A46` | `#FFFFFF` | 10.09:1 | Cumple |
+| movInk sobre barra blanca (pestaña activa) | `#5C4000` | `#FFFFFF` | 9.60:1 | Cumple |
+| calInk sobre barra blanca (pestaña activa) | `#174C86` | `#FFFFFF` | 8.70:1 | Cumple |
+| repInk sobre barra blanca (pestaña activa) | `#4E2DA3` | `#FFFFFF` | 9.42:1 | Cumple |
+| masInk sobre barra blanca (pestaña activa) | `#334155` | `#FFFFFF` | 10.35:1 | Cumple |
+| Blanco sobre calStrong (día elegido del calendario) | `#FFFFFF` | `#2563C9` | 5.67:1 | Cumple |
+| Pestaña inactiva (text2) sobre barra blanca | `#4B5653` | `#FFFFFF` | 7.62:1 | Cumple |
+| Borde de campo sobre tarjeta (componente 3:1) | `#7E8A86` | `#FFFFFF` | 3.58:1 | Cumple 3:1 |
+| Borde de campo sobre fondo cálido (componente 3:1) | `#7E8A86` | `#FFFBF5` | 3.47:1 | Cumple 3:1 |
+| Borde de foco brand700 sobre tarjeta (componente 3:1) | `#0F5F5A` | `#FFFFFF` | 7.49:1 | Cumple 3:1 |
+| Borde Gasto elegido (expense) sobre expenseSoft (3:1) | `#D13A2F` | `#FFE1D9` | 3.91:1 | Cumple 3:1 |
+| Borde Ingreso elegido (income) sobre incomeSoft (3:1) | `#12804A` | `#D9F4E4` | 4.28:1 | Cumple 3:1 |
+| Borde «hoy» calStrong sobre tarjeta (3:1) | `#2563C9` | `#FFFFFF` | 5.67:1 | Cumple 3:1 |
+| Borde chip activo movInk sobre movTile (3:1) | `#5C4000` | `#FFEDA6` | 8.19:1 | Cumple 3:1 |
+| Botón primario brand700 sobre fondo cálido (componente 3:1) | `#0F5F5A` | `#FFFBF5` | 7.26:1 | Cumple 3:1 |
+| Cuenta aguamarina: texto principal sobre tarjeta | `#17211F` | `#E3F6F8` | 14.76:1 | Cumple |
+| Cuenta aguamarina: text2 («Saldo actual», ›) sobre tarjeta | `#4B5653` | `#E3F6F8` | 6.82:1 | Cumple |
+| Cuenta aguamarina: saldo negativo expenseText sobre tarjeta | `#B42A20` | `#E3F6F8` | 5.71:1 | Cumple |
+| Cuenta aguamarina: text2 sobre círculo decorativo 45 % | `#4B5653` | `#F0FAFB` | 7.18:1 | Cumple |
+| Cuenta lavanda: texto principal sobre tarjeta | `#17211F` | `#F0EBFF` | 14.16:1 | Cumple |
+| Cuenta lavanda: text2 («Saldo actual», ›) sobre tarjeta | `#4B5653` | `#F0EBFF` | 6.54:1 | Cumple |
+| Cuenta lavanda: saldo negativo expenseText sobre tarjeta | `#B42A20` | `#F0EBFF` | 5.48:1 | Cumple |
+| Cuenta lavanda: text2 sobre círculo decorativo 45 % | `#4B5653` | `#F7F4FF` | 7.02:1 | Cumple |
+| Cuenta albaricoque: texto principal sobre tarjeta | `#17211F` | `#FFF0E0` | 14.75:1 | Cumple |
+| Cuenta albaricoque: text2 («Saldo actual», ›) sobre tarjeta | `#4B5653` | `#FFF0E0` | 6.82:1 | Cumple |
+| Cuenta albaricoque: saldo negativo expenseText sobre tarjeta | `#B42A20` | `#FFF0E0` | 5.71:1 | Cumple |
+| Cuenta albaricoque: text2 sobre círculo decorativo 45 % | `#4B5653` | `#FFF7EE` | 7.18:1 | Cumple |
+| Cuenta celeste: texto principal sobre tarjeta | `#17211F` | `#E7F1FF` | 14.46:1 | Cumple |
+| Cuenta celeste: text2 («Saldo actual», ›) sobre tarjeta | `#4B5653` | `#E7F1FF` | 6.69:1 | Cumple |
+| Cuenta celeste: saldo negativo expenseText sobre tarjeta | `#B42A20` | `#E7F1FF` | 5.60:1 | Cumple |
+| Cuenta celeste: text2 sobre círculo decorativo 45 % | `#4B5653` | `#F2F7FF` | 7.09:1 | Cumple |
+| Cuenta rosa: texto principal sobre tarjeta | `#17211F` | `#FDEAF2` | 14.31:1 | Cumple |
+| Cuenta rosa: text2 («Saldo actual», ›) sobre tarjeta | `#4B5653` | `#FDEAF2` | 6.62:1 | Cumple |
+| Cuenta rosa: saldo negativo expenseText sobre tarjeta | `#B42A20` | `#FDEAF2` | 5.54:1 | Cumple |
+| Cuenta rosa: text2 sobre círculo decorativo 45 % | `#4B5653` | `#FEF3F8` | 7.04:1 | Cumple |
+| Cuenta limón: texto principal sobre tarjeta | `#17211F` | `#FFF6D6` | 15.23:1 | Cumple |
+| Cuenta limón: text2 («Saldo actual», ›) sobre tarjeta | `#4B5653` | `#FFF6D6` | 7.04:1 | Cumple |
+| Cuenta limón: saldo negativo expenseText sobre tarjeta | `#B42A20` | `#FFF6D6` | 5.89:1 | Cumple |
+| Cuenta limón: text2 sobre círculo decorativo 45 % | `#4B5653` | `#FFFAE8` | 7.29:1 | Cumple |
+
+Resultado: los 82 pares cumplen. **Mínimo de texto 4.60:1** («Saldo actual» `onBrandSoft` sobre la tarjeta de saldo en el peor caso de banda + círculo); **mínimo de componente 3.47:1** (borde de campo sobre fondo cálido). Gasto sobre fondo cálido: 4.67:1.
+
+### 3.2 Distinguibilidad: módulo frente a semántica de dinero (docs/007 §3.6)
+
+Simulación de protanopia y deuteranopia (Viénot, Brettel y Mollon 1999) y diferencia ΔE76 en CIELAB. Umbral orientativo ΔE ≥ 20.
+
+| Par (distinguibilidad) | A | B | ΔE normal | ΔE protanopia | ΔE deuteranopia | Resultado |
+| --- | --- | --- | --- | --- | --- | --- |
+| Marca brand700 frente a ingreso income | `#0F5F5A` | `#12804A` | 33.0 | 29.6 | 27.8 | Distinto |
+| Mosaico Cuenta cuentaTile frente a incomeSoft | `#D3EBF0` | `#D9F4E4` | 11.2 | 10.9 | 10.6 | Cercano: apoyarse en texto/icono |
+| Ámbar movStrong frente a gasto expense | `#F5A524` | `#D13A2F` | 54.8 | 51.2 | 35.7 | Distinto |
+| Mosaico ámbar movTile frente a expenseSoft | `#FFEDA6` | `#FFE1D9` | 31.8 | 31.2 | 29.8 | Distinto |
+| Tinta ámbar movInk frente a expenseText | `#5C4000` | `#B42A20` | 48.7 | 12.2 | 16.4 | Cercano: apoyarse en texto/icono |
+
+Lectura: la marca y el verde de ingreso, y el ámbar fuerte y el coral, se distinguen también con daltonismo. Los tintes muy claros (mosaico Cuenta frente a `incomeSoft`) y las tintas oscuras ámbar/coral quedan «cercanos» con deuteranopia: por eso nunca van solos (la píldora de pestaña lleva ícono y etiqueta; la burbuja de Ingresos lleva «↑» y la palabra; el importe lleva signo). Si en la prueba con usuarios se confunden, aplica la salida prevista en docs/007 §3.6: el módulo cede y usa su tono solo en la píldora de la pestaña.
+
+### 3.3 Categorías (glifo = objeto gráfico, mínimo 3:1)
+
+| Categoría | Color API | Blanco sobre API | Glifo blanco directo | `catFill` | Blanco sobre `catFill` | Oscuro `#17211F` sobre API |
+| --- | --- | --- | --- | --- | --- | --- |
+| Alimentación | `#F97316` | 2.80:1 | No | `#EF6E15` (−4 %) | 3.04:1 | 5.88:1 |
+| Transporte | `#3B82F6` | 3.68:1 | Sí | `#3B82F6` | 3.68:1 | 4.48:1 |
+| Servicios básicos | `#EAB308` | 1.92:1 | No | `#B98D06` (−21 %) | 3.05:1 | 8.60:1 |
+| Salud | `#EF4444` | 3.76:1 | Sí | `#EF4444` | 3.76:1 | 4.38:1 |
+| Educación | `#8B5CF6` | 4.23:1 | Sí | `#8B5CF6` | 4.23:1 | 3.89:1 |
+| Hogar | `#14B8A6` | 2.49:1 | No | `#12A695` (−10 %) | 3.04:1 | 6.62:1 |
+| Entretenimiento | `#EC4899` | 3.53:1 | Sí | `#EC4899` | 3.53:1 | 4.67:1 |
+| Otros gastos | `#6B7280` | 4.83:1 | Sí | `#6B7280` | 4.83:1 | 3.41:1 |
+| Sueldo | `#22C55E` | 2.28:1 | No | `#1DA951` (−14 %) | 3.07:1 | 7.24:1 |
+| Ventas | `#06B6D4` | 2.43:1 | No | `#05A2BD` (−11 %) | 3.04:1 | 6.79:1 |
+| Otros ingresos | `#84CC16` | 1.98:1 | No | `#6AA312` (−20 %) | 3.06:1 | 8.35:1 |
+
+Limitaciones honestas:
+
+1. Márgenes justos: `onBrandSoft` en el peor caso de la tarjeta de saldo (4.60), `expense` sobre `bg` (4.67) y `catFill` (3.04). No aclarar esos tokens sin volver a ejecutar el script.
+2. El texto **no** se coloca sobre ilustraciones (alcancía del encabezado, de la tarjeta de saldo y de la bienvenida tienen zona reservada); su contraste no se calcula porque no son fondo de texto.
+3. Los emojis multicolor no tienen contraste calculable; el nombre siempre acompaña al ícono.
+4. Las sombras (`elevation`) no entran en los cálculos.
+
+## 4. Tipografía
+
+Solo fuentes del sistema (Roboto en Android): no se agrega ninguna fuente. **Decisión pendiente 15.1:** una fuente de marca (por ejemplo vía `expo-font`, dependencia nueva y recurso embebido) no se propone ahora. Escala (valores `sp`; respetar el tamaño de fuente del sistema, sin `allowFontScaling={false}`):
+
+| Estilo | Tamaño / interlínea | Peso | Uso |
+| --- | --- | --- | --- |
+| `amountXl` | 34 / 40 | 800 | Saldo actual |
+| `title` | 24 / 30 | 800 | Título de pantalla |
+| `h2` | 18 / 24 | 700 | Secciones, títulos de diálogo |
+| `body` | 15 / 22 | 400-600 | Texto general |
+| `button` | 16 / 20 | 700 | Botones |
+| `small` | 13 / 18 | 400-700 | Etiquetas y ayudas |
+| `tab` | 11.5 / 14 | 700 | Pestañas |
+
+Los importes usan cifras tabulares (`fontVariant: ['tabular-nums']`). Con fuente al 200 % se usan alturas mínimas y saltos de línea, nunca alturas fijas. Esto sustituye los títulos de 22/24/28 hoy mezclados (hallazgo H4 de docs/007).
+
+Estilos nuevos de esta iteración (Mis cuentas): `rootTitle` 26/32 800 («Mis cuentas», con subrayado amarillo de 40 × 5); `greeting` 16/22 600 `text2` («Hola, Ana»); `brandLabel` 14 800 `brandInk` («CuidaTuBilletera»); `totalAmount` 24/30 800; `accountName` 17/22 800; `accountBalance` 22/28 800 cifras tabulares.
+
+## 5. Espaciado, radios y sombras
+
+- Espaciado (escala de 4): 4, 8, 12, 16, 24, 32. Margen lateral de pantalla 16 (20 con ancho ≥ 400 dp, docs/007 §5.2.5).
+- Radios: `sm` 8 (celdas), `md` 12 (botones, campos, filas de categoría), `lg` 16 (tarjetas, botón primario alto), `accountCard` 20 (tarjetas de cuenta), `xl` 24 (tarjeta de saldo, diálogos, hoja de perfil), `pill` 999 (chips, segmentados, FAB).
+- Sombras (Android `elevation`, más `shadow*` para compatibilidad): `sh1` tarjeta = elevation 1; `sh2` FAB, tarjeta de saldo y diálogos = elevation 4. No usar más niveles.
+- Objetivo táctil mínimo 48 dp de **zona efectiva**; separación mínima 8 dp (docs/007 §10). El aspecto puede ser menor solo en dos casos aprobados (paso 346): chips de filtro de 36 dp con `hitSlop` 6 dp arriba y abajo (P-1) y celdas de día del calendario de 52 dp de alto y ≈ 44,3 dp de ancho a 360 dp (P-3, única excepción al ancho de 48 dp). Ningún otro control baja de 48 dp.
+
+
+## 6. Componentes visuales
+
+Técnica común de profundidad (sin dependencias): contenedor con `overflow: 'hidden'` y color sólido; dentro, `View` absolutas decorativas (`pointerEvents="none"`, `importantForAccessibility="no-hide-descendants"`). Se usa en la tarjeta de saldo (banda `brand500` al 35 % girada −16° + círculos blancos al 8 %), en las tarjetas de cuenta (círculo blanco al 45 % arriba a la derecha) y en los fondos de Bienvenida y Mis cuentas (manchas, 2.6).
+
+### 6.1 Encabezado de Mis cuentas (docs/007 §5.2.2)
+
+Fondo **claro** (`bg` + manchas), sin franja verde. Fila superior de 48 dp: «CuidaTuBilletera» (`brandLabel`) a la izquierda y **avatar** a la derecha (círculo `surface` de 40 dp con borde 1.5 `border`, `sh1`, inicial 16/800 `text`; objetivo táctil 48 dp; etiqueta «Tu perfil y sesión»). Debajo, saludo + título con subrayado amarillo a la izquierda y la **alcancía** a la derecha, alineada abajo: caja de 72 dp (96 dp con ancho ≥ 400 dp) y la imagen ampliada ×1.4 dentro de la caja para compensar el margen transparente del PNG (el arte visible queda en ~62 dp / ~84 dp); un destello amarillo. Con fuente ≥ 130 % la caja baja a 48 dp; con fuente ≥ 175 % o ancho ≤ 340 dp se oculta (docs/007 §5.2.5).
+
+**Hoja de perfil** (14.17): hoja inferior `surface`, radio 24 arriba, asa de 40 × 4; avatar de 48 dp en `yellowSoft`, nombre 17/800, correo `small`; [Cerrar sesión] `secondary` a todo el ancho y [Cerrar] `ghost`. Tocar fuera la cierra.
+
+### 6.2 Resumen «Total en tus cuentas» (14.16)
+
+Tarjeta `surface`, radio 16, `sh1`, relleno 12/16. A la izquierda, **moneda** amarilla de 40 dp con «$» `text` (10.73:1). Texto: «Total en tus cuentas» `small` 700, importe `totalAmount` (`expenseText` y «-» si es negativo), «Suma de los saldos de {n} cuentas» y, si hay archivadas, «No incluye cuentas archivadas» en línea propia. Superficie neutra: **sin color fuerte**. Solo con ≥ 2 cuentas activas.
+
+### 6.3 Tarjeta de cuenta (`AccountCard`, docs/007 §5.2.4)
+
+Toda la tarjeta es un botón: fondo `acc*Card` (2.4), radio 20, `sh1`, alto mínimo 88 dp (92 con ancho ≥ 400; es mínimo, la tarjeta crece con el contenido y la fuente), relleno 12/14/12/12, separación 10 dp. Capas: círculo blanco de 110 dp al 45 % asomando arriba a la derecha. Izquierda: **mosaico de 52 dp** radio 16 en `acc*Tile` con el ícono de 28 dp (o la alcancía recortada al mosaico). Centro: nombre `accountName` (una línea con elipsis: truncado intencional, ver 6.12; el nombre completo va en `accessibilityLabel` y se ve entero en Datos de cuenta), «Saldo actual» `small`, saldo `accountBalance` (`expenseText` y «-» si es negativo; el fondo no cambia). Derecha: chevrón «›» `text2` 18/800 dentro de un círculo blanco al 70 % de 28 dp. Presionada: escala 0.98. Archivada (lista desplegada): fondo `#F4F0EA`, borde `border`, sin sombra ni color de cuenta, etiqueta «Archivada», [Ver] `ghost` y [Desarchivar] `secondary`. Fila «▸ Archivadas (n)» 48 dp, 15/700 `text2`, sin relleno.
+
+### 6.4 Tarjeta de saldo (`BalanceCard`) - única superficie fuerte
+
+Fondo `brand700`, radio 24, `sh2`, relleno 20/20/22, alto mínimo 132. Capas: banda arriba a la derecha, círculo de 150 dp abajo a la derecha y de 60 dp arriba a la izquierda, destellos amarillos (12 × 4, radio 2, ±35°). Alcancía de 104 dp abajo a la derecha. Texto en columna con `paddingRight: 96`: «Saldo actual» 14/600 `onBrandSoft`, saldo `amountXl` blanco. Fuente > 130 % o ancho ≤ 340 dp: sin ilustración. Recargando: último valor + «Actualizando…» (`busy`). Error: recuadro blanco «Saldo no disponible» `expenseText` + [Reintentar] 48 dp. Nunca «$0.00» inventado.
+
+### 6.5 Mosaicos de resumen (`SummaryTile`)
+
+**Claros** (docs/007 §5.4): `surface`, radio 16, `sh1`, relleno 12/16. Etiqueta 13/700 `text2` con **burbuja** cuadrada de 24 dp radio 8: «↑» `incomeText` sobre `incomeSoft` (Ingresos) o «↓» `expenseText` sobre `expenseSoft` (Gastos). Cifra 19/800 con signo en `income` / `expense`. Neto (Calendario) y Balance (Reportes): cifra en `text`, sin color de módulo.
+
+### 6.6 Botones, FAB y navegación de mes
+
+- Alto mínimo 48 (52 y radio 16 en «+ Nueva cuenta» y «Crear mi primera cuenta»), radio 12, texto 16/700. `primary`: `brand700`, texto blanco (presionado `brand800`). `secondary`: `surface`, borde 2 y texto `brand700`. `danger`: `surface`, borde 2 `expense`, texto `expenseText`. `dangerSolid`: `expense` y texto blanco (solo confirmaciones). `ghost`: solo texto `text`. Deshabilitado: opacidad 0.5 + `disabled`. Cargando: «Guardando…» y bloqueado. **Una sola primaria por pantalla.**
+- **FAB «+ Nuevo movimiento»**: píldora `brand700` de 56 dp, texto blanco 16/800, círculo `yellow` de 40 dp con «+» en `text`; `sh2`. Mismo color en Cuenta, Movimientos y Calendario. Deshabilitado (archivada): opacidad 0.5 + nota `yellowSoft` «Cuenta archivada: no admite movimientos nuevos».
+- Flechas de mes (‹ ›): círculo `surface` de 32 dp con `sh1`, glifo `text` 800, objetivo 48 dp.
+- Enlaces de texto («Ver todo ›»): `brand700` 700 (texto, no superficie).
+
+### 6.7 Campos, chips y segmentados
+
+- Campos: alto 48, radio 12, borde 1.5 `borderStrong`, fondo blanco, etiqueta 14/700, ayuda `text2` 13, error `expenseText` (`role=alert`). Foco: borde 2 `brand700` + halo 3 dp `brand100`.
+- Chips (48 dp; **P-1, aprobada:** solo los chips de filtro `.chip.sm` se ven de 36 dp con zona táctil efectiva de 48 dp: `hitSlop={{ top: 6, bottom: 6 }}`, filas separadas 12 dp (36 + 12 = 48 de paso, sin solapar zonas), 8 dp entre chips de una fila; `hitSlop` solo agranda la zona, no cambia el aspecto; docs/007 §10): píldora, borde 1.5 `borderStrong`, `surface`. Elegido neutro: `segBg`, borde `text`, «✓». Elegido en Movimientos: `movTile`, borde y texto `movInk`. Elegido en Nuevo movimiento: el del tipo (`expenseSoft`/`expense`/`expenseText` o `incomeSoft`/`income`/`incomeText`). Filtro activo con «✕».
+- Segmentado neutro (Todos/Gastos/Ingresos de la pestaña Cuenta; **P-2, aprobada:** todas las opciones de segmentado, incluidas Mes/Año/Rango y Tipo, miden 48 dp de alto y reparten el ancho por igual; la pista mide 56 dp con su relleno de 4): pista `segBg`, opción elegida `surface` + `text` 800 + `sh1` + «✓». En Reportes, la elegida es `repTile` + `repInk`; en el filtro de Movimientos, `movTile` + `movInk`.
+- **Tipo Gasto/Ingreso** (Nuevo movimiento, Categorías): dos botones separados de 48 dp, radio 12, `surface` con borde `border`. «✓ Gasto» = `expenseSoft`, borde 2 `expense`, texto `expenseText`; «✓ Ingreso» = `incomeSoft`, borde 2 `income`, texto `incomeText` (el «segmentado coral/menta» del póster). La categoría elegida usa el mismo tinte y borde del tipo.
+- **Selector de categorías de Nuevo movimiento (D2, aprobada):** cuadrícula de **2 columnas** (`minmax(0, 1fr)`, separación 8 dp), cada opción con alto mínimo **56 dp que crece** con el contenido (nunca alto fijo; el mínimo de docs/007 §10 es 48), radio 12, borde 2 `border` (elegida: tinte y borde del tipo, nombre 800, «✓»), relleno horizontal 8, `CategoryIcon` de 32 dp a la izquierda y el **nombre a la derecha en hasta DOS líneas** (14/18, `min-width: 0`, salto en palabras largas). Los nombres habituales (Alimentación, Servicios básicos, Entretenimiento, Otros gastos…) **no se truncan con elipsis**; solo un nombre propio muy largo se corta en la segunda línea (6.12). Probado a 360 y 412 dp y con fuente grande.
+
+### 6.8 Barra inferior
+
+`surface`, borde superior `border`, sombra suave, 5 pestañas, etiquetas siempre visibles. **D1, aprobada:** **ícono encima de la etiqueta COMPLETA** («Cuenta», «Movimientos», «Calendario», «Reportes», «Más»), sin solapamientos ni recortes a 360 y 412 dp. Reparto **no igualitario**: cada pestaña `flex: 1 1 auto` (ancho según su contenido), `minWidth: 48`, relleno horizontal 2 dp, columna ícono-etiqueta con separación 2 dp. Alto de la barra **62 dp** como mínimo (crece si la etiqueta pasa a dos líneas). Etiqueta `tab` 11,5/14 700 (no se reduce a 11; respeta el tamaño de fuente del sistema). Zona táctil ≥ 48 dp de ancho y alto. Inactiva: ícono y texto `text2`. Activa: **píldora compacta de 10 dp de relleno horizontal** (3 dp vertical; antes 16) en el `*Tile` del módulo, ícono y texto en su `*Ink` 800, `selected`, `role=tab` dentro de `tablist`. Con fuente grande la etiqueta puede pasar a dos líneas; no se trunca. Criterio de aceptación: la auditoría no registra «pestañas solapadas».
+
+### 6.9 Barra de contexto de cuenta (`AccountContextBar`) - neutra
+
+Anatomía, datos y accesibilidad en docs/007 §3.5; aquí solo el aspecto. **Cambio de esta iteración:** deja de ser `brand100` (verde) y pasa a **`surface` blanca** con borde inferior `border` y sombra muy suave, **idéntica en todas las pantallas internas** y sin color de módulo (docs/007 §3.6). La barra de estado del sistema usa `surface` en esas pantallas.
+
+| Parte | Estilo |
+| --- | --- |
+| Contenedor | `surface`, alto mín. 56, relleno 4-6 / 4-12, borde inferior 1 `border`. |
+| «‹ Mis cuentas» | Botón 48 × 48 mín., 14/800 `text`; separador vertical 1 dp `border`. |
+| Ícono | Mosaico de 30 dp radio 10 con el **color y el ícono de la cuenta** (2.4). |
+| Nombre | 15/800 `text`, una línea, elipsis, `flexShrink: 1`. |
+| Saldo | Píldora `segBg`, 14/800 `text`, cifras tabulares, `flexShrink: 0`. Negativo: `expenseText` y «-». Omitido en la pestaña Cuenta. |
+| Recargando | Indicador de 12 dp (`text2` sobre `#D9D2C6`), `busy`; se mantiene el último saldo. |
+| Error | «Saldo no disponible» 13/700 `expenseText` + «Reintentar» subrayado 48 dp. |
+| Archivada | Etiqueta «Archivada» 12/800 `yellowText` sobre `yellowSoft`, borde `#E8C560`. |
+
+Solo lectura (Categorías, Historial desde Reportes): igual, con la salida propia. Compacta (Nuevo/Editar movimiento): una línea de 36 dp, `surface`, «Efectivo · $1,876.00», sin ícono ni acción. Estrecha (≤ 340 dp) o fuente 200 %: dos filas. Selector rápido (14.14): «▾» `text` y hoja como 6.1; no simulado.
+
+### 6.10 Calendario, gráficos y estados
+
+- Calendario (aprobado 4.1, solo color): cuadrícula de 7 columnas con separación de 3 dp; celdas de **52 dp de alto**, ancho ≈ 44,3 dp a 360 dp y ≥ 48 dp con ancho de pantalla ≥ ≈ 400 dp (**P-3, aprobada**: única excepción al mínimo de 48 dp; condiciones en docs/007 §10: ≥ 44 dp de ancho, zonas sin superponer, cumple WCAG 2.5.8). Cifra de día 13/700 e importe de celda 10/800 en una columna centrada, sin cambiar de tamaño para ganar espacio. Celdas blancas radio 8; **hoy** con borde 2 `calStrong`; **día elegido** `calStrong` con texto blanco (5.67:1); importes de celda con signo en `incomeText`/`expenseText`.
+- Dona (15.3) con `catFill` y leyenda.
+- Guía y aviso: `yellowSoft`/`yellowText`. Error: caja `expenseSoft` con [Reintentar]. Snackbar: fondo `text`, texto blanco.
+
+### 6.11 Bienvenida
+
+**Sin verde a sangre** (antes 89-93 % de la pantalla). Fondo `bg` con tres manchas; alcancía de 250 dp (arte visible ~155 dp) sobre un círculo `yellowSoft` de 200 dp con dos destellos; «CuidaTuBilletera» 28/34 800 `text` con subrayado amarillo de 44 × 5; texto `text2` 16/24; botón Google blanco con borde `border`, sombra y «G» azul; aviso de privacidad `text2` 13. El ícono verde de la app sigue siendo el del lanzador (sección 13).
+
+### 6.12 Texto truncado y accesibilidad de texto (docs/007 §10)
+
+- **Truncado intencional:** solo nombres propios del usuario que pueden ser arbitrariamente largos (nombre de cuenta en `AccountCard` y barra de contexto, nota de un movimiento, saludo): una línea con elipsis (`numberOfLines={1}`, `ellipsizeMode="tail"`, `flexShrink: 1`) o, en notas, hasta dos líneas. El **nombre completo** va en `accessibilityLabel` (prototipo: `aria-label` y `title`) y se ve entero en el detalle o la edición. Los importes y el saldo **nunca** se truncan (`flexShrink: 0`).
+- **Nunca se trunca con elipsis:** nombres de categorías habituales, etiquetas de pestañas, botones, importes y mensajes de error. Usan hasta dos líneas o saltan de línea; las alturas son mínimas, no fijas.
+- Escala `sp` sin `allowFontScaling={false}`; probar al 200 % sin truncar el saldo ni Guardar (docs/007 §10). La etiqueta de pestaña conserva 11,5 sp.
+- El color no es el único portador de significado (regla 3 de la sección 1) y los pares de texto de la sección 3 no cambian: esta sincronización no introduce colores.
+
+## 7. Iconografía de categorías
+
+Las categorías ya guardan `icono` (clave tipo Lucide) y `color`. Comparación:
+
+| Opción | Dependencias | Calidad | Riesgo | Veredicto |
+| --- | --- | --- | --- | --- |
+| Emojis con tabla `icono` a emoji | Ninguna | Buena; varía algo entre fabricantes y versiones de Android | Bajo; `ellipsis` se resuelve con «⋯» | **Propuesta inicial** |
+| PNG propios en `app/assets/categories/` | Ninguna | Consistente en todos los teléfonos | Hay que dibujar 11 a 14 y los nuevos íconos futuros no tienen imagen | Alternativa si el emoji no convence |
+| `@expo/vector-icons` | Viene con muchos proyectos Expo, pero **no está instalado** (no figura en `app/package.json` ni en `node_modules`) | Alta, vectorial | Agregar dependencia; requiere verificar fuentes y, según el caso, nueva build | Decisión pendiente 15.2 |
+| `react-native-svg` | Módulo nativo, **no instalado** | Máxima (también para dona y pestañas) | Nueva development build y APK | Decisión pendiente 15.2; recomendada solo si se aprueba una build nueva |
+
+Propuesta: emoji (o glifo de texto blanco para `ellipsis` y `plus-circle`) sobre cuadrado redondeado de 40 dp con fondo `catFill` (sección 2.7), con un componente `CategoryIcon` (40 dp en listas; **32 dp** en el selector de Nuevo movimiento y en filas compactas, radio 10; el nombre de la categoría nunca depende del ícono ni se trunca en el selector, ver 6.7 y 6.12) que **desacopla** la imagen del nombre de la categoría. Si luego se aprueba `react-native-svg`, solo cambia `CategoryIcon`. Íconos de pestañas: en el prototipo son SVG de trazo propios; en la app, mientras no haya `react-native-svg`, usar emojis o glifos de texto equivalentes (🏠 📋 📅 📊 ⋯); decisión 15.2. La dona del prototipo está en SVG; sin `react-native-svg` se puede aproximar con barras apiladas horizontales (decisión 15.3).
+
+## 8. Gráficos sin dependencias
+
+La dona exige `react-native-svg`. Sin ella: (a) barra horizontal proporcional por categoría (ya existe en `ReportsScreen`) con la paleta nueva, o (b) una barra apilada de 100 % con leyenda. El prototipo muestra la dona como referencia de diseño; **su implementación depende de la decisión 15.3** y no debe darse por aprobada.
+
+
+## 9. Ilustraciones de estados vacíos
+
+Vacío de cuentas: **la alcancía** (120 dp, oculta con fuente ≥ 175 %). Las demás, trazo simple de 96 dp sobre un círculo con el **tinte del módulo** y trazo en su tinta: movimientos (hoja con «+», ámbar `movTile`/`movInk`), filtros (embudo, azul `calTile`/`calInk`), gráfico (barras, violeta `repTile`/`repInk`), con acento amarillo. Ninguna usa ya el trazo verde de marca. SVG inline en el prototipo; para la app se exportan a PNG propios (sin dependencias). Textos: docs/007 §7.2. Tono sereno, sin celebraciones.
+
+## 10. Microinteracciones baratas (`Animated` nativo)
+
+Sin librerías, con `useNativeDriver: true`:
+
+- Escala 1 a 0.97 al presionar botones y tarjetas (100 ms).
+- Aparición de pantalla: opacidad 0 a 1 (180 ms).
+- Snackbar: sube 12 dp y aparece (250 ms); desaparece a los 3 s.
+- Píldora de pestaña: cambio de fondo (150 ms).
+- Indicador de recarga del saldo: giro simple de 12 dp (`ActivityIndicator` nativo, sin librerías) solo mientras se relee.
+- Desactivar todas si el sistema pide movimiento reducido (`AccessibilityInfo.isReduceMotionEnabled`). Sin animaciones continuas, sin parpadeos, sin confeti.
+
+
+## 11. Tokens (bloque TypeScript propuesto)
+
+Para un futuro `app/src/theme/tokens.ts` (**no se crea ahora**; lo implementa `mobile-engineer` tras aprobar la paleta, decisión 15.0). Valores idénticos a `docs/design/contrast.js` y al `:root` del prototipo.
+
+```ts
+export const colors = {
+  // marca: SOLO acción primaria, FAB, tarjeta de saldo, foco, botón secundario y enlaces
+  brand800: '#0B4A46',
+  brand700: '#0F5F5A',
+  brand500: '#1F8A80', // solo decorativo (banda al 35 %)
+  brand100: '#D3EBF0',
+  brandInk: '#0B4A46',
+  onBrandSoft: '#E6F7F4',
+  // superficies y texto
+  bg: '#FFFBF5',
+  surface: '#FFFFFF',
+  segBg: '#F3EEE6',
+  text: '#17211F',
+  text2: '#4B5653',
+  text3: '#5F6B68',
+  border: '#EEE7DC',
+  borderStrong: '#7E8A86',
+  // semánticos (fijos)
+  income: '#12804A', incomeText: '#0E6A3D', incomeSoft: '#D9F4E4',
+  expense: '#D13A2F', expenseText: '#B42A20', expenseSoft: '#FFE1D9',
+  // acento
+  yellow: '#FFC93C', yellowSoft: '#FFF1C2', yellowText: '#6B4E00',
+  white: '#FFFFFF',
+} as const;
+
+// Color por módulo (docs/007 §3.6). Nunca en la barra de contexto, importes ni FAB.
+export const moduleColors = {
+  cuenta: { tile: '#D3EBF0', ink: '#0B4A46' },
+  movimientos: { tile: '#FFEDA6', ink: '#5C4000', strong: '#F5A524' }, // ámbar ≠ coral de gasto
+  calendario: { tile: '#DCEBFF', ink: '#174C86', strong: '#2563C9' },
+  reportes: { tile: '#ECE4FF', ink: '#4E2DA3' },
+  mas: { tile: '#E3E8EF', ink: '#334155' }, // también Categorías
+} as const;
+
+// Paleta de cuentas (docs/007 §5.2.4). Índice = accountColorIndex(id).
+export const accountPalette = [
+  { name: 'aguamarina', card: '#E3F6F8', tile: '#BDE9EF' },
+  { name: 'lavanda', card: '#F0EBFF', tile: '#D9CCFF' },
+  { name: 'albaricoque', card: '#FFF0E0', tile: '#FFD6A8' },
+  { name: 'celeste', card: '#E7F1FF', tile: '#C5DBFF' },
+  { name: 'rosa', card: '#FDEAF2', tile: '#F8CADD' },
+  { name: 'limón', card: '#FFF6D6', tile: '#FFE58A' },
+] as const;
+// export function accountColorIndex(id: string): number  -> hash de cadena (x = (x * 31 + charCode) >>> 0) mod 6.
+// Pura, en lib/ (p. ej. lib/account-appearance.ts, nombre a confirmar), con prueba unitaria: 'a1' -> 2, 'a2' -> 3, 'a4' -> 5.
+// export function accountIcon(nombre: string): 'tarjeta' | 'banco' | 'alcancia' | 'billetera'  -> por palabra clave.
+
+// Capas decorativas (View con opacity), verificadas compuestas en docs/008 §3.
+export const depth = {
+  bandColor: colors.brand500, bandOpacity: 0.35, bandRotate: '-16deg',
+  circleColor: colors.white, circleOpacity: 0.08,
+  accountCardCircleOpacity: 0.45,
+  blobs: [
+    { color: '#FFD966', opacity: 0.35 }, // amarillo
+    { color: '#FFB59A', opacity: 0.25 }, // melocotón
+    { color: '#9CC4FF', opacity: 0.25 }, // celeste
+  ],
+} as const;
+
+export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
+export const radii = { sm: 8, md: 12, lg: 16, accountCard: 20, xl: 24, pill: 999 } as const;
+
+export const typography = {
+  amountXl: { fontSize: 34, lineHeight: 40, fontWeight: '800' },
+  rootTitle: { fontSize: 26, lineHeight: 32, fontWeight: '800' },
+  title: { fontSize: 24, lineHeight: 30, fontWeight: '800' },
+  totalAmount: { fontSize: 24, lineHeight: 30, fontWeight: '800' },
+  accountBalance: { fontSize: 22, lineHeight: 28, fontWeight: '800' },
+  h2: { fontSize: 18, lineHeight: 24, fontWeight: '700' },
+  accountName: { fontSize: 17, lineHeight: 22, fontWeight: '800' },
+  greeting: { fontSize: 16, lineHeight: 22, fontWeight: '600' },
+  body: { fontSize: 15, lineHeight: 22, fontWeight: '400' },
+  button: { fontSize: 16, lineHeight: 20, fontWeight: '700' },
+  brandLabel: { fontSize: 14, lineHeight: 18, fontWeight: '800' },
+  small: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
+  tab: { fontSize: 11.5, lineHeight: 14, fontWeight: '700' },
+} as const;
+
+export const elevation = { card: 1, raised: 4 } as const;
+export const sizes = {
+  touchMin: 48, tabHeight: 62, contextBar: 56, contextBarCompact: 36, fab: 56, primaryTall: 52,
+  accountCardMin: 88, accountCardMinWide: 92, accountIcon: 52, avatar: 40,
+  // PROPUESTA (paso 346, docs/007 §10; valores del prototipo): tabMinWidth 48, tabPadX 2, tabPillPadX 10, chipSm 36, chipHitSlop 6, segmentOption 48, categoryOptionMin 56, calendarCell 52
+  tabMinWidth: 48, tabPillPadX: 10, chipSmHeight: 36, chipHitSlop: 6, segmentOption: 48, categoryOptionMin: 56, calendarCellHeight: 52,
+  headerPig: 72, headerPigWide: 96, headerPigLargeFont: 48, pigZoom: 1.4, balanceCardMin: 132, balanceCardPig: 104,
+} as const;
+
+// Fondo del cuadrado de categoría: color de la API oscurecido (mezcla con negro, pasos de 1 %) hasta 3:1 con blanco.
+// export function categoryFill(hex: string): string  -> la implementa mobile-engineer, con prueba unitaria.
+export const categoryFillExpected: Record<string, string> = {
+  '#F97316': '#EF6E15', '#3B82F6': '#3B82F6', '#EAB308': '#B98D06', '#EF4444': '#EF4444',
+  '#8B5CF6': '#8B5CF6', '#14B8A6': '#12A695', '#EC4899': '#EC4899', '#6B7280': '#6B7280',
+  '#22C55E': '#1DA951', '#06B6D4': '#05A2BD', '#84CC16': '#6AA312',
+};
+
+// Glifo por clave `icono` (api/src/services/default-categories.ts). `text: true` = glifo de texto blanco.
+export const categoryGlyph: Record<string, { glyph: string; text?: boolean }> = {
+  utensils: { glyph: '🍽️' }, bus: { glyph: '🚌' }, lightbulb: { glyph: '💡' }, 'heart-pulse': { glyph: '🩺' },
+  'graduation-cap': { glyph: '🎓' }, home: { glyph: '🏠' }, film: { glyph: '🎬' }, ellipsis: { glyph: '⋯', text: true },
+  briefcase: { glyph: '💼' }, 'shopping-bag': { glyph: '🛍️' }, 'plus-circle': { glyph: '＋', text: true },
+};
+export const defaultCategoryGlyph = { glyph: '🏷️' };
+```
+
+## 12. Componentes reutilizables (para `mobile-engineer`)
+
+| Componente | Responsabilidad | Estados y variantes |
+| --- | --- | --- |
+| `Screen` | Safe areas (docs/007 §9, opción A), fondo `bg`, `KeyboardAvoidingView` y scroll; barra de estado `bg` (Bienvenida, Mis cuentas, Crear cuenta) o `surface` (pantallas con barra de contexto) | normal, con barra inferior, con teclado |
+| `DecorBlobs` | Manchas de fondo (2.6), `pointerEvents="none"`, ocultas a accesibilidad | Bienvenida, Mis cuentas |
+| `AccountsHeader` | Marca + avatar + saludo + título + alcancía (6.1) | normal, sin nombre («Hola»), fuente grande (alcancía 48), muy grande o estrecha (sin alcancía) |
+| `ProfileSheet` | Hoja de perfil con nombre, correo y Cerrar sesión (14.17) | abierta, cerrando sesión |
+| `AccountsTotal` | Resumen «Total en tus cuentas» (6.2) | visible (≥ 2), con archivadas, negativo; oculto en carga/error/vacío |
+| `AccountCard` | Tarjeta de cuenta con color e ícono estables (6.3) | normal, presionada, saldo negativo, nombre largo, archivada, esqueleto de carga |
+| `Header` | Título de pantalla de pila con salida («✕», «‹») | simple |
+| `ScreenTitle` | Título con `ModuleTile` y subrayado amarillo; `role=header` | por módulo |
+| `ModuleTile` | Cuadrado de 36 dp con el color del módulo (2.3) | 36, 28 dp |
+| `AccountContextBar` | Barra neutra (6.9); solo props | completa, solo lectura, compacta; normal, recargando, error, archivada, nombre largo, negativo, estrecha |
+| `DepthLayers` | Banda + círculos con `opacity` | tarjeta de saldo |
+| `BalanceCard` | Saldo grande sobre `brand700` + alcancía (6.4) | normal, recargando, error, sin ilustración |
+| `SummaryTile` | Ingresos / Gastos / Neto / Balance claros (6.5) | `income`, `expense`, `neutral`; cargando; sin datos |
+| `CategoryIcon` | Cuadrado `catFill` con emoji o glifo blanco | 32 dp (selector de Nuevo movimiento, radio 10), 40 dp (listas, radio 12); archivada (opacidad 0.5) |
+| `CategoryOption` | Opción del selector de Nuevo movimiento (6.7, D2): 2 columnas, alto mín. 56 que crece, nombre hasta 2 líneas | normal, elegida (tinte del tipo, «✓»), presionada |
+| `TransactionRow` | Ícono, texto e importe con signo | ingreso, gasto, anulado, presionada |
+| `Button` | primary, secondary, danger, dangerSolid, ghost; `tall` (52) | normal, presionado, deshabilitado, cargando |
+| `Chip` | Selección con «✓»; tono neutro, de módulo o de tipo | normal 48 dp, `sm` de filtro (36 dp visibles, `hitSlop` 6 dp, P-1), elegido, filtro activo (✕), deshabilitado |
+| `Segmented` | Neutro, de módulo (Reportes, Movimientos) o de tipo Gasto/Ingreso; opciones de 48 dp (P-2) | normal, elegido («✓»), deshabilitado |
+| `Field` | Etiqueta + campo + ayuda + error | normal, foco, error, deshabilitado, solo lectura |
+| `AmountInput` / `Keypad` | Monto con signo y teclado numérico estricto | vacío, con valor, error |
+| `BottomTabBar` | 5 pestañas con color por módulo; ícono sobre etiqueta completa, `flex: 1 1 auto`, `minWidth` 48, píldora de 10 dp (6.8, D1) | activa, inactiva, etiqueta en dos líneas con fuente grande |
+| `Fab` | «+ Nuevo movimiento» `brand700` con «+» amarillo | normal, presionado, deshabilitado con nota |
+| `EmptyState` | Ilustración + título + texto + acción | por pantalla (docs/007 §7.2) |
+| `Snackbar`, `ConfirmDialog`, `Guide`, `ErrorBox` | Sin cambios de comportamiento; re-estilizados con la paleta | como en la iteración 2 |
+
+Compatibilidad con pruebas: conservar `accessibilityLabel` y `testID` de docs/007 §12 (la etiqueta «Nueva cuenta» del botón primario ya existe en `AccountsScreen.test.tsx`).
+
+## 13. Especificación del ícono Android
+
+Recursos generados desde la imagen aprobada (verificados, ver 13.1). Rutas destino futuras en `app/assets/` (la carpeta hoy **no existe**; no se creó):
+
+| Archivo en `docs/design/assets/` | Destino futuro | Formato y medida | Uso |
+| --- | --- | --- | --- |
+| `icon.png` | `app/assets/icon.png` | PNG 1024x1024, RGB, **sin canal alfa**, cuadrado completo | Ícono principal de Expo |
+| `adaptive-icon-foreground.png` | `app/assets/adaptive-icon-foreground.png` | PNG 1024x1024 RGBA, arte dentro del 62 % central (zona segura Android 66 %) | `android.adaptiveIcon.foregroundImage` |
+| `adaptive-icon-background.png` | `app/assets/adaptive-icon-background.png` | PNG 1024x1024 verde sólido `#0F5F5A` (color del ícono aprobado; desde la iteración 3 es exactamente `brand700`) | Fondo adaptable (o usar `backgroundColor`) |
+| `adaptive-icon-monochrome.png` | `app/assets/adaptive-icon-monochrome.png` | PNG 1024x1024 RGBA, silueta blanca sobre transparente | `android.adaptiveIcon.monochromeImage` (ícono temático Android 13+) |
+| `splash-icon.png` | `app/assets/splash-icon.png` | PNG 1024x1024 RGBA, arte al 78 % | `expo-splash-screen` |
+| `favicon.png` | `app/assets/favicon.png` | PNG 48x48 | Solo web; opcional (la app es Android) |
+
+Cambios futuros de `app.json` (**no aplicados**; dependen de la versión de Expo instalada, `expo ~57`; confirmar en la documentación de esa versión):
+
+```json
+{
+  "expo": {
+    "icon": "./assets/icon.png",
+    "android": {
+      "package": "com.cuidatubilletera.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
+        "backgroundImage": "./assets/adaptive-icon-background.png",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
+        "backgroundColor": "#0F5F5A"
+      }
+    },
+    "plugins": [
+      "expo-status-bar", "expo-secure-store", "expo-sharing",
+      ["expo-splash-screen", { "image": "./assets/splash-icon.png", "imageWidth": 200, "backgroundColor": "#0F5F5A" }]
+    ]
+  }
+}
+```
+
+`expo-splash-screen` puede no estar instalado: agregarlo es una dependencia nueva (decisión 15.6).
+
+**Qué exige nueva build:** ícono, ícono adaptable, monocromático y splash son recursos nativos: **cambiarlos exige una nueva build** de Android (development build y APK de EAS); no se actualizan con una actualización de JavaScript ni con Expo Go. El color de la barra de estado, los tokens y los componentes sí se prueban con la build actual.
+
+### 13.1 Verificación y limitaciones de los recursos
+
+Verificados con `identify` y con inspección visual: dimensiones, canal alfa y peso en la tabla de abajo.
+
+| Archivo | Medida | Alfa | Peso |
+| --- | --- | --- | --- |
+| `icon.png` | 1024x1024 | no | 606 746 B |
+| `adaptive-icon-foreground.png` | 1024x1024 | sí | 422 026 B |
+| `adaptive-icon-background.png` | 1024x1024 | no | 16 050 B |
+| `adaptive-icon-monochrome.png` | 1024x1024 | sí | 32 557 B |
+| `splash-icon.png` | 1024x1024 | sí | 610 603 B |
+| `favicon.png` | 48x48 | no | 3 997 B |
+
+Limitaciones honestas:
+
+1. **La imagen de origen es de baja resolución real** (arte reescalado, bordes algo borrosos). Sirve para el diseño y la revisión; para publicar se recomienda regenerar el arte en vector o a 1024 nativos.
+2. **`icon.png` no es el recorte literal** de la imagen aprobada: el recorte con esquinas redondeadas dejaba costuras al rellenar las esquinas. Se recompuso: fondo de degradado vertical `#11706A` a `#0B534F` (dibujado) + la alcancía, hojas, moneda y destellos recortados y ampliados. Resultado fiel en motivo y colores, no pixel a pixel.
+3. El recorte del sujeto sobre el verde se hizo por distancia de color: es fiable para la alcancía, la moneda y los destellos (revisado sobre fondo magenta), pero queda un halo/sombra mínima en los pies de la alcancía.
+4. El monocromático es una silueta sólida (sin ojos ni detalles). Funciona para el ícono temático, pero un monocromático diseñado a mano (con ojos y ranura) sería mejor.
+5. No se probó en un dispositivo ni en un lanzador Android real.
+
+
+## 14. Prototipo y verificación visual
+
+`docs/design/prototipo/index.html`: un solo archivo, CSS y JS inline, sin red; usa `../assets/adaptive-icon-foreground.png` (alcancía: bienvenida, encabezado de Mis cuentas, cuenta de ahorro, tarjeta de saldo, vacío de cuentas). Aviso «Datos de ejemplo», casilla «Simular error al releer el saldo» y **selector de tamaño** (360 × 640, 390 × 800, 412 × 915). Sin gradientes CSS. Las medidas de componentes son variables CSS del `:root` (`--hdr-pig`, `--acc-card-min`, `--acc-ico`, `--btn-h`, etc.), las mismas que lee el render.
+
+Pantallas (flujos y textos aprobados sin cambios): Bienvenida, Mis cuentas (encabezado con avatar y alcancía, Total, tres cuentas de colores con nombre largo, Archivadas colapsadas, hoja de perfil), Crear cuenta, Detalle con 5 pestañas, Datos de cuenta, Opciones avanzadas, Categorías y Nuevo movimiento. Cambios de contenido respecto a la iteración 2, todos tomados de docs/007 §5.2 (recién actualizado): «+ Crear cuenta» pasa a «+ Nueva cuenta»; «Cerrar sesión» sale de la lista y va a la hoja de perfil del avatar (Más lo conserva); aparece el Total (14.16) y la guía «Toca una cuenta para anotar sus gastos e ingresos.» bajo la lista.
+
+### 14.1 Verificación funcional y de color (jsdom, scripts fuera del repositorio, en el scratchpad de la sesión)
+
+- `verify.js` (el de la iteración 2, sin cambios): **56 comprobaciones, 0 fallas, 0 errores de JavaScript**. Incluye la barra de contexto con el nombre correcto en cada pantalla interna (Cuenta, Movimientos, Calendario, Reportes, Más, Datos de cuenta, Categorías en solo lectura, Nuevo movimiento compacta), su ausencia en Bienvenida/Mis cuentas/Crear cuenta, el **saldo que cambia de $1,888.50 a $1,876.00 tras guardar un gasto de $12.50** (con indicador durante la relectura), error de relectura con Reintentar, renombrar, archivar y cuenta archivada con FAB deshabilitado.
+- `audit.js` (nuevo): **29 comprobaciones, 0 fallas**. Recalcula la cascada de `background` del CSS (jsdom no resuelve `var()`) y clasifica los fondos de la familia verde/marca (tono HSL 85-182°, saturación ≥ 0,20). Resultados: Bienvenida, **ningún** fondo verde; Mis cuentas, **solo** `button.btn.primary «+ Nueva cuenta»` (`#0F5F5A`); **3 colores de tarjeta distintos** para 3 cuentas (albaricoque `#FFF0E0`, celeste `#E7F1FF`, limón `#FFF6D6`) y ninguno verde; crear «Tarjeta de crédito» no cambia el color de las demás (la nueva sale rosa con 💳); Total = $5,981.50, sin archivadas; avatar abre la hoja y «Cerrar» la cierra; barra de contexto **`#FFFFFF` idéntica** en las 5 pestañas y en Nuevo movimiento; FAB `#0F5F5A` igual en Cuenta, Movimientos y Calendario; píldora activa con **5 colores de módulo**; en Cuenta el verde fuerte está solo en la tarjeta de saldo y el FAB; en Movimientos/Calendario solo el FAB; en Reportes y Más ninguno (aparte de cuadrados de categoría de la API como Hogar o Sueldo y la burbuja semántica de Ingresos, que se listan como permitidos); segmentado de Reportes en violeta; «Gasto»/«Ingreso» en coral/verde suave.
+
+### 14.2 Renders aproximados (`docs/design/capturas/`)
+
+**No son capturas de navegador** (no hay navegador headless en el entorno y no se instaló ninguno). Son SVG generados por un script (`render.js`, scratchpad) que lee los **tokens y medidas del `:root`** del HTML y el **contenido real del DOM** del prototipo con jsdom (nombres, saldos, filas de la semana), y se rasterizan con `sharp` (librsvg). Aproximaciones: fuente DejaVu Sans escalada en horizontal al ancho estimado de Roboto; emojis sustituidos por íconos vectoriales simples (billetera, banco, tarjeta) y letras blancas en los cuadrados de categoría; sombras simplificadas; estado tras descartar las guías del Detalle. Sirven para juzgar composición, color y proporción, no el píxel exacto.
+
+| Archivo | Contenido |
+| --- | --- |
+| `mis-cuentas-360.png`, `mis-cuentas-412.png` | Mis cuentas, iteración 3 |
+| `detalle-360.png`, `detalle-412.png` | Detalle, pestaña Cuenta (Efectivo), iteración 3 |
+| `bienvenida-360.png`, `bienvenida-412.png` | Bienvenida, iteración 3 |
+| `antes-mis-cuentas-360.png`, `antes-detalle-360.png`, `antes-bienvenida-360.png` | Las mismas pantallas de la iteración 2 (de `prototipo-antes.html`), para comparar |
+
+## 15. Decisiones pendientes del usuario
+
+| # | Decisión | Propuesta |
+| --- | --- | --- |
+| 15.0 | **Paleta y composición.** Iteración 1 **RECHAZADA**; iteración 2 **RECHAZADA (segunda vez)** por dominancia del verde. Nueva propuesta: secciones 1, 2, 6 y 11 (fondos casi blancos con manchas, verde solo en acción primaria/FAB/tarjeta de saldo, color por módulo, cuentas de colores) | **PENDIENTE DE APROBACIÓN** |
+| 15.1 | Fuente de marca (dependencia `expo-font`) | No: solo fuentes del sistema |
+| 15.2 | Íconos de categorías, cuentas y pestañas: emoji, PNG propios, `@expo/vector-icons` o `react-native-svg` | Emoji ahora (alcancía PNG para ahorro); revisar con una build nueva |
+| 15.3 | Dona en la app (exige `react-native-svg`) o barras apiladas | Barras apiladas hasta aprobar svg |
+| 15.4 | Paleta del selector de color de categorías | Usar los 11 colores iniciales + 3 extras |
+| 15.5 | Degradado en la tarjeta de saldo | **Resuelta por `architect`**: sin `expo-linear-gradient`; capas semitransparentes |
+| 15.6 | Splash con `expo-splash-screen` y cambio de `app.json` (nueva build) | Aprobar junto con la build de rediseño |
+| 15.7 | Regenerar el ícono en vector o a 1024 nativos | Sí, antes de Play Store |
+| 15.8 | Rojo de gasto también como «peligro» | Sí |
+| 15.9 | `catFill` frente a glifo oscuro sobre el color crudo | `catFill` |
+| 15.10 | Alcancía en la tarjeta de saldo | Sí; oculta con fuente grande o pantalla estrecha |
+| 15.11 | Tonos por módulo (2.3): ámbar `#FFEDA6`/`#5C4000`, azul `#DCEBFF`/`#174C86` (+ `#2563C9`), violeta `#ECE4FF`/`#4E2DA3`, pizarra `#E3E8EF`/`#334155`, Cuenta `#D3EBF0`/`#0B4A46` | Aprobar; si en la prueba se confunden con ingreso/gasto, el módulo usa su tono solo en la píldora (3.2) |
+| 15.12 | Paleta de 6 tonos de cuentas (2.4), sin menta ni coral | Aprobar (depende de 14.18 y 14.19 de docs/007) |
+| 15.13 | Bienvenida clara con la alcancía en lugar del panel verde a sangre del póster | Sí (es la queja principal del usuario) |
+| 15.14 | Barra de contexto blanca neutra (antes `brand100` verde) | Sí (docs/007 §3.6: la barra no se tiñe) |
+
+## 16. Comparación visual iteración 2 → 3
+
+### 16.1 Por pantalla y elemento
+
+| Pantalla / elemento | Iteración 2 (rechazada) | Iteración 3 (propuesta) |
+| --- | --- | --- |
+| Bienvenida: fondo | `brand800` a sangre con banda y círculos (verde en ~90 % de la pantalla) | `bg` casi blanco con 3 manchas (amarilla, celeste, melocotón) |
+| Bienvenida: logotipo | Ícono cuadrado verde de 168 dp | Alcancía grande sobre círculo `yellowSoft` con destellos |
+| Bienvenida: textos | Blanco y `onBrandSoft` sobre verde | `text` y `text2` sobre claro; título 28 con subrayado amarillo |
+| Barra de estado | `brand800` (bienvenida) / `brand100` menta (internas) | `bg` / `surface` |
+| Mis cuentas: encabezado | «Hola, Ana» + «Mis cuentas» sobre liso, sin ilustración | Marca + avatar con inicial + saludo + título 26 + **alcancía** + destello, sobre manchas de color |
+| Mis cuentas: resumen | No había | «Total en tus cuentas» con moneda amarilla (14.16) |
+| Mis cuentas: tarjetas | Blancas, 76 dp, 👛 en pastel rotativo **por posición** (la primera, menta), saldo a la derecha, chevrón verde | **Tarjetas de color** por cuenta (albaricoque, celeste, limón…; estable **por id**), 88 dp (92 con ancho ≥ 400), mosaico de 52 dp con ícono por tipo (👛, 🏦, 💳, alcancía), círculo decorativo, saldo de 22 en línea propia, chevrón en círculo |
+| Mis cuentas: botones | «+ Crear cuenta» primario + «Cerrar sesión» de ancho completo + «▸ Archivadas» verde | Una primaria «+ Nueva cuenta» (52 dp); «▸ Archivadas» gris; Cerrar sesión en la hoja del avatar |
+| Mis cuentas: espacio libre (412 × 915) | Mitad inferior vacía | Total + tarjetas más altas + guía «Toca una cuenta…» |
+| Barra de contexto | `brand100` verde, texto `brandInk`, ícono 👛 en blanco | **Blanca neutra**, texto `text`, ícono y color **de la cuenta** |
+| Detalle: tarjeta de saldo | `brand700` (única superficie fuerte) | Igual (es la protagonista del póster), alcancía 104 |
+| Detalle: Ingresos/Gastos | Mosaicos pastel a sangre (`incomeSoft`/`expenseSoft`) | Tarjetas blancas con burbuja de color y cifra semántica |
+| Detalle: flechas de mes | «‹ ›» verdes sueltas | Botones circulares blancos |
+| Pestaña activa | Pastel por función (Cuenta menta, Movimientos melocotón…) | Color por módulo (Cuenta verde azulado claro, Movimientos **ámbar**, Calendario azul, Reportes violeta, Más pizarra) |
+| Movimientos | Mosaico del título melocotón; chips elegidos `brand100` verdes | Mosaico ámbar; segmentado y chips activos ámbar |
+| Calendario | Hoy y día elegido `brand700` verde | Hoy y día elegido **azul** `calStrong` |
+| Reportes | Segmentado elegido blanco con texto verde; mosaico Balance lavanda | Segmentado elegido **violeta**; Ingresos/Gastos/Balance claros y semánticos |
+| Más / Categorías | Mosaico limón; ícono Categorías melocotón | Mosaico **pizarra** |
+| Nuevo movimiento | Categoría y fecha elegidas en `brand100` verde | Manda el tipo: coral suave (Gasto) o verde suave (Ingreso) en tipo, categoría y fecha |
+| Ilustraciones vacías | Trazo verde de marca | Alcancía (cuentas) y trazo del color del módulo |
+
+### 16.2 Área verde medida en los renders
+
+Medición: píxeles de la familia verde/marca (tono HSL 85-182°, saturación ≥ 0,20, luminosidad 0,08-0,97) sobre el total, contados con `sharp` en bruto sobre los PNG de 14.2. «Sin ilustración» repite la medida con las imágenes de la alcancía ocultas (sus hojas son verdes). Es un render aproximado (14.2), no una captura.
+
+| Pantalla | Tamaño | Iteración 2 | Iteración 3 | Sin ilustración (2 → 3) |
+| --- | --- | --- | --- | --- |
+| Bienvenida | 360 × 640 | **89,4 %** | **1,2 %** | 92,7 % → 0,0 % |
+| Bienvenida | 412 × 915 | 92,8 % | 0,7 % | 94,9 % → 0,0 % |
+| Mis cuentas | 360 × 640 | **7,8 %** | **6,5 %** | 7,8 % → 6,2 % |
+| Mis cuentas | 412 × 915 | 5,4 % | 5,3 % | 5,4 % → 5,1 % |
+| Detalle (Cuenta) | 360 × 640 | **40,3 %** | **23,0 %** | 41,1 % → 23,7 % |
+| Detalle (Cuenta) | 412 × 915 | 27,6 % | 15,1 % | 28,0 % → 15,5 % |
+
+Lectura honesta: en la iteración 2 el verde dominante estaba en la **primera pantalla** (Bienvenida, ~90 %), en la barra de contexto y barra de estado menta y en el Detalle (40 %). Mis cuentas ya tenía poco verde por área (botón, primer mosaico menta y textos verdes); allí el cambio de esta iteración no es de porcentaje (7,8 → 6,5 %, casi todo es el botón «+ Nueva cuenta») sino de **color y alegría**: tarjetas de colores, alcancía, manchas y Total. En el Detalle el verde restante es la tarjeta de saldo (≈ 19 % en 360 × 640), que docs/007 §5.4 define como única superficie fuerte, y el FAB.
