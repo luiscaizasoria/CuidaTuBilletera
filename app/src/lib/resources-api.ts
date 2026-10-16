@@ -87,6 +87,77 @@ export interface GetCalendarOptions {
   month: string;
 }
 
+// Contrato de reportes (Fase 5): totales en centavos, sin porcentajes (los calcula la app).
+export interface ReportRange {
+  accountId: string;
+  desde: string;
+  hasta: string;
+}
+
+export interface ReportSummary extends ReportRange {
+  ingresos: number;
+  gastos: number;
+  balance: number;
+  cantidad: number;
+}
+
+export interface CategoryReportItem {
+  categoryId: string;
+  nombre: string;
+  icono: string;
+  color: string;
+  archivada: boolean;
+  total: number;
+  cantidad: number;
+}
+
+export interface CategoryReportGroup {
+  total: number;
+  items: CategoryReportItem[];
+}
+
+export interface CategoryReport extends ReportRange {
+  ingresos: CategoryReportGroup;
+  gastos: CategoryReportGroup;
+}
+
+export type ReportGroup = 'month' | 'year';
+
+export interface PeriodPoint {
+  periodo: string; // AAAA-MM o AAAA
+  ingresos: number;
+  gastos: number;
+  balance: number;
+  cantidad: number;
+}
+
+export interface PeriodReport extends ReportRange {
+  group: ReportGroup;
+  points: PeriodPoint[];
+}
+
+export interface GetReportOptions {
+  accountId: string;
+  desde: string;
+  hasta: string;
+}
+
+export interface GetPeriodReportOptions extends GetReportOptions {
+  group: ReportGroup;
+}
+
+// Exportación de archivos CSV o PDF (Fase 5). `tipo` y `categoryId` solo se envían si hay filtro activo.
+export type ExportFormat = 'csv' | 'pdf';
+
+export interface ExportFileOptions {
+  accountId: string;
+  desde: string;
+  hasta: string;
+  format: ExportFormat;
+  tipo?: TransactionType;
+  categoryId?: string;
+}
+
 export interface Page<T> {
   items: T[];
   page: number;
@@ -167,6 +238,11 @@ export interface ResourcesApi {
   ): Promise<Transaction>;
   deleteTransaction(accessToken: string, id: string): Promise<void>;
   getCalendar(accessToken: string, options: GetCalendarOptions): Promise<CalendarMonth>;
+  getReportSummary(accessToken: string, options: GetReportOptions): Promise<ReportSummary>;
+  getReportByCategory(accessToken: string, options: GetReportOptions): Promise<CategoryReport>;
+  getReportByPeriod(accessToken: string, options: GetPeriodReportOptions): Promise<PeriodReport>;
+  // Devuelve los bytes exactos del archivo (CSV con BOM o PDF). Nunca se registra ni se cachea.
+  exportFile(accessToken: string, options: ExportFileOptions): Promise<Uint8Array>;
 }
 
 // 401 -> AuthError 'rejected' (authorizedCall renueva y reintenta). 429/5xx -> 'server'.
@@ -309,6 +385,131 @@ function parseCalendar(
   return { accountId, month, days };
 }
 
+const isCents = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+// Suma exacta o null si algún sumando o el total no es un entero seguro.
+function exactSum(values: readonly number[]): number | null {
+  let total = 0;
+  for (const value of values) {
+    total += value;
+    if (!Number.isSafeInteger(total)) return null;
+  }
+  return total;
+}
+
+// Valida que la respuesta corresponda a la consulta hecha (cuenta y rango).
+function checkRange(data: Record<string, unknown>, expected: GetReportOptions): void {
+  if (
+    data.accountId !== expected.accountId ||
+    data.desde !== expected.desde ||
+    data.hasta !== expected.hasta
+  ) {
+    invalid();
+  }
+}
+
+function parseReportSummary(data: Record<string, unknown>, expected: GetReportOptions) {
+  checkRange(data, expected);
+  const { ingresos, gastos, balance, cantidad } = data;
+  if (
+    !isCents(ingresos) ||
+    !isCents(gastos) ||
+    typeof balance !== 'number' ||
+    !Number.isSafeInteger(balance) ||
+    exactSum([ingresos, -gastos]) !== balance ||
+    !isCount(cantidad)
+  ) {
+    return invalid();
+  }
+  return { ...expected, ingresos, gastos, balance, cantidad } as ReportSummary;
+}
+
+function parseCategoryGroup(value: unknown): CategoryReportGroup {
+  if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 100) return invalid();
+  const items = value.items.map((raw: unknown): CategoryReportItem => {
+    if (!isRecord(raw)) return invalid();
+    const { categoryId, nombre, icono, color, archivada, total, cantidad } = raw;
+    if (
+      !isString(categoryId) ||
+      typeof nombre !== 'string' ||
+      typeof icono !== 'string' ||
+      typeof color !== 'string' ||
+      typeof archivada !== 'boolean' ||
+      !isCents(total) ||
+      !isCount(cantidad)
+    ) {
+      return invalid();
+    }
+    return { categoryId, nombre, icono, color, archivada, total, cantidad };
+  });
+  if (!isCents(value.total) || exactSum(items.map((item) => item.total)) !== value.total) {
+    return invalid();
+  }
+  return { total: value.total, items };
+}
+
+function parseCategoryReport(data: Record<string, unknown>, expected: GetReportOptions) {
+  checkRange(data, expected);
+  return {
+    ...expected,
+    ingresos: parseCategoryGroup(data.ingresos),
+    gastos: parseCategoryGroup(data.gastos),
+  } as CategoryReport;
+}
+
+function parsePeriodReport(data: Record<string, unknown>, expected: GetPeriodReportOptions) {
+  checkRange(data, expected);
+  if (data.group !== expected.group || !Array.isArray(data.points) || data.points.length > 120) {
+    return invalid();
+  }
+  const pattern = expected.group === 'month' ? /^\d{4}-\d{2}$/ : /^\d{4}$/;
+  let previous = '';
+  const points = data.points.map((raw: unknown): PeriodPoint => {
+    if (!isRecord(raw)) return invalid();
+    const { periodo, ingresos, gastos, balance, cantidad } = raw;
+    if (
+      typeof periodo !== 'string' ||
+      !pattern.test(periodo) ||
+      periodo <= previous ||
+      !isCents(ingresos) ||
+      !isCents(gastos) ||
+      typeof balance !== 'number' ||
+      exactSum([ingresos, -gastos]) !== balance ||
+      !isCount(cantidad)
+    ) {
+      return invalid();
+    }
+    previous = periodo;
+    return { periodo, ingresos, gastos, balance, cantidad };
+  });
+  return { ...expected, points } as PeriodReport;
+}
+
+const EXPORT_CONTENT_TYPES: Record<ExportFormat, RegExp> = {
+  csv: /^text\/csv(\s*;|$)/i,
+  pdf: /^application\/pdf(\s*;|$)/i,
+};
+
+// Bytes de un 2xx de /export: exige el Content-Type del formato pedido y un cuerpo no vacío.
+// Se leen como bytes para conservar el BOM del CSV y no corromper el PDF.
+async function readExportBytes(response: Response, format: ExportFormat): Promise<Uint8Array> {
+  const contentType = response.headers?.get('content-type');
+  if (typeof contentType !== 'string' || !EXPORT_CONTENT_TYPES[format].test(contentType.trim())) {
+    return invalid();
+  }
+  let buffer: ArrayBuffer;
+  try {
+    buffer = await response.arrayBuffer();
+  } catch {
+    return invalid();
+  }
+  if (!buffer || typeof buffer.byteLength !== 'number' || buffer.byteLength === 0) return invalid();
+  return new Uint8Array(buffer);
+}
+
 function parsePage<T>(data: Record<string, unknown>, parseItem: (value: unknown) => T): Page<T> {
   const { items, page, pageSize, total } = data;
   if (
@@ -331,6 +532,15 @@ function query(params: Record<string, string | number | boolean | undefined>): s
   const entries = Object.entries(params).filter(([, value]) => value !== undefined);
   if (entries.length === 0) return '';
   return `?${entries.map(([key, value]) => `${key}=${encodeURIComponent(String(value))}`).join('&')}`;
+}
+
+function reportQuery(options: GetReportOptions, group?: ReportGroup): string {
+  return query({
+    account_id: options.accountId,
+    desde: options.desde,
+    hasta: options.hasta,
+    group,
+  });
 }
 
 export function createResourcesApi(baseUrl: string, fetchImpl: typeof fetch = fetch): ResourcesApi {
@@ -461,6 +671,45 @@ export function createResourcesApi(baseUrl: string, fetchImpl: typeof fetch = fe
         'GET',
       );
       return parseCalendar(await readJson(response), options.accountId, options.month);
+    },
+
+    async getReportSummary(accessToken, options) {
+      const response = await call(accessToken, `/reports/summary${reportQuery(options)}`, 'GET');
+      return parseReportSummary(await readJson(response), options);
+    },
+
+    async getReportByCategory(accessToken, options) {
+      const response = await call(
+        accessToken,
+        `/reports/by-category${reportQuery(options)}`,
+        'GET',
+      );
+      return parseCategoryReport(await readJson(response), options);
+    },
+
+    async getReportByPeriod(accessToken, options) {
+      const response = await call(
+        accessToken,
+        `/reports/by-period${reportQuery(options, options.group)}`,
+        'GET',
+      );
+      return parsePeriodReport(await readJson(response), options);
+    },
+
+    async exportFile(accessToken, options) {
+      const response = await call(
+        accessToken,
+        `/export${query({
+          account_id: options.accountId,
+          desde: options.desde,
+          hasta: options.hasta,
+          tipo: options.tipo,
+          category_id: options.categoryId,
+          format: options.format,
+        })}`,
+        'GET',
+      );
+      return readExportBytes(response, options.format);
     },
   };
 }

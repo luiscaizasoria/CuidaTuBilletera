@@ -16,6 +16,13 @@ import { Button, Chip, ErrorBox, screenStyles as s } from './ui';
 
 export const HISTORY_PAGE_SIZE = 20;
 
+export interface HistoryFilters {
+  tipo?: TransactionType;
+  categoryId?: string;
+  desde?: string;
+  hasta?: string;
+}
+
 interface Filters {
   tipo: TransactionType | null;
   categoryId: string | null;
@@ -34,15 +41,27 @@ export default function HistoryScreen({
   account,
   api,
   onOpenTransaction,
+  initialFilters,
 }: {
   account: Account;
   api: ResourcesApi;
   onOpenTransaction: (transaction: Transaction) => void;
+  // Filtros con los que abre la pantalla (p. ej. desde Reportes). Solo se leen al montar.
+  initialFilters?: HistoryFilters;
 }) {
   const { authorizedCall } = useAuth();
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [desdeText, setDesdeText] = useState('');
-  const [hastaText, setHastaText] = useState('');
+  const [filters, setFilters] = useState<Filters>(() =>
+    initialFilters
+      ? {
+          tipo: initialFilters.tipo ?? null,
+          categoryId: initialFilters.categoryId ?? null,
+          desde: initialFilters.desde ?? '',
+          hasta: initialFilters.hasta ?? '',
+        }
+      : NO_FILTERS,
+  );
+  const [desdeText, setDesdeText] = useState(initialFilters?.desde ?? '');
+  const [hastaText, setHastaText] = useState(initialFilters?.hasta ?? '');
   const [rangeError, setRangeError] = useState<string | null>(null);
   const [list, setList] = useState<ListState>({ status: 'loading' });
   const [loadingMore, setLoadingMore] = useState(false);

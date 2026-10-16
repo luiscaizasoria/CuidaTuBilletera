@@ -74,6 +74,30 @@ export function fakeResourcesApi(overrides: Partial<ResourcesApi> = {}): jest.Mo
     updateTransaction: jest.fn(async (_t, id, input) => transaction({ id, ...input })),
     deleteTransaction: jest.fn(async () => undefined),
     getCalendar: jest.fn(async (_t, { accountId, month }) => ({ accountId, month, days: [] })),
+    getReportSummary: jest.fn(async (_t, { accountId, desde, hasta }) => ({
+      accountId,
+      desde,
+      hasta,
+      ingresos: 0,
+      gastos: 0,
+      balance: 0,
+      cantidad: 0,
+    })),
+    getReportByCategory: jest.fn(async (_t, { accountId, desde, hasta }) => ({
+      accountId,
+      desde,
+      hasta,
+      ingresos: { total: 0, items: [] },
+      gastos: { total: 0, items: [] },
+    })),
+    getReportByPeriod: jest.fn(async (_t, { accountId, desde, hasta, group }) => ({
+      accountId,
+      desde,
+      hasta,
+      group,
+      points: [],
+    })),
+    exportFile: jest.fn(async () => new Uint8Array([0x25, 0x50, 0x44, 0x46])),
     ...overrides,
   } as jest.Mocked<ResourcesApi>;
 }

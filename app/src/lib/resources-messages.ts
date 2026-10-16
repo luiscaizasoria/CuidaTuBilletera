@@ -1,4 +1,5 @@
 import { AuthError } from './auth-types';
+import { ExportFileError } from './export-files';
 import { ApiRequestError } from './resources-api';
 
 // Mensajes en español mapeados desde el código del error. Nunca se muestra el message del servidor.
@@ -13,12 +14,22 @@ const API_CODE_MESSAGES: Record<string, string> = {
   CATEGORY_ARCHIVED: 'La categoría está archivada. Elige otra categoría.',
   CATEGORY_MISMATCH: 'La categoría no corresponde a esta cuenta o al tipo de movimiento.',
   TRANSACTION_VOIDED: 'El movimiento ya fue anulado y no puede modificarse.',
+  EXPORT_TOO_LARGE: 'El rango tiene más de 2000 movimientos; elige un período más corto.',
   PAYLOAD_TOO_LARGE: 'Los datos enviados son demasiado grandes.',
 };
 
 const GENERIC_MESSAGE = 'Ocurrió un error inesperado. Inténtalo de nuevo.';
 
+const EXPORT_PREPARE_MESSAGE = 'No se pudo preparar el archivo. Inténtalo de nuevo.';
+const EXPORT_UNAVAILABLE_MESSAGE =
+  'Esta versión de la app no admite compartir archivos; instala la versión actualizada.';
+
 export function resourceErrorMessage(error: unknown): string {
+  if (error instanceof ExportFileError) {
+    return error.code === 'EXPORT_UNAVAILABLE'
+      ? EXPORT_UNAVAILABLE_MESSAGE
+      : EXPORT_PREPARE_MESSAGE;
+  }
   if (error instanceof ApiRequestError) {
     if (error.status === 413) return API_CODE_MESSAGES.PAYLOAD_TOO_LARGE!;
     return API_CODE_MESSAGES[error.code] ?? GENERIC_MESSAGE;

@@ -311,3 +311,74 @@ describe('HistoryScreen: filtros', () => {
     expect(screen.getByLabelText('Desde').props.value).toBe('');
   });
 });
+
+describe('HistoryScreen: filtros iniciales', () => {
+  const renderWith = async (
+    initialFilters: Parameters<typeof HistoryScreen>[0]['initialFilters'],
+  ) => {
+    const api = makeApi();
+    await render(
+      <HistoryScreen
+        account={account()}
+        api={api}
+        onOpenTransaction={onOpen}
+        initialFilters={initialFilters}
+      />,
+    );
+    return api;
+  };
+
+  it('consulta ya filtrada por categoría y rango, y rellena los campos de fecha', async () => {
+    const api = await renderWith({
+      categoryId: 'c-food',
+      desde: '2026-10-01',
+      hasta: '2026-10-31',
+    });
+    await screen.findByText('mov 1');
+    expect(api.listTransactions).toHaveBeenCalledTimes(1);
+    expect(api.listTransactions).toHaveBeenCalledWith('tok', {
+      accountId: 'acc-1',
+      page: 1,
+      pageSize: 20,
+      categoryId: 'c-food',
+      desde: '2026-10-01',
+      hasta: '2026-10-31',
+    });
+    expect(screen.getByLabelText('Desde').props.value).toBe('2026-10-01');
+    expect(screen.getByLabelText('Hasta').props.value).toBe('2026-10-31');
+    expect(
+      screen.getByRole('radio', { name: 'Filtrar por Comida' }).props.accessibilityState.selected,
+    ).toBe(true);
+  });
+
+  it('filtra por tipo y Limpiar filtros los quita', async () => {
+    const api = await renderWith({ tipo: 'gasto', desde: '2026-10-01', hasta: '2026-10-31' });
+    await screen.findByText('mov 1');
+    expect(api.listTransactions).toHaveBeenCalledWith(
+      'tok',
+      expect.objectContaining({ tipo: 'gasto', desde: '2026-10-01' }),
+    );
+    expect(screen.getByRole('radio', { name: 'Gastos' }).props.accessibilityState.selected).toBe(
+      true,
+    );
+    await fireEvent.press(screen.getByText('Limpiar filtros'));
+    await waitFor(() =>
+      expect(api.listTransactions).toHaveBeenLastCalledWith('tok', {
+        accountId: 'acc-1',
+        page: 1,
+        pageSize: 20,
+      }),
+    );
+    expect(screen.getByLabelText('Desde').props.value).toBe('');
+  });
+
+  it('sin initialFilters se comporta como antes (sin filtros)', async () => {
+    const api = await renderWith(undefined);
+    await screen.findByText('mov 1');
+    expect(api.listTransactions).toHaveBeenCalledWith('tok', {
+      accountId: 'acc-1',
+      page: 1,
+      pageSize: 20,
+    });
+  });
+});

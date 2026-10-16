@@ -160,9 +160,24 @@ Pendientes y riesgos:
 
 # Fase 5 - Reportes
 
-[ ] Reportes mensuales.
-[ ] Reportes anuales.
-[ ] Exportación.
+[x] Reportes mensuales (implementado en local).
+[x] Reportes anuales (implementado en local; incluye modo Rango).
+[x] Exportación CSV y PDF como archivos adjuntos (implementada en local; sin validar en Android real ni desplegada, decisión 5.3).
+
+Implementado (2026-10-15, solo local, sin commit): `GET /reports/summary`, `/reports/by-category` y `/reports/by-period` (Decisión 5.1 de docs/003); pantalla Reportes con modos Mes/Año/Rango, totales, desglose por categoría, serie por período y navegación al Historial con filtros. Sin migración ni dependencias nuevas.
+
+Evidencia local:
+
+- API Vitest (máx. 2 workers): 21 archivos y 820 pruebas aprobadas (97 de `reports-api.test.ts`); app Jest (máx. 2 workers): 23 suites y 952 pruebas aprobadas. `tsc`, ESLint y Prettier sin errores.
+- QA (qa-engineer): aprobado, sin hallazgos críticos, altos ni medios. Verificó aislamiento por cuenta y usuario, exclusión de anulados, enteros seguros y `no-store`.
+
+Pendientes y riesgos:
+
+- Sin despliegue a DEV ni pruebas remotas de `/reports/*`: la app necesita la API con esas rutas desplegadas.
+- Sin validación en Android real (barras, scroll horizontal de la serie, teclado del modo Rango, botón atrás).
+- `balance` de reportes es flujo neto (sin saldo inicial); la línea de ajustes llega con la conciliación (Fase 6).
+- El desempate por `id` en el orden de categorías no es ejercitable con datos reales (nombre único por cuenta y tipo).
+- Cambios sin commit; `tsconfig.json` de la raíz sin rastrear (preexistente) debe quedar fuera del commit.
 
 ---
 
@@ -263,3 +278,56 @@ Pendientes de la Fase 2B:
 
 No se realizarán despliegues automáticos por fusionar a main.
 El entorno de producción requiere aprobación expresa.
+
+## Fase 5 - Exportación (incremento 5.2)
+
+Implementada (local, sin commit): `GET /export` en CSV (columnas `fecha,tipo,categoria,nota,monto,monto_centavos`, BOM, CRLF, escapado RFC 4180, neutralización de fórmulas, tope 2000 filas, anulados excluidos) y botón «Exportar CSV» en Reportes con el menú de compartir de Android (`Share` de React Native, texto).
+
+Evidencia local: API Vitest 23 archivos y 933 pruebas; app Jest 23 suites y 971 pruebas; `tsc`, ESLint y Prettier sin errores. QA (qa-engineer): aprobado; corrigió un bloqueo del botón al volver al período original tras descartar una exportación (con prueba de regresión). Hubo fallos intermitentes por carga en una primera corrida (una prueba de `/auth/refresh` en API; CalendarScreen y ReportsScreen en Jest) que pasaron al repetir, riesgo ya registrado en Fase 3.
+
+Pendiente:
+
+- PDF: no implementado. Generarlo a mano en el Worker es viable, pero la app no puede entregar un binario sin `expo-sharing` y `expo-file-system`; requiere autorización para añadir dependencias y una nueva development build.
+- CSV como archivo adjunto (hoy se comparte como texto en el cuerpo del mensaje).
+- Filtros de tipo y categoría desde Reportes (la API y el cliente ya los soportan).
+
+No validado en Android real: apertura del menú de compartir, tamaño máximo aceptado por el Intent y cómo lo recibe el correo. Sin despliegue a DEV: `/export` y `/reports/*` no están probados en remoto.
+
+## Fase 5 - Exportación como archivo (incremento 5.3)
+
+Implementada (local, sin commit): `GET /export?format=csv|pdf` (PDF 1.4 real generado en el Worker, sin dependencias en la API) y, en la app, botones «Exportar CSV» y «Exportar PDF» que escriben un archivo temporal en la caché privada y lo comparten con `expo-sharing` (Decisión 5.3 de docs/003, que sustituye la entrega como texto de 5.2).
+
+Dependencias incorporadas con autorización: `expo-sharing ~57.0.23` y `expo-file-system ~57.0.7` (directa), más el plugin `expo-sharing` en `app.json`. Sin cambios en el SDK de Expo ni en otras dependencias; sin migraciones.
+
+Evidencia local: API Vitest 25 archivos y 979 pruebas aprobadas (46 nuevas de PDF); app Jest 25 suites y 990 pruebas aprobadas; `tsc`, ESLint y Prettier sin errores. QA (qa-engineer): aprobado, sin defectos bloqueantes. Validó la estructura de 9 PDF generados (xref, offsets, `/Length`, `/Count`, codificación WinAnsi, paginación y totales contra una suma independiente) con un validador propio, y revisó el ciclo de vida de los archivos temporales y que no se perdieran pruebas en `resources-api.test.ts`.
+
+Pendientes y riesgos:
+
+- **Nueva Development Build obligatoria** (`expo-sharing` es un módulo nativo): no se ejecutó EAS Build. Con el APK actual, la app sigue funcionando y muestra un mensaje al exportar, pero la exportación solo funcionará con la nueva build.
+- **No validado en Android real**: compartir el archivo (FileProvider y selector), apertura del PDF y del CSV en las apps receptoras, comportamiento de `isAvailableAsync` en un APK antiguo.
+- PDF sin abrir en un visor real: solo hay validación estructural y de contenido con un parser propio.
+- CPU del Worker en plan Free con 2000 filas no demostrada (local ~5 ms; ~460 KB y 36 páginas). Medir tras el despliegue a DEV; si hay `exceededCpu`, bajar el tope solo del PDF.
+- Sin despliegue a DEV: `/export` y `/reports/*` no están probados en remoto.
+- Android no confirma el envío, por lo que no se muestra mensaje de éxito; los archivos temporales permanecen en la caché privada hasta la siguiente limpieza.
+- Menores: falta una prueba explícita de igualdad de sumas entre CSV y PDF con el mismo filtro (ambos comparten la lectura); con exactamente 56, 112… filas los totales quedan solos en una página; `tsconfig.json` de la raíz sigue sin rastrear y debe quedar fuera del commit.
+
+## Fase 5 - Cierre (2026-10-15)
+
+Despliegue en Cloudflare DEV (autorizado; solo DEV, sin producción ni migraciones remotas):
+
+- Worker `controlgastos-api-dev`, URL https://controlgastos-api-dev.luis-caiza-soria.workers.dev, versionId `1a73a98a-c358-44df-9429-cb7f1410705b`, desplegado con `cwrangler deploy --env dev` el 2026-10-15 entre 20:01:35 y 20:01:43 UTC. Antes, `d1 migrations list --remote` indicó «No migrations to apply!» (0001–0003 aplicadas) y el dry-run solo mostró el binding `DB` → `controlgastos-db-dev`.
+- Verificación remota sin credenciales: `/health` 200; `/reports/summary`, `/reports/by-category`, `/reports/by-period`, `/export` (csv y pdf), `/accounts`, `/transactions` y `/calendar` sin JWT → 401 `UNAUTHORIZED`; con JWT inválido → 401 `INVALID_TOKEN`; todas las respuestas protegidas con `Cache-Control: no-store` y cuerpo genérico. Conteos D1 DEV antes y después idénticos (users 1, refresh_tokens 6, accounts 0, categories 0, transactions 0).
+- **No verificado en remoto**: reportes autenticados, CSV ni PDF (no existe identidad de prueba aislada; no se crearon usuarios ni movimientos). D1 DEV no tiene cuentas ni movimientos.
+
+Development Build Android (autorizada): EAS build `375e4dc0-2e61-4fb8-b411-9e06a9a93456`, perfil `development`, plataforma Android, distribución interna, SDK 57, estado final FINISHED (~3 min en cola y ~9,5 min de compilación, 20:05–20:14 hora local). Credenciales: keystore remoto existente, sin credenciales nuevas. Variables del entorno `development` de EAS: `EXPO_PUBLIC_API_URL` apunta a la URL de DEV y `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` existe. APK: https://expo.dev/artifacts/eas/VR-HEbIBa2Hmb4R51Ha_sF0GKS0jh7qE4bDJ9zK4yDY.apk (página: https://expo.dev/accounts/luiscaizasoria/projects/cuida-tu-billetera/builds/375e4dc0-2e61-4fb8-b411-9e06a9a93456). EAS empaqueta el árbol de trabajo, por lo que la build incluye los cambios de Fase 5 aunque se lanzó antes del commit (base `bc75b03`). Sin OTA ni publicación en tiendas.
+
+QA final (qa-engineer): aprobado, sin hallazgos críticos, altos ni medios. Pruebas dirigidas de hoy: API 477 pruebas en 9 archivos y app 223 pruebas en 8 suites aprobadas; `tsc`, ESLint y Prettier sin errores. Las suites completas (API 979, app 990) vienen de la corrida previa, sin cambios de código desde entonces.
+
+Alcance de la validación:
+
+- Local: reportes, exportación CSV/PDF, archivos temporales (con mocks), regresión de calendario, historial y movimientos.
+- Cloudflare DEV: solo disponibilidad y rutas protegidas (sin credenciales).
+- Compilación Android: la build termina y empaqueta `expo-sharing` y `expo-file-system`; no equivale a validación funcional.
+- **No validado en dispositivo real**: pantalla de Reportes, hoja de compartir, apertura del CSV (BOM y acentos en Excel) y del PDF en un visor real, rendimiento con 2000 filas, comportamiento de `FileProvider` y renovación de sesión durante la exportación.
+
+Pendientes: instalar el APK de Development y probar Fase 5 en un dispositivo; crear una identidad de prueba aislada para validar en DEV los reportes autenticados, CSV y PDF y medir la CPU del Worker con 2000 filas (plan Free, 10 ms); `tsconfig.json` de la raíz sigue sin rastrear y queda fuera del commit; el Pull Request y la integración a `main` no se han hecho.

@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "plugins": ["expo-status-bar", "expo-secure-store"],
+    "plugins": ["expo-status-bar", "expo-secure-store", "expo-sharing"],
     "android": {
       "package": "com.cuidatubilletera.app"
     },
