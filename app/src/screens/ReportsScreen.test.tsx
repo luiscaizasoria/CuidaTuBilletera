@@ -110,6 +110,16 @@ const renderReports = (api = makeApi(), view: ReportsView = OCT, acct = acc) =>
     />,
   );
 
+// El primer render del archivo transforma en frío los módulos de React Native (en CI no hay caché de
+// Jest) y puede pasar de los 5 s de una prueba. Se paga una vez aquí, con límite propio, para que
+// ninguna prueba cargue con ese costo.
+beforeAll(async () => {
+  const view = await renderReports();
+  await view.findByTestId('report-card-ingresos');
+  view.unmount();
+  jest.clearAllMocks();
+}, 60_000);
+
 afterEach(() => jest.clearAllMocks());
 
 describe('ReportsScreen: presentación', () => {
