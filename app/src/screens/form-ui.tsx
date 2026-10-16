@@ -141,17 +141,29 @@ export function CategoryIcon({
   icono,
   color,
   size = sizes.categoryIcon,
+  dimmed = false,
 }: {
   icono: string;
   color: string;
   size?: number;
+  // Categoría archivada: opacidad 0.5 (docs/008 §6.14).
+  dimmed?: boolean;
 }) {
   const { glyph, text } = categoryGlyph(icono);
   return (
     <View
       testID="category-icon"
       {...hidden}
-      style={[styles.icon, { width: size, height: size, backgroundColor: categoryFill(color) }]}
+      style={[
+        styles.icon,
+        {
+          width: size,
+          height: size,
+          borderRadius: size >= sizes.avatar ? radii.md : 10,
+          backgroundColor: categoryFill(color),
+        },
+        dimmed && styles.iconDimmed,
+      ]}
     >
       <Text style={[styles.iconGlyph, text && styles.iconGlyphText]}>{glyph}</Text>
     </View>
@@ -338,6 +350,7 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.expenseText },
   errorMessage: { flexShrink: 1 },
   icon: { borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  iconDimmed: { opacity: 0.5 },
   iconGlyph: { fontSize: 16, lineHeight: 20 },
   iconGlyphText: { color: colors.white, fontWeight: '800' },
   option: {

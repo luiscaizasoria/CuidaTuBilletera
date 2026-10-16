@@ -4,8 +4,10 @@ import { Alert } from 'react-native';
 import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type ResourcesApi } from '../lib/resources-api';
 import { account, fakeResourcesApi } from '../resources-test-utils';
-import { controlledPromise } from '../test-utils';
+import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import MoreScreen from './MoreScreen';
+
+relaxTimeoutsForColdCache();
 
 const mockAuthState: Record<string, unknown> = {};
 jest.mock('../hooks/use-auth', () => ({

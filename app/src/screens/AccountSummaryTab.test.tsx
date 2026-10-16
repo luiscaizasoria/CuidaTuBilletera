@@ -4,6 +4,9 @@ import type { ResourcesApi } from '../lib/resources-api';
 import { account, category, fakeResourcesApi, pageOf, transaction } from '../resources-test-utils';
 import AccountSummaryTab from './AccountSummaryTab';
 import type { BalanceStatus } from './navigation';
+import { relaxTimeoutsForColdCache } from '../test-utils';
+
+relaxTimeoutsForColdCache();
 
 jest.mock('../hooks/use-auth', () => ({
   useAuth: () => ({ authorizedCall: (call: (token: string) => Promise<unknown>) => call('tok') }),

@@ -38,7 +38,7 @@ La matriz detallada por archivo de `app/src` está en docs/007-DISENO-UX.md §13
 | R1 | `app/src/theme/tokens.ts` (nuevo), `app/src/screens/ui.tsx`, `app/src/App.tsx` |
 | R2 | `AccountContextBar.tsx` (nuevo; quedó dentro de `screens/account-ui.tsx`, docs/003 R2 D9), `lib/resources-api.ts` (`getAccountBalance`, endpoint existente) y `resources-test-utils.ts`, `MainNavigator.tsx` (`refreshKey`), `AccountsScreen.tsx`, `AccountDetailScreen.tsx` (absorbido en `MainNavigator.tsx`, docs/003 R2 D9), `AccountSummaryTab.tsx`, `MoreScreen.tsx` (nuevos), `HomeScreen.tsx` y `HomeDashboard.tsx` (retirar), `lib/dates.ts` |
 | R3 | `TransactionFormScreen.tsx` |
-| R4 | `HistoryScreen.tsx`, `CalendarScreen.tsx`, `ReportsScreen.tsx`, `CategoriesScreen.tsx`, `TransactionRow.tsx` |
+| R4 | `HistoryScreen.tsx`, `CalendarScreen.tsx`, `ReportsScreen.tsx`, `CategoriesScreen.tsx`, `TransactionRow.tsx`, `DatePickerSheet.tsx` (tono neutro), `ui.tsx` (`ScreenTitle`, `SummaryTile`), `lib/calendar.ts` (día de la semana y ancho de celda); especificación en docs/007 §5.11 |
 | R5 | `lib/guides.ts` (nuevo), pantallas con ayudas |
 | R6 | `app/app.json`, `app/assets/*` (copiados desde `docs/design/assets/` tras aprobar) |
 

@@ -2,6 +2,7 @@ import {
   accountPalette,
   colors,
   moduleColors,
+  screenMargin,
   shadows,
   sizes,
   spacing,
@@ -21,8 +22,8 @@ function ratio(a: string, b: string): number {
 }
 
 describe('tokens', () => {
-  it('sizes tiene exactamente 25 claves con los valores aprobados', () => {
-    expect(Object.keys(sizes)).toHaveLength(25);
+  it('sizes tiene exactamente 29 claves con los valores aprobados', () => {
+    expect(Object.keys(sizes)).toHaveLength(29);
     expect(sizes).toEqual({
       touchMin: 48,
       tabHeight: 62,
@@ -49,6 +50,10 @@ describe('tokens', () => {
       pigZoom: 1.4,
       balanceCardMin: 132,
       balanceCardPig: 104,
+      moduleTile: 36,
+      moduleTileSm: 28,
+      monthArrow: 32,
+      categoryBar: 10,
     });
   });
 
@@ -107,5 +112,18 @@ describe('tokens', () => {
 
   it('borde fuerte >= 3:1 sobre superficie', () => {
     expect(ratio(colors.borderStrong, colors.surface)).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('screenMargin (docs/003 R4 D6)', () => {
+  it.each([
+    [320, 16],
+    [360, 16],
+    [399, 16],
+    [400, 20],
+    [412, 20],
+    [480, 20],
+  ])('ancho %s dp -> margen %s dp', (width, margin) => {
+    expect(screenMargin(width)).toBe(margin);
   });
 });

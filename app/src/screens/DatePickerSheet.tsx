@@ -28,23 +28,26 @@ export default function DatePickerSheet({
   onClose,
 }: {
   visible: boolean;
-  // Fecha actual del formulario (AAAA-MM-DD): fija el mes inicial y el día elegido.
+  // Fecha actual del formulario (AAAA-MM-DD): fija el mes inicial y el día elegido. Vacía (filtro
+  // sin elegir): abre en el mes de hoy y no marca ningún día.
   value: string;
   today: string;
-  tipo: TransactionType;
+  // Tono del día elegido: el del tipo de movimiento; sin `tipo` (filtros) es neutro (`text`).
+  tipo?: TransactionType;
   onSelect: (date: string) => void;
   onClose: () => void;
 }) {
-  const [view, setView] = useState<YearMonth>(() => initialMonthFor(value));
+  const [view, setView] = useState<YearMonth>(() => initialMonthFor(value || today));
   // Cada apertura empieza en el mes de la fecha del formulario.
   useEffect(() => {
-    if (visible) setView(initialMonthFor(value));
+    if (visible) setView(initialMonthFor(value || today));
     // Solo al abrir: `value` no cambia mientras la hoja está abierta.
   }, [visible]);
 
   const previous = shiftMonth(view.year, view.month, -1);
   const next = shiftMonth(view.year, view.month, 1);
-  const accent = tipo === 'gasto' ? colors.expense : colors.income;
+  const accent =
+    tipo === undefined ? colors.text : tipo === 'gasto' ? colors.expense : colors.income;
 
   return (
     <Sheet
@@ -87,7 +90,7 @@ export default function DatePickerSheet({
             {week.map((day, col) => {
               if (day === null) return <View key={col} style={styles.cell} />;
               const key = dateKey(view.year, view.month, day);
-              const selected = key === value;
+              const selected = value !== '' && key === value;
               const isToday = key === today;
               return (
                 <Pressable

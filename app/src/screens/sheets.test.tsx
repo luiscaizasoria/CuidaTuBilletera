@@ -2,8 +2,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { AuthError } from '../lib/auth-types';
 import type { Page } from '../lib/resources-api';
 import { account, fakeResourcesApi, pageOf } from '../resources-test-utils';
-import { controlledPromise } from '../test-utils';
+import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import { AccountSwitcherSheet } from './sheets';
+
+relaxTimeoutsForColdCache();
 
 jest.mock('../hooks/use-auth', () => ({
   useAuth: () => ({ authorizedCall: (call: (token: string) => Promise<unknown>) => call('tok') }),

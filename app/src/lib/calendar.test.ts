@@ -2,7 +2,9 @@ import {
   WEEK_START,
   addDays,
   buildMonthGrid,
+  calendarCellWidth,
   dateKey,
+  dayGroupTitle,
   dayOfWeek,
   daysInMonth,
   defaultDay,
@@ -18,6 +20,7 @@ import {
   weekRange,
   weekdayHeaders,
 } from './calendar';
+import { sizes } from '../theme/tokens';
 
 describe('isLeapYear y daysInMonth', () => {
   it.each([
@@ -272,5 +275,53 @@ describe('weekRange (lunes a domingo)', () => {
   it('fecha inválida o semana fuera de rango devuelve null', () => {
     expect(weekRange('hoy')).toBeNull();
     expect(weekRange('2000-01-01')).toBeNull(); // sábado: el lunes cae en 1999
+  });
+});
+
+describe('calendarCellWidth (R4, P-3)', () => {
+  it('360 dp da ≈ 44,3 dp y 412 dp da 48 dp o más', () => {
+    expect(calendarCellWidth(360)).toBeCloseTo(44.3, 1);
+    expect(calendarCellWidth(360)).toBeGreaterThanOrEqual(44);
+    expect(calendarCellWidth(412)).toBeGreaterThanOrEqual(48);
+    expect(sizes.calendarCellHeight).toBe(52);
+  });
+
+  it('usa el margen responsive: 16 dp bajo 400 dp y 20 dp desde 400 dp (R4 D6)', () => {
+    expect(calendarCellWidth(360)).toBeCloseTo((360 - 32 - 18) / 7, 1);
+    expect(calendarCellWidth(399)).toBeCloseTo((399 - 32 - 18) / 7, 1);
+    expect(calendarCellWidth(400)).toBeCloseTo((400 - 40 - 18) / 7, 1);
+    expect(calendarCellWidth(412)).toBeCloseTo(50.57, 1);
+    expect(calendarCellWidth(412)).toBeGreaterThanOrEqual(48);
+  });
+
+  it('las siete celdas con sus separaciones nunca exceden el ancho disponible', () => {
+    for (const width of [320, 360, 385, 400, 412, 480]) {
+      const used = 7 * calendarCellWidth(width) + 6 * 3 + 2 * (width >= 400 ? 20 : 16);
+      expect(used).toBeLessThanOrEqual(width);
+    }
+  });
+
+  it('un ancho inválido no produce valores negativos', () => {
+    expect(calendarCellWidth(0)).toBe(0);
+  });
+});
+
+describe('dayGroupTitle (R4)', () => {
+  it('Hoy, Ayer y fecha larga con día de la semana', () => {
+    expect(dayGroupTitle('2026-10-15', '2026-10-15')).toBe('Hoy');
+    expect(dayGroupTitle('2026-10-14', '2026-10-15')).toBe('Ayer');
+    expect(dayGroupTitle('2026-10-14', '2026-10-16')).toBe('Miércoles 14 de octubre');
+    expect(dayGroupTitle('2026-11-01', '2026-11-02')).toBe('Ayer');
+  });
+
+  it('agrega el año si no es el actual y usa addDays para cruzar de mes y año', () => {
+    expect(dayGroupTitle('2025-12-31', '2026-01-01')).toBe('Ayer');
+    expect(dayGroupTitle('2025-10-14', '2026-10-16')).toBe('Martes 14 de octubre de 2025');
+    expect(dayGroupTitle('2000-01-01', '2026-10-16')).toBe('Sábado 1 de enero de 2000');
+    expect(dayGroupTitle('2100-12-31', '2026-10-16')).toBe('Viernes 31 de diciembre de 2100');
+  });
+
+  it('una fecha inválida se devuelve tal cual', () => {
+    expect(dayGroupTitle('hoy', '2026-10-16')).toBe('hoy');
   });
 });

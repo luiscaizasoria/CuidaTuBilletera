@@ -4,8 +4,10 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { AccessibilityInfo, Alert, BackHandler, StyleSheet, TextInput } from 'react-native';
 import { ApiRequestError, type ResourcesApi } from '../lib/resources-api';
 import { account, category, fakeResourcesApi, pageOf, transaction } from '../resources-test-utils';
-import { controlledPromise } from '../test-utils';
+import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import TransactionFormScreen from './TransactionFormScreen';
+
+relaxTimeoutsForColdCache();
 
 jest.mock('../hooks/use-auth', () => ({
   useAuth: () => ({ authorizedCall: (call: (token: string) => Promise<unknown>) => call('tok') }),

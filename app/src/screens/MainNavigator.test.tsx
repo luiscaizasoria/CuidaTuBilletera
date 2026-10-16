@@ -7,8 +7,10 @@ import { AccessibilityInfo, Alert, BackHandler } from 'react-native';
 import { clearExports } from '../lib/export-files';
 import { ApiRequestError, type AccountBalance, type ResourcesApi } from '../lib/resources-api';
 import { account, category, fakeResourcesApi, pageOf, transaction } from '../resources-test-utils';
-import { controlledPromise, mockWindow } from '../test-utils';
+import { controlledPromise, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import MainNavigator from './MainNavigator';
+
+relaxTimeoutsForColdCache();
 
 jest.mock('../lib/export-files', () => ({
   clearExports: jest.fn(),
@@ -185,7 +187,7 @@ describe('MainNavigator: regresión', () => {
     await fireEvent.press(await screen.findByRole('radio', { name: 'Modo Año' }));
     await fireEvent.press(await screen.findByLabelText('Año anterior'));
     await fireEvent.press(await screen.findByTestId('report-category-cat-1'));
-    expect(await screen.findByText('Historial de Efectivo')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Movimientos' })).toBeTruthy();
     expect(screen.queryByLabelText('Secciones de la cuenta')).toBeNull();
     expect(screen.getByRole('button', { name: 'Volver a Reportes' })).toBeTruthy();
     await waitFor(() =>
@@ -200,7 +202,7 @@ describe('MainNavigator: regresión', () => {
       ),
     );
     expect(await back()).toBe(true);
-    expect(await screen.findByText('Reportes de Efectivo')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Reportes' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: 'Modo Año' }).props.accessibilityState.selected).toBe(
       true,
     );
@@ -217,7 +219,7 @@ describe('MainNavigator: regresión', () => {
     const first = await render(<MainNavigator api={makeApi()} />);
     await openEfectivo();
     await goTab('Calendario');
-    await screen.findByText('Calendario de Efectivo');
+    await screen.findByRole('header', { name: 'Calendario' });
     await first.unmount();
 
     const otherApi = makeApi({
@@ -226,7 +228,7 @@ describe('MainNavigator: regresión', () => {
     await render(<MainNavigator api={otherApi} />);
     expect(await screen.findByText('Ahorros')).toBeTruthy();
     expect(screen.getByRole('header', { name: 'Mis cuentas' })).toBeTruthy();
-    expect(screen.queryByText(/Calendario de/)).toBeNull();
+    expect(screen.queryByRole('header', { name: 'Calendario' })).toBeNull();
     expect(screen.queryByText(/Banco|Efectivo/)).toBeNull();
     expect(otherApi.getCalendar).not.toHaveBeenCalled();
     expect(await back()).toBe(false);
@@ -297,16 +299,20 @@ describe('MainNavigator: pestañas y Atrás', () => {
   it('las cinco pestañas; FAB solo en Cuenta, Movimientos y Calendario', async () => {
     await render(<MainNavigator api={makeApi()} />);
     await openEfectivo();
-    const expectations: [string, boolean, RegExp | string][] = [
-      ['Movimientos', true, 'Historial de Efectivo'],
-      ['Calendario', true, 'Calendario de Efectivo'],
-      ['Reportes', false, 'Reportes de Efectivo'],
-      ['Más', false, 'Datos de cuenta'],
-      ['Cuenta', true, 'Saldo actual'],
+    // R4: los títulos de Movimientos y Calendario ya no llevan el nombre de la cuenta; el nombre
+    // coincide con el de la pestaña, así que se busca el encabezado (`header`).
+    const expectations: [string, boolean, RegExp | string, boolean][] = [
+      ['Movimientos', true, 'Movimientos', true],
+      ['Calendario', true, 'Calendario', true],
+      ['Reportes', false, 'Reportes', true],
+      ['Más', false, 'Datos de cuenta', false],
+      ['Cuenta', true, 'Saldo actual', false],
     ];
-    for (const [tab, fab, text] of expectations) {
+    for (const [tab, fab, text, isHeader] of expectations) {
       await goTab(tab);
-      expect(await screen.findByText(text)).toBeTruthy();
+      expect(
+        await (isHeader ? screen.findByRole('header', { name: text }) : screen.findByText(text)),
+      ).toBeTruthy();
       expect(selectedTab()).toBe(tab);
       expect(screen.queryByTestId('fab') !== null).toBe(fab);
     }
@@ -349,7 +355,7 @@ describe('MainNavigator: pestañas y Atrás', () => {
     await openEfectivo();
     await goTab('Más');
     await fireEvent.press(screen.getByRole('button', { name: 'Categorías' }));
-    expect(await screen.findByText('Categorías de Efectivo')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Categorías' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Volver a Más' })).toBeTruthy();
     expect(await back()).toBe(true);
     expect(selectedTab()).toBe('Más');
@@ -569,7 +575,7 @@ describe('MainNavigator: selector rápido de cuenta', () => {
     const current = await screen.findByRole('radio', { name: 'Efectivo, saldo $12.50' });
     expect(current.props.accessibilityState.selected).toBe(true);
     await fireEvent.press(screen.getByRole('radio', { name: 'Banco, saldo $5.00' }));
-    expect(await screen.findByText('Calendario de Banco')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Calendario' })).toBeTruthy();
     expect(selectedTab()).toBe('Calendario');
     expect(screen.getByText('Octubre 2026')).toBeTruthy();
     expect(screen.queryByText(/Efectivo/)).toBeNull();
@@ -579,6 +585,31 @@ describe('MainNavigator: selector rápido de cuenta', () => {
         accountId: 'acc-2',
         month: '2026-10',
       }),
+    );
+  });
+
+  it('R4: cambiar de cuenta deja Reportes sin datos de la anterior y consulta la nueva', async () => {
+    const getReportSummary = jest.fn(
+      async (_t: string, o: { accountId: string; desde: string; hasta: string }) => ({
+        ...o,
+        ingresos: o.accountId === 'acc-1' ? 123456 : 654,
+        gastos: 0,
+        balance: o.accountId === 'acc-1' ? 123456 : 654,
+        cantidad: 1,
+      }),
+    );
+    const api = makeApi({ getReportSummary: getReportSummary as never });
+    await render(<MainNavigator api={api} />);
+    await openEfectivo();
+    await goTab('Reportes');
+    expect(await screen.findByText('+$1234.56')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: /^Cuenta Efectivo/ }));
+    await fireEvent.press(await screen.findByRole('radio', { name: 'Banco, saldo $5.00' }));
+    expect(await screen.findByText('+$6.54')).toBeTruthy();
+    expect(screen.queryByText('+$1234.56')).toBeNull();
+    expect(getReportSummary).toHaveBeenLastCalledWith(
+      'tok',
+      expect.objectContaining({ accountId: 'acc-2' }),
     );
   });
 
@@ -702,7 +733,7 @@ describe('MainNavigator: un solo Screen por ruta y Snackbar', () => {
     await back();
     await goTab('Más');
     await fireEvent.press(screen.getByRole('button', { name: 'Categorías' }));
-    await screen.findByText('Categorías de Efectivo');
+    await screen.findByRole('header', { name: 'Categorías' });
     expect(screens()).toHaveLength(1);
   });
 
@@ -879,7 +910,7 @@ describe('MainNavigator: R3 confirmación de descarte con Atrás', () => {
     await openEfectivo();
     await openForm();
     await fireEvent.press(await screen.findByRole('button', { name: 'Ir a Categorías' }));
-    expect(await screen.findByText('Categorías de Efectivo')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Categorías' })).toBeTruthy();
     expect(screen.queryByLabelText('Monto')).toBeNull();
     expect(await back()).toBe(true);
     expect(await screen.findByLabelText('Secciones de la cuenta')).toBeTruthy();
@@ -918,8 +949,9 @@ describe('MainNavigator: R3 confirmación de descarte con Atrás', () => {
     await goTab('Calendario');
     await openForm();
     await fireEvent.press(await screen.findByRole('button', { name: 'Ir a Categorías' }));
-    await screen.findByText('Categorías de Efectivo');
+    await screen.findByRole('header', { name: 'Categorías' });
     expect(screen.getByRole('button', { name: 'Volver' })).toBeTruthy();
+    expect(screen.getByText('Crea una categoría y vuelve para anotar tu movimiento.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Volver a Más' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Volver' }));
     await screen.findByLabelText('Secciones de la cuenta');
@@ -931,8 +963,26 @@ describe('MainNavigator: R3 confirmación de descarte con Atrás', () => {
     await openEfectivo();
     await goTab('Más');
     await fireEvent.press(screen.getByRole('button', { name: 'Categorías' }));
-    await screen.findByText('Categorías de Efectivo');
+    await screen.findByRole('header', { name: 'Categorías' });
     expect(screen.getByRole('button', { name: 'Volver a Más' })).toBeTruthy();
+    expect(screen.queryByText(/Crea una categoría y vuelve/)).toBeNull();
+  });
+
+  it('R4: Atrás con el formulario de categoría abierto lo cierra y no sale de Categorías', async () => {
+    await render(<MainNavigator api={makeApi()} />);
+    await openEfectivo();
+    await goTab('Más');
+    await fireEvent.press(screen.getByRole('button', { name: 'Categorías' }));
+    await screen.findByRole('header', { name: 'Categorías' });
+    await fireEvent.press(await screen.findByRole('button', { name: 'Nueva categoría' }));
+    expect(screen.getByRole('header', { name: 'Nueva categoría' })).toBeTruthy();
+    expect(await back()).toBe(true);
+    expect(screen.queryByRole('header', { name: 'Nueva categoría' })).toBeNull();
+    expect(screen.getByRole('header', { name: 'Categorías' })).toBeTruthy();
+    // Con la lista visible, Atrás vuelve a Más.
+    expect(await back()).toBe(true);
+    await screen.findByLabelText('Secciones de la cuenta');
+    expect(selectedTab()).toBe('Más');
   });
 
   it('UXQA-R3-04: el formulario no añade un segundo margen inferior (solo el del pie)', async () => {

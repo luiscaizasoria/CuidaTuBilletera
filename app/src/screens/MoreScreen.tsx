@@ -8,7 +8,7 @@ import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, moduleColors, radii, shadows, typography } from '../theme/tokens';
 import { ArchivedNotice } from './account-ui';
 import SessionBanner from './SessionBanner';
-import { Button, screenStyles as s } from './ui';
+import { Button, screenStyles as s, useScreenMargin } from './ui';
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
 
@@ -30,6 +30,7 @@ export default function MoreScreen({
   bottomInset?: number;
 }) {
   const { authorizedCall, user, signOut } = useAuth();
+  const margin = useScreenMargin();
   const [editing, setEditing] = useState(false);
   const [nombre, setNombre] = useState(account.nombre);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -88,7 +89,10 @@ export default function MoreScreen({
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={[styles.content, { paddingBottom: 16 + bottomInset }]}
+      contentContainerStyle={[
+        styles.content,
+        { padding: margin, paddingBottom: margin + bottomInset },
+      ]}
     >
       <Text accessibilityRole="header" style={styles.title}>
         Más

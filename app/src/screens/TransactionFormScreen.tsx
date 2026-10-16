@@ -45,7 +45,7 @@ import {
   formStyles,
   TypeToggle,
 } from './form-ui';
-import { Button, Chip, ErrorBox } from './ui';
+import { Button, Chip, ErrorBox, useScreenMargin } from './ui';
 
 export const MAX_AMOUNT_CENTS = 99_999_999_999;
 export const NOTE_MAX = 500;
@@ -88,6 +88,7 @@ export default function TransactionFormScreen({
 }) {
   const { authorizedCall } = useAuth();
   const insets = useSystemInsets();
+  const margin = useScreenMargin();
   const editing = transaction !== undefined;
   const [montoText, setMontoText] = useState(transaction ? centsToInput(transaction.monto) : '');
   const [tipo, setTipo] = useState<TransactionType>(transaction?.tipo ?? 'gasto');
@@ -352,7 +353,7 @@ export default function TransactionFormScreen({
         ref={scrollRef}
         testID="transaction-form-scroll"
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { padding: margin }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>

@@ -5,12 +5,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { monthTitle, shiftMonth } from '../lib/calendar';
-import { formatDateEs } from '../lib/dates';
+import { categoryFill } from '../lib/category-appearance';
+import { formatDateEs, todayLocal } from '../lib/dates';
 import { clearExports, shareExport } from '../lib/export-files';
 import { formatCents, formatCompactCents } from '../lib/money';
 import {
@@ -36,8 +37,24 @@ import type {
   ResourcesApi,
 } from '../lib/resources-api';
 import { resourceErrorMessage } from '../lib/resources-messages';
+import { colors, radii, sizes, tabularNums, typography } from '../theme/tokens';
+import { CategoryIcon } from './form-ui';
+import DatePickerSheet from './DatePickerSheet';
 import type { HistoryFilters } from './HistoryScreen';
-import { Button, Chip, ErrorBox, screenStyles as s } from './ui';
+import {
+  Button,
+  Card,
+  DateField,
+  EmptyState,
+  ErrorBox,
+  LoadingState,
+  MonthArrow,
+  ScreenTitle,
+  Segmented,
+  SummaryTile,
+  useScreenContainerStyle,
+  screenStyles as s,
+} from './ui';
 
 type LoadState =
   | { status: 'error'; key: string; message: string }
@@ -59,14 +76,25 @@ interface ExportState {
 const EXPORT_MIME: Record<ExportFormat, string> = { csv: 'text/csv', pdf: 'application/pdf' };
 
 const COLUMN_HEIGHT = 80;
-const FALLBACK_COLOR = '#9e9e9e';
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+// Mínimo visible de una barra con importe mayor que cero (solo presentación).
+const MIN_BAR_DP = 4;
+export const RANGE_MISSING_ERROR = 'Elige las fechas «Desde» y «Hasta».';
+export const RANGE_ORDER_MESSAGE = 'La fecha «Desde» no puede ser posterior a «Hasta».';
 
 const MODES: { mode: ReportMode; label: string }[] = [
   { mode: 'month', label: 'Mes' },
   { mode: 'year', label: 'Año' },
   { mode: 'range', label: 'Rango' },
 ];
+
+const EMPTY_HINT: Record<ReportMode, string> = {
+  month: 'otro mes',
+  year: 'otro año',
+  range: 'otro rango',
+};
+
+type RangeField = 'desde' | 'hasta';
+type SeriesView = 'chart' | 'table';
 
 export default function ReportsScreen({
   account,
@@ -82,9 +110,11 @@ export default function ReportsScreen({
   onOpenHistory: (filters: HistoryFilters) => void;
 }) {
   const { authorizedCall } = useAuth();
+  const containerStyle = useScreenContainerStyle();
   const [view, setView] = useState<ReportsView>(initialView);
-  const [desdeText, setDesdeText] = useState(initialView.desde);
-  const [hastaText, setHastaText] = useState(initialView.hasta);
+  // Fechas elegidas en el modo Rango; se aplican al tocar «Aplicar».
+  const [pending, setPending] = useState({ desde: initialView.desde, hasta: initialView.hasta });
+  const [picker, setPicker] = useState<RangeField | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
   const [state, setState] = useState<LoadState | null>(null);
   const [reload, setReload] = useState(0);
@@ -95,6 +125,19 @@ export default function ReportsScreen({
   const mounted = useRef(true);
   const loadKeyRef = useRef<string | null>(null);
   const [exportState, setExportState] = useState<ExportState | null>(null);
+  // Vista de la serie (Gráfico/Tabla): vive aquí para no reiniciarse al cambiar de período o reintentar.
+  const [seriesView, setSeriesView] = useState<SeriesView>('chart');
+
+  // Defensa propia ante un cambio de cuenta sin remontar: se descartan estados de la anterior.
+  const [shownAccountId, setShownAccountId] = useState(account.id);
+  if (shownAccountId !== account.id) {
+    setShownAccountId(account.id);
+    setState(null);
+    setExportState(null);
+    setRangeError(null);
+    setPicker(null);
+    setSeriesView('chart');
+  }
 
   const range = viewRange(view);
   const group = range ? periodGroupFor(view.mode, range) : null;
@@ -197,8 +240,7 @@ export default function ReportsScreen({
     if (mode === 'range') {
       // Parte del período que se estaba viendo.
       const base = range ?? monthRange(view.year, view.month);
-      setDesdeText(base.desde);
-      setHastaText(base.hasta);
+      setPending({ desde: base.desde, hasta: base.hasta });
       setRangeError(null);
       changeView({ ...view, mode, desde: base.desde, hasta: base.hasta });
       return;
@@ -217,7 +259,11 @@ export default function ReportsScreen({
   }
 
   function applyRange() {
-    const result = validateRange(desdeText, hastaText);
+    if (pending.desde === '' || pending.hasta === '') {
+      setRangeError(RANGE_MISSING_ERROR);
+      return;
+    }
+    const result = validateRange(pending.desde, pending.hasta);
     if (result.error !== null) {
       setRangeError(result.error);
       return;
@@ -243,81 +289,83 @@ export default function ReportsScreen({
         : null;
 
   return (
-    <ScrollView style={s.container} keyboardShouldPersistTaps="handled">
-      <Text accessibilityRole="header" style={s.title}>
-        Reportes de {account.nombre}
-      </Text>
+    <ScrollView style={containerStyle} keyboardShouldPersistTaps="handled">
+      <ScreenTitle title="Reportes" module="reportes" />
 
-      <View style={s.actions} accessibilityRole="radiogroup">
-        {MODES.map(({ mode, label }) => (
-          <Chip
-            key={mode}
-            label={label}
-            accessibilityLabel={`Modo ${label}`}
-            selected={view.mode === mode}
-            onPress={() => selectMode(mode)}
-          />
-        ))}
-      </View>
+      <Segmented
+        tone="reportes"
+        accessibilityLabel="Período del reporte"
+        value={view.mode}
+        onChange={selectMode}
+        options={MODES.map(({ mode, label }) => ({
+          value: mode,
+          label,
+          accessibilityLabel: `Modo ${label}`,
+        }))}
+      />
 
       {title !== null ? (
         <View style={styles.periodBar}>
-          <Button
-            label="‹"
-            accessibilityLabel={`${unit} anterior`}
+          <MonthArrow
+            glyph="‹"
+            label={`${unit} anterior`}
             disabled={prevDisabled}
             onPress={() => shiftPeriod(-1)}
           />
           <Text accessibilityRole="header" style={styles.periodTitle}>
             {title}
           </Text>
-          <Button
-            label="›"
-            accessibilityLabel={`${unit} siguiente`}
+          <MonthArrow
+            glyph="›"
+            label={`${unit} siguiente`}
             disabled={nextDisabled}
             onPress={() => shiftPeriod(1)}
           />
         </View>
       ) : (
-        <View>
+        <View style={styles.rangeBlock}>
           <View style={styles.rangeRow}>
-            <TextInput
-              accessibilityLabel="Desde"
-              placeholder="Desde AAAA-MM-DD"
-              value={desdeText}
-              onChangeText={setDesdeText}
-              maxLength={10}
-              autoCapitalize="none"
-              style={[s.input, styles.rangeInput]}
-            />
-            <TextInput
-              accessibilityLabel="Hasta"
-              placeholder="Hasta AAAA-MM-DD"
-              value={hastaText}
-              onChangeText={setHastaText}
-              maxLength={10}
-              autoCapitalize="none"
-              style={[s.input, styles.rangeInput]}
-            />
+            {(['desde', 'hasta'] as const).map((field) => (
+              <DateField
+                key={field}
+                testID={`report-${field}`}
+                label={field === 'desde' ? 'Desde' : 'Hasta'}
+                value={pending[field]}
+                display={formatDateEs(pending[field])}
+                onPress={() => setPicker(field)}
+              />
+            ))}
           </View>
           {rangeError ? (
             <Text accessibilityRole="alert" style={styles.error}>
               {rangeError}
             </Text>
           ) : null}
-          <View style={s.actions}>
+          <View style={styles.applyRow}>
             <Button label="Aplicar" onPress={applyRange} />
           </View>
           {range ? (
-            <Text style={s.rowSubtitle}>
+            <Text style={styles.rangeCaption}>
               Del {formatDateEs(range.desde)} al {formatDateEs(range.hasta)}
             </Text>
           ) : null}
         </View>
       )}
 
-      {shown === null ? (
-        <ActivityIndicator size="large" testID="reports-loading" style={styles.spacer} />
+      <DatePickerSheet
+        visible={picker !== null}
+        value={picker ? pending[picker] : ''}
+        today={todayLocal()}
+        onSelect={(date) => {
+          if (picker) setPending((previous) => ({ ...previous, [picker]: date }));
+          setRangeError(null);
+          setPicker(null);
+        }}
+        onClose={() => setPicker(null)}
+      />
+
+      {range === null ? null : shown === null ? (
+        <LoadingState text="Calculando tu resumen…" testID="reports-loading" />
       ) : shown.status === 'error' ? (
         <ErrorBox
           message={shown.message}
@@ -325,7 +373,11 @@ export default function ReportsScreen({
           retryAccessibilityLabel="Reintentar reportes"
         />
       ) : shown.summary.cantidad === 0 ? (
-        <Text style={s.muted}>Sin movimientos en este período</Text>
+        <EmptyState
+          module="reportes"
+          glyph="📊"
+          message={`Sin movimientos en este período. Prueba con ${EMPTY_HINT[view.mode]}.`}
+        />
       ) : (
         <ReportContent
           summary={shown.summary}
@@ -334,6 +386,8 @@ export default function ReportsScreen({
           onOpenHistory={onOpenHistory}
           exportState={exportState !== null && exportState.key === loadKey ? exportState : null}
           onExport={(format) => exportAs(shown.summary, format)}
+          seriesView={seriesView}
+          onSeriesViewChange={setSeriesView}
         />
       )}
     </ScrollView>
@@ -347,6 +401,8 @@ function ReportContent({
   onOpenHistory,
   exportState,
   onExport,
+  seriesView,
+  onSeriesViewChange,
 }: {
   summary: ReportSummary;
   categories: CategoryReport;
@@ -354,8 +410,11 @@ function ReportContent({
   onOpenHistory: (filters: HistoryFilters) => void;
   exportState: ExportState | null;
   onExport: (format: ExportFormat) => void;
+  seriesView: SeriesView;
+  onSeriesViewChange: (view: SeriesView) => void;
 }) {
   const { desde, hasta } = summary;
+  const { fontScale } = useWindowDimensions();
   const loadingExport = exportState?.status === 'loading';
   return (
     <View>
@@ -365,60 +424,42 @@ function ReportContent({
           accessibilityRole="button"
           accessibilityLabel={`Ingresos ${formatCents(summary.ingresos)}. Ver movimientos`}
           onPress={() => onOpenHistory({ tipo: 'ingreso', desde, hasta })}
-          style={styles.card}
+          style={({ pressed }) => [styles.cardButton, pressed && styles.pressed]}
         >
-          <Text style={s.rowSubtitle}>Ingresos</Text>
-          <Text style={[styles.cardValue, styles.income]}>{formatCents(summary.ingresos)}</Text>
+          <SummaryTile
+            kind="income"
+            label="Ingresos"
+            value={`+${formatCents(summary.ingresos)}`}
+            hint="Ver movimientos ›"
+          />
         </Pressable>
         <Pressable
           testID="report-card-gastos"
           accessibilityRole="button"
           accessibilityLabel={`Gastos ${formatCents(summary.gastos)}. Ver movimientos`}
           onPress={() => onOpenHistory({ tipo: 'gasto', desde, hasta })}
-          style={styles.card}
+          style={({ pressed }) => [styles.cardButton, pressed && styles.pressed]}
         >
-          <Text style={s.rowSubtitle}>Gastos</Text>
-          <Text style={[styles.cardValue, styles.expense]}>{formatCents(summary.gastos)}</Text>
+          <SummaryTile
+            kind="expense"
+            label="Gastos"
+            value={`-${formatCents(summary.gastos)}`}
+            hint="Ver movimientos ›"
+          />
         </Pressable>
-        <View
-          testID="report-card-balance"
-          accessible
-          accessibilityLabel={`Balance ${formatCents(summary.balance)}`}
-          style={styles.card}
-        >
-          <Text style={s.rowSubtitle}>Balance</Text>
-          <Text style={styles.cardValue}>{formatCents(summary.balance)}</Text>
-        </View>
       </View>
-
-      <View style={s.actions}>
-        <Button
-          label={loadingExport && exportState.format === 'csv' ? 'Exportando…' : 'Exportar CSV'}
-          accessibilityLabel="Exportar CSV"
-          disabled={loadingExport}
-          onPress={() => onExport('csv')}
-        />
-        <Button
-          label={loadingExport && exportState.format === 'pdf' ? 'Exportando…' : 'Exportar PDF'}
-          accessibilityLabel="Exportar PDF"
-          disabled={loadingExport}
-          onPress={() => onExport('pdf')}
-        />
-        {loadingExport ? (
-          <ActivityIndicator testID="export-loading" style={styles.exportSpinner} />
-        ) : null}
+      <View
+        testID="report-card-balance"
+        accessible
+        accessibilityLabel={`Balance ${formatCents(summary.balance)}`}
+        style={styles.balance}
+      >
+        <SummaryTile kind="neutral" label="Balance" value={formatCents(summary.balance)} wide />
       </View>
-      {exportState?.status === 'error' ? (
-        <ErrorBox
-          message={exportState.message}
-          onRetry={() => onExport(exportState.format)}
-          retryLabel="Reintentar exportación"
-          retryAccessibilityLabel="Reintentar exportación"
-        />
-      ) : null}
 
       <CategoryBreakdown
         title="Gastos por categoría"
+        glyph="↓"
         emptyText="Sin gastos en este período"
         noun="gastos"
         group={categories.gastos}
@@ -426,159 +467,434 @@ function ReportContent({
       />
       <CategoryBreakdown
         title="Ingresos por categoría"
+        glyph="↑"
         emptyText="Sin ingresos en este período"
         noun="ingresos"
         group={categories.ingresos}
         onOpen={(categoryId) => onOpenHistory({ categoryId, desde, hasta })}
       />
 
-      {period ? <PeriodSeries report={period} /> : null}
+      {period ? (
+        <PeriodSeries
+          report={period}
+          seriesView={seriesView}
+          onSeriesViewChange={onSeriesViewChange}
+        />
+      ) : null}
+
+      <View style={styles.exportSection}>
+        <Text accessibilityRole="header" style={styles.groupTitle}>
+          Exportar este período
+        </Text>
+        <Text style={styles.exportText}>
+          Descarga los movimientos de este período en un archivo para guardarlo o compartirlo.
+        </Text>
+        <View style={[styles.exportButtons, fontScale >= 1.3 && styles.exportButtonsColumn]}>
+          <View style={styles.exportButton}>
+            <Button
+              label={loadingExport && exportState.format === 'csv' ? 'Exportando…' : 'Exportar CSV'}
+              accessibilityLabel="Exportar CSV"
+              disabled={loadingExport}
+              onPress={() => onExport('csv')}
+            />
+          </View>
+          <View style={styles.exportButton}>
+            <Button
+              label={loadingExport && exportState.format === 'pdf' ? 'Exportando…' : 'Exportar PDF'}
+              accessibilityLabel="Exportar PDF"
+              disabled={loadingExport}
+              onPress={() => onExport('pdf')}
+            />
+          </View>
+        </View>
+        {loadingExport ? (
+          <ActivityIndicator
+            testID="export-loading"
+            color={colors.brand700}
+            style={styles.exportSpinner}
+          />
+        ) : null}
+        {exportState?.status === 'error' ? (
+          <ErrorBox
+            message={exportState.message}
+            onRetry={() => onExport(exportState.format)}
+            retryLabel="Reintentar exportación"
+            retryAccessibilityLabel="Reintentar exportación"
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
 
 function CategoryBreakdown({
   title,
+  glyph,
   emptyText,
   noun,
   group,
   onOpen,
 }: {
   title: string;
+  glyph: string;
   emptyText: string;
   noun: string;
   group: CategoryReportGroup;
   onOpen: (categoryId: string) => void;
 }) {
   const max = maxCents(group.items.map((item) => item.total));
+  const income = glyph === '↑';
   return (
     <View>
-      <Text accessibilityRole="header" style={s.section}>
-        {title}
-      </Text>
+      <View style={styles.groupHeader}>
+        <View
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+          style={[
+            styles.groupBubble,
+            { backgroundColor: income ? colors.incomeSoft : colors.expenseSoft },
+          ]}
+        >
+          <Text
+            style={[
+              styles.groupBubbleGlyph,
+              { color: income ? colors.incomeText : colors.expenseText },
+            ]}
+          >
+            {glyph}
+          </Text>
+        </View>
+        <Text accessibilityRole="header" style={styles.groupTitle}>
+          {title}
+        </Text>
+      </View>
       {group.items.length === 0 ? (
         <Text style={s.muted}>{emptyText}</Text>
       ) : (
-        group.items.map((item) => {
-          const percent = formatPercent(item.total, group.total);
-          const width = percent === null ? 0 : scaleUnits(item.total, max, 1000) / 10;
-          const color = HEX_COLOR.test(item.color) ? item.color : FALLBACK_COLOR;
-          return (
-            <Pressable
-              key={item.categoryId}
-              testID={`report-category-${item.categoryId}`}
-              accessibilityRole="button"
-              accessibilityLabel={`${item.nombre}${item.archivada ? ' (archivada)' : ''}: ${formatCents(item.total)}${percent ? `, ${percent} de los ${noun}` : ''}. Ver movimientos`}
-              onPress={() => onOpen(item.categoryId)}
-              style={s.row}
-            >
-              <View style={styles.categoryHeader}>
-                <Text style={[s.rowTitle, styles.categoryName]} numberOfLines={1}>
-                  {item.nombre}
-                  {item.archivada ? ' (archivada)' : ''}
-                </Text>
-                <Text style={s.rowTitle}>{formatCents(item.total)}</Text>
-              </View>
-              {percent !== null ? (
-                <>
-                  <Text style={s.rowSubtitle}>{percent}</Text>
-                  <View style={styles.barTrack}>
+        <Card style={styles.groupCard}>
+          {group.items.map((item, index) => {
+            const percent = formatPercent(item.total, group.total);
+            // Solo presentación: el ancho es proporcional a la categoría mayor del grupo.
+            const width = percent === null ? 0 : scaleUnits(item.total, max, 1000) / 10;
+            return (
+              <Pressable
+                key={item.categoryId}
+                testID={`report-category-${item.categoryId}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.nombre}${item.archivada ? ' (archivada)' : ''}: ${formatCents(item.total)}${percent ? `, ${percent} de los ${noun}` : ''}. Ver movimientos`}
+                onPress={() => onOpen(item.categoryId)}
+                style={({ pressed }) => [
+                  styles.categoryRow,
+                  index > 0 && styles.categoryDivider,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <View style={styles.categoryTop}>
+                  <CategoryIcon
+                    icono={item.icono}
+                    color={item.color}
+                    size={32}
+                    dimmed={item.archivada}
+                  />
+                  <Text style={styles.categoryName} numberOfLines={2} ellipsizeMode="clip">
+                    {item.nombre}
+                    {item.archivada ? ' (archivada)' : ''}
+                  </Text>
+                  <Text style={styles.categoryTotal}>{formatCents(item.total)}</Text>
+                </View>
+                {percent !== null ? (
+                  <View style={styles.categoryBottom}>
+                    <Text style={styles.percent}>{percent}</Text>
                     <View
-                      testID={`report-bar-${item.categoryId}`}
-                      style={[styles.bar, { width: `${width}%`, backgroundColor: color }]}
-                    />
+                      importantForAccessibility="no"
+                      accessibilityElementsHidden
+                      style={styles.barTrack}
+                    >
+                      <View
+                        testID={`report-bar-${item.categoryId}`}
+                        style={[
+                          styles.bar,
+                          {
+                            width: `${width}%`,
+                            backgroundColor: categoryFill(item.color),
+                          },
+                          item.total > 0 && { minWidth: MIN_BAR_DP },
+                        ]}
+                      />
+                    </View>
                   </View>
-                </>
-              ) : null}
-            </Pressable>
-          );
-        })
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </Card>
       )}
     </View>
   );
 }
 
-function PeriodSeries({ report }: { report: PeriodReport }) {
+function PeriodSeries({
+  report,
+  seriesView,
+  onSeriesViewChange,
+}: {
+  report: PeriodReport;
+  seriesView: SeriesView;
+  onSeriesViewChange: (view: SeriesView) => void;
+}) {
+  const { fontScale } = useWindowDimensions();
+  const [layoutWidth, setLayoutWidth] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
   const max = maxCents(report.points.flatMap((point) => [point.ingresos, point.gastos]));
   const height = (value: number) => {
     const units = scaleUnits(value, max, COLUMN_HEIGHT);
-    return value > 0 ? Math.max(units, 2) : 0;
+    return value > 0 ? Math.max(units, MIN_BAR_DP) : 0;
   };
+  const stacked = fontScale >= 1.15;
   return (
-    <View>
-      <Text accessibilityRole="header" style={s.section}>
+    <Card style={styles.seriesCard}>
+      <Text accessibilityRole="header" style={styles.groupTitle}>
         {report.group === 'month' ? 'Evolución mensual' : 'Evolución anual'}
       </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator>
-        {report.points.map((point) => (
-          <View
-            key={point.periodo}
-            testID={`report-period-${point.periodo}`}
-            accessible
-            accessibilityLabel={`${periodLabel(point.periodo)}: ingresos ${formatCents(point.ingresos)}, gastos ${formatCents(point.gastos)}`}
-            style={styles.column}
+      <View style={styles.seriesToggle}>
+        <Segmented
+          accessibilityLabel="Vista de la evolución"
+          value={seriesView}
+          onChange={onSeriesViewChange}
+          options={[
+            { value: 'chart', label: 'Gráfico' },
+            { value: 'table', label: 'Tabla' },
+          ]}
+        />
+      </View>
+      <View style={styles.legend}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, { backgroundColor: colors.income }]} />
+          <Text style={styles.legendText}>↑ Ingresos</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendSwatch, { backgroundColor: colors.expense }]} />
+          <Text style={styles.legendText}>↓ Gastos</Text>
+        </View>
+      </View>
+
+      {seriesView === 'chart' ? (
+        <>
+          <ScrollView
+            testID="period-scroll"
+            horizontal
+            showsHorizontalScrollIndicator
+            onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}
+            onContentSizeChange={(width) => setContentWidth(width)}
           >
-            <View style={styles.bars}>
+            {report.points.map((point) => (
               <View
-                testID={`report-period-ingresos-${point.periodo}`}
-                style={[styles.periodBarFill, styles.incomeBg, { height: height(point.ingresos) }]}
-              />
-              <View
-                testID={`report-period-gastos-${point.periodo}`}
-                style={[styles.periodBarFill, styles.expenseBg, { height: height(point.gastos) }]}
-              />
+                key={point.periodo}
+                testID={`report-period-${point.periodo}`}
+                accessible
+                accessibilityLabel={`${periodLabel(point.periodo)}: ingresos ${formatCents(point.ingresos)}, gastos ${formatCents(point.gastos)}`}
+                style={styles.column}
+              >
+                <Text allowFontScaling={false} style={[styles.amount, styles.income]}>
+                  +{formatCompactCents(point.ingresos)}
+                </Text>
+                <Text allowFontScaling={false} style={[styles.amount, styles.expense]}>
+                  −{formatCompactCents(point.gastos)}
+                </Text>
+                <View style={styles.bars}>
+                  <View
+                    testID={`report-period-ingresos-${point.periodo}`}
+                    style={[
+                      styles.periodBarFill,
+                      { backgroundColor: colors.income, height: height(point.ingresos) },
+                    ]}
+                  />
+                  <View
+                    testID={`report-period-gastos-${point.periodo}`}
+                    style={[
+                      styles.periodBarFill,
+                      { backgroundColor: colors.expense, height: height(point.gastos) },
+                    ]}
+                  />
+                </View>
+                <Text allowFontScaling={false} style={styles.periodLabel}>
+                  {periodLabel(point.periodo)}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+          {contentWidth > layoutWidth && layoutWidth > 0 ? (
+            <Text style={styles.scrollHint}>Desliza para ver más períodos.</Text>
+          ) : null}
+        </>
+      ) : (
+        <View testID="period-table">
+          {!stacked ? (
+            <View style={styles.tableRow}>
+              <Text style={[styles.tableHead, styles.tablePeriod]}>Período</Text>
+              <Text style={[styles.tableHead, styles.tableCell]}>Ingresos</Text>
+              <Text style={[styles.tableHead, styles.tableCell]}>Gastos</Text>
+              <Text style={[styles.tableHead, styles.tableCell]}>Balance</Text>
             </View>
-            <Text allowFontScaling={false} style={styles.periodLabel}>
-              {periodLabel(point.periodo)}
-            </Text>
-            <Text allowFontScaling={false} style={[styles.amount, styles.income]}>
-              +{formatCompactCents(point.ingresos)}
-            </Text>
-            <Text allowFontScaling={false} style={[styles.amount, styles.expense]}>
-              −{formatCompactCents(point.gastos)}
-            </Text>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
+          ) : null}
+          {report.points.map((point) => {
+            const label = `${periodLabel(point.periodo)}: ingresos ${formatCents(point.ingresos)}, gastos ${formatCents(point.gastos)}, balance ${formatCents(point.balance)}`;
+            const balanceStyle = [styles.tableValue, point.balance < 0 && styles.expense];
+            return (
+              <View
+                key={point.periodo}
+                testID={`report-table-${point.periodo}`}
+                accessible
+                accessibilityLabel={label}
+                style={[styles.tableRow, styles.tableRowDivider, stacked && styles.tableStacked]}
+              >
+                {stacked ? (
+                  <>
+                    <View style={styles.tableTop}>
+                      <Text style={styles.tablePeriodText}>{periodLabel(point.periodo)}</Text>
+                      <Text style={[balanceStyle, styles.tableBalanceStrong]}>
+                        {formatCents(point.balance)}
+                      </Text>
+                    </View>
+                    <Text style={styles.tableDetail}>
+                      Ingresos +{formatCents(point.ingresos)} · Gastos -{formatCents(point.gastos)}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.tablePeriodText, styles.tablePeriod]}>
+                      {periodLabel(point.periodo)}
+                    </Text>
+                    <Text style={[styles.tableValue, styles.tableCell, styles.income]}>
+                      {formatCents(point.ingresos)}
+                    </Text>
+                    <Text style={[styles.tableValue, styles.tableCell, styles.expense]}>
+                      {formatCents(point.gastos)}
+                    </Text>
+                    <Text style={[balanceStyle, styles.tableCell, styles.tableBalanceStrong]}>
+                      {formatCents(point.balance)}
+                    </Text>
+                  </>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
+  pressed: { opacity: 0.85 },
   periodBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 12,
+    minHeight: sizes.touchMin,
+    marginTop: 8,
   },
-  periodTitle: { fontSize: 18, fontWeight: '700' },
-  rangeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  rangeInput: { flex: 1 },
-  error: { color: '#b3261e', marginBottom: 4 },
-  exportSpinner: { alignSelf: 'center' },
-  spacer: { marginVertical: 16 },
-  cards: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  card: {
-    flexGrow: 1,
-    flexBasis: 100,
-    borderWidth: 1,
-    borderColor: '#dddddd',
-    borderRadius: 8,
-    padding: 12,
-    minHeight: 44,
+  periodTitle: {
+    ...typography.h2,
+    fontWeight: '800',
+    flex: 1,
+    textAlign: 'center',
+    color: colors.text,
   },
-  cardValue: { fontSize: 18, fontWeight: '700' },
-  income: { color: '#2e7d32' },
-  expense: { color: '#b3261e' },
-  incomeBg: { backgroundColor: '#2e7d32' },
-  expenseBg: { backgroundColor: '#b3261e' },
-  categoryHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  categoryName: { flex: 1 },
-  barTrack: { height: 8, backgroundColor: '#eeeeee', borderRadius: 4, marginTop: 6 },
-  bar: { height: 8, borderRadius: 4 },
+  rangeBlock: { marginTop: 12 },
+  rangeRow: { flexDirection: 'row', gap: 8 },
+  applyRow: { marginTop: 8, alignItems: 'flex-start' },
+  rangeCaption: { ...typography.small, color: colors.text2, textAlign: 'center', marginTop: 8 },
+  error: { ...typography.small, fontWeight: '700', color: colors.expenseText, marginTop: 4 },
+  cards: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  cardButton: { flex: 1, minHeight: sizes.touchMin },
+  balance: { marginTop: 8 },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  groupBubble: {
+    width: 24,
+    height: 24,
+    borderRadius: radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupBubbleGlyph: { fontSize: 14, lineHeight: 18, fontWeight: '800' },
+  groupTitle: { ...typography.h2, color: colors.text, flexShrink: 1 },
+  groupCard: { paddingVertical: 0, paddingHorizontal: 12 },
+  categoryRow: { minHeight: 56, paddingVertical: 8, justifyContent: 'center' },
+  categoryDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  categoryTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  categoryName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  categoryTotal: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: colors.text,
+    flexShrink: 0,
+    ...tabularNums,
+  },
+  categoryBottom: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 40 },
+  percent: { ...typography.small, fontWeight: '700', color: colors.text2, minWidth: 52 },
+  barTrack: {
+    flex: 1,
+    height: sizes.categoryBar,
+    borderRadius: sizes.categoryBar / 2,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+  },
+  bar: { height: sizes.categoryBar, borderRadius: sizes.categoryBar / 2 },
+  seriesCard: { marginTop: 24, padding: 12 },
+  seriesToggle: { marginTop: 8 },
+  legend: { flexDirection: 'row', gap: 16, marginTop: 8, marginBottom: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendSwatch: { width: 12, height: 12, borderRadius: 3 },
+  legendText: { ...typography.small, fontWeight: '700', color: colors.text },
   column: { width: 56, alignItems: 'center', marginRight: 4 },
-  bars: { height: COLUMN_HEIGHT, flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
-  periodBarFill: { width: 18, borderTopLeftRadius: 2, borderTopRightRadius: 2 },
-  periodLabel: { fontSize: 11, marginTop: 4, color: '#555555' },
-  amount: { fontSize: 10 },
+  bars: {
+    height: COLUMN_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  periodBarFill: { width: 18, borderTopLeftRadius: 6, borderTopRightRadius: 6 },
+  periodLabel: { fontSize: 12, lineHeight: 16, marginTop: 4, color: colors.text2 },
+  amount: { fontSize: 10, lineHeight: 12, fontWeight: '800' },
+  income: { color: colors.incomeText },
+  expense: { color: colors.expenseText },
+  scrollHint: { ...typography.small, color: colors.text3, marginTop: 8 },
+  tableRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8 },
+  tableRowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  tableStacked: { flexDirection: 'column', alignItems: 'stretch' },
+  tableTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  tableHead: { fontSize: 12, lineHeight: 16, fontWeight: '700', color: colors.text2 },
+  tablePeriod: { flex: 1.2 },
+  tableCell: { flex: 1, textAlign: 'right' },
+  tablePeriodText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: colors.text },
+  tableValue: { fontSize: 14, lineHeight: 20, color: colors.text, ...tabularNums },
+  tableBalanceStrong: { fontWeight: '700' },
+  tableDetail: { ...typography.small, color: colors.text2 },
+  exportSection: {
+    marginTop: 24,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  exportText: { ...typography.body, color: colors.text2, marginTop: 4, marginBottom: 12 },
+  exportButtons: { flexDirection: 'row', gap: 8 },
+  exportButtonsColumn: { flexDirection: 'column' },
+  exportButton: { flex: 1 },
+  exportSpinner: { alignSelf: 'center', marginTop: 8 },
 });

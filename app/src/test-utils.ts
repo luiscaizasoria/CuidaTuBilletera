@@ -12,6 +12,16 @@ import { AuthError } from './lib/auth-types';
 
 // El mock de jest-expo mide 750 dp y fontScale 2, lo que activa siempre el modo de dos filas de la
 // barra de contexto. Las pruebas fijan una ventana normal salvo que prueben ese modo.
+// Con la caché de Jest fría (CI, primera corrida, máquina cargada) el primer render de las suites
+// pesadas transforma React Native en línea y supera el límite por defecto de 5 s por prueba o gancho
+// y el de 1 s de `findBy`/`waitFor`. Las suites pesadas llaman a esta función una vez, al inicio:
+// solo ajusta los límites, no cambia ninguna aserción ni silencia pruebas.
+export function relaxTimeoutsForColdCache() {
+  jest.setTimeout(30_000);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@testing-library/react-native').configure({ asyncUtilTimeout: 5000 });
+}
+
 export function mockWindow(width = 411, fontScale = 1) {
   // `import *` crea una copia del módulo con la interoperabilidad de Babel: se espía el original.
   // eslint-disable-next-line @typescript-eslint/no-require-imports

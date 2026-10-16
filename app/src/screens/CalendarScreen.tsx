@@ -1,9 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import {
+  CALENDAR_CELL_GAP,
   MONTH_NAMES,
   buildMonthGrid,
+  calendarCellWidth,
   dateKey,
   defaultDay,
   initialMonthFor,
@@ -29,7 +40,17 @@ import type {
 } from '../lib/resources-api';
 import { resourceErrorMessage } from '../lib/resources-messages';
 import TransactionRow, { categoryMap } from './TransactionRow';
-import { Button, ErrorBox, screenStyles as s } from './ui';
+import { colors, moduleColors, radii, sizes, typography } from '../theme/tokens';
+import {
+  Button,
+  Card,
+  ErrorBox,
+  MonthArrow,
+  ScreenTitle,
+  SummaryTile,
+  useScreenContainerStyle,
+  screenStyles as s,
+} from './ui';
 
 export const CALENDAR_PAGE_SIZE = 20;
 
@@ -98,6 +119,9 @@ export default function CalendarScreen({
   bottomInset?: number;
 }) {
   const { authorizedCall } = useAuth();
+  const containerStyle = useScreenContainerStyle();
+  const { width: windowWidth } = useWindowDimensions();
+  const cellWidth = calendarCellWidth(windowWidth);
   const today = todayLocal();
   const [view, setView] = useState(() => initialView(initialMonth, initialDay, today));
   const [monthState, setMonthState] = useState<MonthState>({ status: 'loading' });
@@ -204,7 +228,11 @@ export default function CalendarScreen({
 
   function goToMonth(delta: number) {
     const next = shiftMonth(ym.year, ym.month, delta);
-    if (next) changeView(next, defaultDay(next.year, next.month, today));
+    if (next) {
+      changeView(next, defaultDay(next.year, next.month, today));
+      // El foco queda en la flecha: se anuncia el mes nuevo (docs/007 §5.11 D.1).
+      AccessibilityInfo.announceForAccessibility?.(monthTitle(next.year, next.month));
+    }
   }
 
   async function loadMore() {
@@ -248,200 +276,283 @@ export default function CalendarScreen({
   const hasMore = dayData?.status === 'ready' && dayData.items.length < dayData.total;
 
   const totals = monthTotals([...entries.values()]);
-  const showTotal = (cents: number | null) => (cents === null ? '—' : formatCents(cents));
+  const monthName = MONTH_NAMES[ym.month - 1]!.toLowerCase();
+  const income = totals.ingresos === null ? '—' : `+${formatCents(totals.ingresos)}`;
+  const expense = totals.gastos === null ? '—' : `-${formatCents(totals.gastos)}`;
+  const net = totals.neto === null ? '—' : formatCents(totals.neto);
+  const spoken = (cents: number | null) => (cents === null ? 'no disponible' : formatCents(cents));
+  const dayTitle = selectedParsed ? dayLabel(selectedParsed.day, selectedParsed.month) : day;
+  const cellSize = { width: cellWidth, height: sizes.calendarCellHeight };
 
   return (
     <ScrollView
-      style={s.container}
+      style={containerStyle}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={bottomInset ? { paddingBottom: bottomInset } : undefined}
     >
-      <Text accessibilityRole="header" style={s.title}>
-        Calendario de {account.nombre}
-      </Text>
+      <ScreenTitle title="Calendario" module="calendario" />
 
       <View style={styles.monthBar}>
-        <Button
-          label="‹"
-          accessibilityLabel="Mes anterior"
+        <MonthArrow
+          glyph="‹"
+          label="Mes anterior"
           disabled={prevDisabled}
           onPress={() => goToMonth(-1)}
         />
         <Text accessibilityRole="header" style={styles.monthTitle}>
           {monthTitle(ym.year, ym.month)}
         </Text>
-        <Button
-          label="›"
-          accessibilityLabel="Mes siguiente"
+        <MonthArrow
+          glyph="›"
+          label="Mes siguiente"
           disabled={nextDisabled}
           onPress={() => goToMonth(1)}
         />
       </View>
 
-      <View style={styles.weekRow}>
-        {weekdayHeaders().map((header, index) => (
-          <Text
-            key={index}
-            accessibilityLabel={header.long}
-            style={styles.weekHeader}
-            allowFontScaling={false}
-          >
-            {header.short}
-          </Text>
+      <View style={styles.grid}>
+        <View style={styles.weekRow}>
+          {weekdayHeaders().map((header, index) => (
+            <Text
+              key={index}
+              accessibilityLabel={header.long}
+              style={[styles.weekHeader, { width: cellWidth }]}
+              allowFontScaling={false}
+            >
+              {header.short}
+            </Text>
+          ))}
+        </View>
+        {grid.map((week, row) => (
+          <View key={row} style={styles.weekRow}>
+            {week.map((cellDay, col) => {
+              if (cellDay === null) return <View key={col} style={cellSize} />;
+              const key = dateKey(ym.year, ym.month, cellDay);
+              const entry = entries.get(key);
+              const selected = key === day;
+              const isToday = key === today;
+              return (
+                <Pressable
+                  key={col}
+                  testID={`calendar-cell-${key}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={cellLabel(cellDay, ym.month, entry, isToday)}
+                  accessibilityState={{ selected }}
+                  onPress={() => changeView(ym, key)}
+                  style={({ pressed }) => [
+                    styles.cell,
+                    cellSize,
+                    isToday && styles.cellToday,
+                    selected && styles.cellSelected,
+                    isToday && selected && styles.cellTodaySelected,
+                    pressed && styles.cellPressed,
+                  ]}
+                >
+                  <Text
+                    allowFontScaling={false}
+                    style={[
+                      styles.dayNumber,
+                      isToday && styles.dayNumberToday,
+                      selected && styles.onSelected,
+                    ]}
+                  >
+                    {cellDay}
+                  </Text>
+                  {entry && entry.ingresos > 0 ? (
+                    <Text
+                      allowFontScaling={false}
+                      numberOfLines={1}
+                      style={[styles.amount, selected ? styles.onSelected : styles.income]}
+                    >
+                      +{formatCompactCents(entry.ingresos)}
+                    </Text>
+                  ) : null}
+                  {entry && entry.gastos > 0 ? (
+                    <Text
+                      allowFontScaling={false}
+                      numberOfLines={1}
+                      style={[styles.amount, selected ? styles.onSelected : styles.expense]}
+                    >
+                      −{formatCompactCents(entry.gastos)}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
         ))}
       </View>
-      {grid.map((week, row) => (
-        <View key={row} style={styles.weekRow}>
-          {week.map((cellDay, col) => {
-            if (cellDay === null) return <View key={col} style={styles.cell} />;
-            const key = dateKey(ym.year, ym.month, cellDay);
-            const entry = entries.get(key);
-            const selected = key === day;
-            const isToday = key === today;
-            return (
-              <Pressable
-                key={col}
-                testID={`calendar-cell-${key}`}
-                accessibilityRole="button"
-                accessibilityLabel={cellLabel(cellDay, ym.month, entry, isToday)}
-                accessibilityState={{ selected }}
-                onPress={() => changeView(ym, key)}
-                style={[
-                  styles.cell,
-                  styles.cellActive,
-                  isToday && styles.cellToday,
-                  selected && styles.cellSelected,
-                ]}
-              >
-                <Text
-                  allowFontScaling={false}
-                  style={[styles.dayNumber, isToday && styles.todayText]}
-                >
-                  {cellDay}
-                </Text>
-                {entry && entry.ingresos > 0 ? (
-                  <Text
-                    allowFontScaling={false}
-                    numberOfLines={1}
-                    style={[styles.amount, styles.income]}
-                  >
-                    +{formatCompactCents(entry.ingresos)}
-                  </Text>
-                ) : null}
-                {entry && entry.gastos > 0 ? (
-                  <Text
-                    allowFontScaling={false}
-                    numberOfLines={1}
-                    style={[styles.amount, styles.expense]}
-                  >
-                    −{formatCompactCents(entry.gastos)}
-                  </Text>
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      ))}
 
       {month === null ? (
-        <ActivityIndicator size="small" testID="calendar-loading" style={styles.spacer} />
+        <ActivityIndicator
+          size="small"
+          color={colors.brand700}
+          testID="calendar-loading"
+          style={styles.spacer}
+        />
       ) : month.status === 'error' ? (
-        <ErrorBox
-          message={month.message}
-          onRetry={() => setMonthReload((n) => n + 1)}
-          retryAccessibilityLabel="Reintentar calendario"
-        />
+        <View style={styles.block}>
+          <ErrorBox
+            message={month.message}
+            onRetry={() => setMonthReload((n) => n + 1)}
+            retryAccessibilityLabel="Reintentar calendario"
+          />
+        </View>
+      ) : entries.size === 0 ? (
+        <Text style={[s.muted, styles.block]}>No hay movimientos en este mes.</Text>
       ) : (
-        <>
-          {entries.size === 0 ? (
-            <Text style={s.muted}>No hay movimientos en este mes</Text>
-          ) : (
-            <Text style={s.rowSubtitle}>
-              Mes: Ingresos {showTotal(totals.ingresos)} · Gastos {showTotal(totals.gastos)} · Neto{' '}
-              {showTotal(totals.neto)}
-            </Text>
-          )}
-        </>
+        <View
+          testID="month-summary"
+          accessible
+          accessibilityLabel={`Resumen de ${monthName}: ingresos ${spoken(totals.ingresos)}, gastos ${spoken(totals.gastos)}, neto ${spoken(totals.neto)}`}
+          style={styles.block}
+        >
+          <Text style={styles.summaryTitle}>Resumen de {monthName}</Text>
+          <View style={styles.summaryRow}>
+            <SummaryTile kind="income" label="Ingresos" value={income} />
+            <SummaryTile kind="expense" label="Gastos" value={expense} />
+          </View>
+          <View style={styles.summaryNet}>
+            <SummaryTile kind="neutral" label="Neto" value={net} wide />
+          </View>
+        </View>
       )}
 
-      <Text accessibilityRole="header" style={s.section}>
-        {selectedParsed ? dayLabel(selectedParsed.day, selectedParsed.month) : day}
-      </Text>
-      {month?.status === 'ready' ? (
-        <Text>
-          {selectedEntry
-            ? `Ingresos ${formatCents(selectedEntry.ingresos)} · Gastos ${formatCents(selectedEntry.gastos)} · Neto ${formatCents(selectedEntry.ingresos - selectedEntry.gastos)}`
-            : 'Sin movimientos este día'}
+      <Card style={[styles.dayCard, styles.block]}>
+        <Text accessibilityRole="header" style={styles.dayTitle}>
+          {dayTitle}
         </Text>
-      ) : null}
-      <View style={s.actions}>
-        <Button
-          label="Nuevo movimiento"
-          variant="primary"
-          disabled={!canCreate}
-          onPress={() => onNewTransaction(day)}
-        />
-      </View>
-
-      {dayData === null ? (
-        <ActivityIndicator size="large" testID="day-loading" style={styles.spacer} />
-      ) : dayData.status === 'error' ? (
-        <ErrorBox
-          message={dayData.message}
-          onRetry={() => setDayReload((n) => n + 1)}
-          retryAccessibilityLabel="Reintentar movimientos del día"
-        />
-      ) : dayData.items.length === 0 ? (
-        <Text style={s.muted}>Este día no tiene movimientos registrados</Text>
-      ) : (
-        <>
-          {dayData.items.map((transaction) => (
-            <TransactionRow
-              key={transaction.id}
-              transaction={transaction}
-              category={dayData.categories.get(transaction.categoryId)}
-              onPress={() => onOpenTransaction(transaction)}
-            />
-          ))}
-          {moreError ? (
-            <Text accessibilityRole="alert" style={styles.error}>
-              {moreError}
+        {month?.status === 'ready' && selectedEntry ? (
+          <Text
+            style={styles.dayTotals}
+            accessibilityLabel={`Ingresos ${formatCents(selectedEntry.ingresos)}, gastos ${formatCents(selectedEntry.gastos)}, neto ${formatCents(selectedEntry.ingresos - selectedEntry.gastos)}`}
+          >
+            <Text style={styles.dayIncome}>Ingresos +{formatCents(selectedEntry.ingresos)}</Text>
+            <Text style={styles.daySeparator}> · </Text>
+            <Text style={styles.dayExpense}>Gastos -{formatCents(selectedEntry.gastos)}</Text>
+            <Text style={styles.daySeparator}> · </Text>
+            <Text style={styles.dayNet}>
+              Neto {formatCents(selectedEntry.ingresos - selectedEntry.gastos)}
             </Text>
-          ) : null}
-          {hasMore ? (
-            <Button label="Cargar más" disabled={loadingMore} onPress={() => void loadMore()} />
-          ) : null}
-        </>
-      )}
+          </Text>
+        ) : null}
+        {dayData?.status === 'ready' && dayData.items.length === 0 ? (
+          <Text style={styles.dayEmpty}>Este día no tiene movimientos registrados.</Text>
+        ) : null}
+        <View style={styles.dayAction}>
+          <Button
+            label="+ Anotar en este día"
+            accessibilityLabel={`Nuevo movimiento el ${dayTitle}`}
+            disabled={!canCreate}
+            onPress={() => onNewTransaction(day)}
+          />
+        </View>
+      </Card>
+
+      <View style={styles.rows}>
+        {dayData === null ? (
+          <ActivityIndicator
+            size="large"
+            color={colors.brand700}
+            testID="day-loading"
+            style={styles.spacer}
+          />
+        ) : dayData.status === 'error' ? (
+          <ErrorBox
+            message={dayData.message}
+            onRetry={() => setDayReload((n) => n + 1)}
+            retryAccessibilityLabel="Reintentar movimientos del día"
+          />
+        ) : (
+          <>
+            {dayData.items.map((transaction) => (
+              <TransactionRow
+                key={transaction.id}
+                transaction={transaction}
+                category={dayData.categories.get(transaction.categoryId)}
+                onPress={() => onOpenTransaction(transaction)}
+              />
+            ))}
+            {moreError ? (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {moreError}
+              </Text>
+            ) : null}
+            {hasMore ? (
+              <Button
+                label={loadingMore ? 'Cargando…' : 'Cargar más'}
+                busy={loadingMore}
+                onPress={() => void loadMore()}
+              />
+            ) : null}
+          </>
+        )}
+      </View>
     </ScrollView>
   );
 }
+
+const calendario = moduleColors.calendario;
 
 const styles = StyleSheet.create({
   monthBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    minHeight: sizes.touchMin,
     marginBottom: 8,
   },
-  monthTitle: { fontSize: 18, fontWeight: '700' },
-  weekRow: { flexDirection: 'row' },
-  weekHeader: {
+  monthTitle: {
+    ...typography.h2,
+    fontWeight: '800',
     flex: 1,
     textAlign: 'center',
-    fontWeight: '700',
-    color: '#555555',
-    paddingVertical: 4,
+    color: colors.text,
   },
-  cell: { flex: 1, minHeight: 56, margin: 1, padding: 2, alignItems: 'center' },
-  cellActive: { borderWidth: 1, borderColor: '#dddddd', borderRadius: 6 },
-  cellToday: { borderColor: '#1a73e8' },
-  cellSelected: { backgroundColor: '#e8f0fe', borderColor: '#1a73e8', borderWidth: 2 },
-  dayNumber: { fontSize: 14, fontWeight: '600' },
-  todayText: { color: '#1a73e8' },
-  amount: { fontSize: 10 },
-  income: { color: '#2e7d32' },
-  expense: { color: '#b3261e' },
+  grid: { gap: CALENDAR_CELL_GAP },
+  weekRow: { flexDirection: 'row', gap: CALENDAR_CELL_GAP },
+  weekHeader: {
+    ...typography.small,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: colors.text2,
+  },
+  // Borde 2 siempre presente: los cambios de estado no mueven el diseño.
+  cell: {
+    paddingHorizontal: 0,
+    paddingVertical: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    backgroundColor: colors.surface,
+  },
+  cellToday: { borderColor: calendario.strong },
+  cellSelected: { backgroundColor: calendario.strong, borderColor: calendario.strong },
+  cellTodaySelected: { borderColor: calendario.tile },
+  cellPressed: { opacity: 0.85 },
+  dayNumber: { fontSize: 13, lineHeight: 16, fontWeight: '700', color: colors.text },
+  dayNumberToday: { fontWeight: '800' },
+  onSelected: { color: colors.white },
+  amount: { fontSize: 10, lineHeight: 12, fontWeight: '800' },
+  income: { color: colors.incomeText },
+  expense: { color: colors.expenseText },
+  block: { marginTop: 16 },
+  summaryTitle: { ...typography.brandLabel, color: colors.text, marginBottom: 8 },
+  summaryRow: { flexDirection: 'row', gap: 8 },
+  summaryNet: { marginTop: 8 },
+  dayCard: { padding: 12 },
+  dayTitle: { ...typography.h2, color: colors.text },
+  dayTotals: { ...typography.small, marginTop: 4 },
+  dayIncome: { fontWeight: '700', color: colors.incomeText },
+  dayExpense: { fontWeight: '700', color: colors.expenseText },
+  dayNet: { fontWeight: '700', color: colors.text },
+  daySeparator: { color: colors.text2 },
+  dayEmpty: { ...typography.small, color: colors.text2, marginTop: 4 },
+  dayAction: { marginTop: 12 },
+  rows: { marginTop: 8 },
   spacer: { marginVertical: 12 },
-  error: { color: '#b3261e', marginBottom: 4 },
+  error: { ...typography.small, fontWeight: '700', color: colors.expenseText, marginBottom: 4 },
 });

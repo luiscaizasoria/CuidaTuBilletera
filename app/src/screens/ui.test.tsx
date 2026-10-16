@@ -1,8 +1,28 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform, StatusBar, Text } from 'react-native';
-import { Button, Card, Chip, Screen, Segmented, Snackbar } from './ui';
-import { colors } from '../theme/tokens';
+import { Platform, StatusBar, StyleSheet, Text } from 'react-native';
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ErrorBox,
+  LoadingState,
+  ModuleTile,
+  MonthArrow,
+  Screen,
+  ScreenTitle,
+  Segmented,
+  Snackbar,
+  SummaryTile,
+} from './ui';
+import { colors, moduleColors } from '../theme/tokens';
+import { mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import { FALLBACK_TOP_DP } from '../theme/useSystemInsets';
+
+relaxTimeoutsForColdCache();
+
+// Los adornos están ocultos a los lectores de pantalla: se consultan incluyendo elementos ocultos.
+const HIDDEN = { includeHiddenElements: true };
 
 describe('Button', () => {
   it.each(['primary', 'secondary', 'ghost', 'danger', 'dangerSolid'] as const)(
@@ -92,7 +112,7 @@ describe('Chip', () => {
       backgroundColor: colors.surface,
       paddingHorizontal: 16,
     });
-    expect(screen.queryByTestId('chip-check')).toBeNull();
+    expect(screen.queryByTestId('chip-check', HIDDEN)).toBeNull();
   });
 
   it('seleccionado: ✓ en un texto aparte, oculto a la accesibilidad, y etiqueta en negrita', async () => {
@@ -276,7 +296,7 @@ describe('Snackbar', () => {
   it('limpia el temporizador al desmontar', async () => {
     const onDismiss = jest.fn();
     const view = await render(<Snackbar message="x" onDismiss={onDismiss} />);
-    await view.unmount();
+    await await view.unmount();
     await act(async () => {
       jest.advanceTimersByTime(5000);
     });
@@ -348,5 +368,200 @@ describe('Screen', () => {
       </Screen>,
     );
     expect(screen.queryByTestId('screen-bottom-inset')).toBeNull();
+  });
+});
+
+describe('R4: ScreenTitle y ModuleTile', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('ScreenTitle es un encabezado 24/30 800 con tope de escala 1.6, subrayado amarillo y sin cuenta', async () => {
+    mockWindow(360, 1);
+    await render(<ScreenTitle title="Movimientos" module="movimientos" />);
+    const title = screen.getByRole('header', { name: 'Movimientos' });
+    expect(title).toHaveStyle({ fontSize: 24, lineHeight: 30, fontWeight: '800' });
+    expect(title.props.maxFontSizeMultiplier).toBe(1.6);
+    expect(title.props.allowFontScaling).not.toBe(false);
+    expect(screen.getByTestId('module-tile', HIDDEN)).toHaveStyle({
+      width: 36,
+      height: 36,
+      backgroundColor: moduleColors.movimientos.tile,
+    });
+  });
+
+  it.each([
+    [1.3, 28],
+    [1.5, 28],
+    [1.0, 36],
+  ])('ModuleTile con fuente %s mide %s dp', async (fontScale, size) => {
+    mockWindow(360, fontScale);
+    await render(<ModuleTile module="calendario" />);
+    expect(screen.getByTestId('module-tile', HIDDEN)).toHaveStyle({ width: size, height: size });
+  });
+
+  it('ModuleTile se oculta con fuente ≥ 175 %', async () => {
+    mockWindow(360, 1.75);
+    await render(<ScreenTitle title="Calendario" module="calendario" />);
+    expect(screen.queryByTestId('module-tile', HIDDEN)).toBeNull();
+    expect(screen.getByRole('header', { name: 'Calendario' })).toBeTruthy();
+  });
+
+  it('cada módulo usa su mosaico', async () => {
+    mockWindow(360, 1);
+    for (const module of ['movimientos', 'calendario', 'reportes', 'mas'] as const) {
+      const view = await render(<ModuleTile module={module} />);
+      expect(screen.getByTestId('module-tile', HIDDEN)).toHaveStyle({
+        backgroundColor: moduleColors[module].tile,
+      });
+      await view.unmount();
+    }
+  });
+});
+
+describe('R4: Chip tone movimientos, Button expanded, ErrorBox', () => {
+  it('Chip movimientos elegido: tile, borde 1.5 ink y texto ink con «✓»', async () => {
+    await render(
+      <Chip label="Comida" tone="movimientos" selected size="sm" onPress={() => undefined} />,
+    );
+    const chip = screen.getByRole('radio', { name: 'Comida' });
+    expect(chip).toHaveStyle({
+      backgroundColor: moduleColors.movimientos.tile,
+      borderColor: moduleColors.movimientos.ink,
+      borderWidth: 1.5,
+    });
+    expect(screen.getByText('Comida')).toHaveStyle({ color: moduleColors.movimientos.ink });
+    expect(screen.getByTestId('chip-check', HIDDEN)).toBeTruthy();
+  });
+
+  it('Chip de filtro activo: rol button, sin «✓» y con «✕» oculto a lectores', async () => {
+    const onPress = jest.fn();
+    await render(
+      <Chip
+        label="Gastos"
+        tone="movimientos"
+        selected
+        role="button"
+        check={false}
+        suffix="✕"
+        accessibilityLabel="Quitar filtro: Gastos"
+        onPress={onPress}
+      />,
+    );
+    expect(screen.queryByTestId('chip-check', HIDDEN)).toBeNull();
+    expect(screen.getByText('✕', HIDDEN).props.importantForAccessibility).toBe('no');
+    await fireEvent.press(screen.getByRole('button', { name: 'Quitar filtro: Gastos' }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('Button con expanded anuncia el estado y oculta el adorno', async () => {
+    await render(<Button label="Filtros" suffix="▾" expanded={false} onPress={() => undefined} />);
+    const button = screen.getByRole('button', { name: /^Filtros/ });
+    expect(button.props.accessibilityState).toEqual({ disabled: false, expanded: false });
+    expect(screen.getByText('▾', HIDDEN).props.accessibilityElementsHidden).toBe(true);
+  });
+
+  it('ErrorBox: fondo expenseSoft, mensaje alert y Reintentar secundario', async () => {
+    const onRetry = jest.fn();
+    await render(<ErrorBox message="No se pudo conectar" onRetry={onRetry} />);
+    const message = screen.getByText('No se pudo conectar');
+    expect(message.props.accessibilityRole).toBe('alert');
+    expect(message.parent!).toHaveStyle({ backgroundColor: colors.expenseSoft, borderRadius: 16 });
+    const retry = screen.getByRole('button', { name: 'Reintentar' });
+    expect(retry).toHaveStyle({ backgroundColor: colors.surface });
+    await fireEvent.press(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('R4: SummaryTile, MonthArrow y estados', () => {
+  it('SummaryTile de ingresos y gastos: burbuja y cifra con su color; neto en text', async () => {
+    await render(
+      <>
+        <SummaryTile kind="income" label="Ingresos" value="+$12.00" />
+        <SummaryTile kind="expense" label="Gastos" value="-$5.00" />
+        <SummaryTile kind="neutral" label="Neto" value="$7.00" wide />
+      </>,
+    );
+    expect(screen.getByText('+$12.00')).toHaveStyle({ color: colors.income, fontSize: 19 });
+    expect(screen.getByText('-$5.00')).toHaveStyle({ color: colors.expense });
+    expect(screen.getByText('$7.00')).toHaveStyle({ color: colors.text });
+    expect(screen.getByText('↑', HIDDEN).parent!).toHaveStyle({
+      backgroundColor: colors.incomeSoft,
+    });
+    expect(screen.getByText('↓', HIDDEN).parent!).toHaveStyle({
+      backgroundColor: colors.expenseSoft,
+    });
+    expect(screen.queryAllByText(/^[↑↓]$/, HIDDEN)).toHaveLength(2);
+  });
+
+  it('MonthArrow: zona de 48 dp, círculo de 32 dp, deshabilitada con opacidad 0.4', async () => {
+    const onPress = jest.fn();
+    await render(
+      <>
+        <MonthArrow glyph="‹" label="Mes anterior" onPress={onPress} />
+        <MonthArrow glyph="›" label="Mes siguiente" disabled onPress={onPress} />
+      </>,
+    );
+    const prev = screen.getByRole('button', { name: 'Mes anterior' });
+    expect(prev).toHaveStyle({ width: 48, height: 48 });
+    expect(screen.getByText('‹', HIDDEN).parent!).toHaveStyle({
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+    });
+    await fireEvent.press(prev);
+    const next = screen.getByRole('button', { name: 'Mes siguiente' });
+    expect(next.props.accessibilityState.disabled).toBe(true);
+    expect(next).toHaveStyle({ opacity: 0.4 });
+    await fireEvent.press(next);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('LoadingState muestra el indicador con su texto', async () => {
+    await render(<LoadingState text="Cargando movimientos…" testID="loading" />);
+    expect(screen.getByTestId('loading')).toBeTruthy();
+    expect(screen.getByText('Cargando movimientos…')).toBeTruthy();
+  });
+
+  it('EmptyState muestra el dibujo y la acción; con fuente ≥ 175 % oculta el dibujo', async () => {
+    const onAction = jest.fn();
+    mockWindow(360, 1);
+    const view = await render(
+      <EmptyState
+        module="movimientos"
+        glyph="🔎"
+        message="Ningún movimiento coincide con estos filtros."
+        actionLabel="Limpiar filtros"
+        onAction={onAction}
+      />,
+    );
+    expect(screen.getByText('🔎', HIDDEN)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Limpiar filtros' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    await view.unmount();
+    mockWindow(360, 1.75);
+    await render(<EmptyState module="movimientos" glyph="🔎" message="Vacío" />);
+    expect(screen.queryByText('🔎', HIDDEN)).toBeNull();
+    expect(screen.getByText('Vacío')).toBeTruthy();
+    jest.restoreAllMocks();
+  });
+});
+
+describe('R4 D6: chips pequeños y margen lateral', () => {
+  it('Chip sm: 36 dp de alto, minWidth 48 y hitSlop vertical de 6 dp (zona ≥ 48 × 48)', async () => {
+    await render(<Chip label="A" size="sm" selected={false} onPress={() => undefined} />);
+    const chip = screen.getByRole('radio', { name: 'A' });
+    const style = StyleSheet.flatten(chip.props.style);
+    expect(style.minHeight).toBe(36);
+    expect(style.minWidth).toBe(48);
+    // Sin hitSlop horizontal: el ancho ya cubre 48 dp y no invade al vecino.
+    expect(chip.props.hitSlop).toEqual({ top: 6, bottom: 6 });
+    expect(style.minHeight! + 6 + 6).toBeGreaterThanOrEqual(48);
+  });
+
+  it('Chip md no cambia: 48 dp de alto y sin hitSlop', async () => {
+    await render(<Chip label="Todos" selected={false} onPress={() => undefined} />);
+    const chip = screen.getByRole('radio', { name: 'Todos' });
+    expect(StyleSheet.flatten(chip.props.style).minHeight).toBe(48);
+    expect(chip.props.hitSlop).toBeUndefined();
   });
 });

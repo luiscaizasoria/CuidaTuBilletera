@@ -17,6 +17,7 @@ import {
   depth,
   moduleColors,
   radii,
+  screenMargin,
   shadows,
   sizes,
   tabularNums,
@@ -330,7 +331,7 @@ export const FAB_NOTE = 'Cuenta archivada: no admite movimientos nuevos';
 export function Fab({ onPress, disabled = false }: { onPress: () => void; disabled?: boolean }) {
   const { width } = useWindowDimensions();
   return (
-    <View pointerEvents="box-none" style={[styles.fabArea, { right: width >= WIDE ? 20 : 16 }]}>
+    <View pointerEvents="box-none" style={[styles.fabArea, { right: screenMargin(width) }]}>
       {disabled ? (
         <Text pointerEvents="none" style={styles.fabNote}>
           {FAB_NOTE}

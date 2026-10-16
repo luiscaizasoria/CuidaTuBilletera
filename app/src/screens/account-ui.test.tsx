@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { accountPalette, colors, moduleColors } from '../theme/tokens';
 import { accountColorIndex } from '../lib/accounts';
 import { account } from '../resources-test-utils';
-import { mockWindow } from '../test-utils';
+import { mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import {
   AccountCard,
   AccountContextBar,
@@ -13,6 +13,8 @@ import {
   FAB_NOTE,
   balanceText,
 } from './account-ui';
+
+relaxTimeoutsForColdCache();
 
 describe('balanceText', () => {
   it('formatea solo saldos enteros seguros sin error; nunca inventa $0.00', () => {

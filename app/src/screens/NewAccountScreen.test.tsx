@@ -3,11 +3,13 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { AccessibilityInfo, Alert, BackHandler, StyleSheet, TextInput } from 'react-native';
 import { ApiRequestError } from '../lib/resources-api';
 import { account, fakeResourcesApi } from '../resources-test-utils';
-import { controlledPromise } from '../test-utils';
+import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import NewAccountScreen, {
   BALANCE_TOO_BIG_ERROR,
   NEGATIVE_BALANCE_LABEL,
 } from './NewAccountScreen';
+
+relaxTimeoutsForColdCache();
 
 jest.mock('../hooks/use-auth', () => ({
   useAuth: () => ({ authorizedCall: (call: (token: string) => Promise<unknown>) => call('tok') }),

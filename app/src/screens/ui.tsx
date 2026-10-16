@@ -9,11 +9,35 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
+  ActivityIndicator,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { useSystemInsets } from '../theme/useSystemInsets';
-import { colors, radii, shadows, sizes, typography, moduleColors } from '../theme/tokens';
+import {
+  colors,
+  moduleColors,
+  radii,
+  screenMargin,
+  shadows,
+  sizes,
+  spacing,
+  tabularNums,
+  typography,
+} from '../theme/tokens';
+
+// Margen lateral de la ventana actual (16 dp; 20 dp desde 400 dp de ancho).
+export function useScreenMargin(): number {
+  const { width } = useWindowDimensions();
+  return screenMargin(width);
+}
+
+// Estilo del contenedor de las pantallas de pestaña: fondo, relleno responsive y ocupa el alto.
+export function useScreenContainerStyle() {
+  const margin = useScreenMargin();
+  return { flex: 1, padding: margin, backgroundColor: colors.bg } as const;
+}
 
 // Piezas de interfaz compartidas por las pantallas.
 export function Button({
@@ -24,6 +48,8 @@ export function Button({
   tall = false,
   variant = 'secondary',
   accessibilityLabel,
+  expanded,
+  suffix,
 }: {
   label: string;
   onPress: () => void;
@@ -32,6 +58,10 @@ export function Button({
   tall?: boolean;
   variant?: 'primary' | 'secondary' | 'ghost' | 'link' | 'danger' | 'dangerSolid';
   accessibilityLabel?: string;
+  // Botón que despliega una sección (p. ej. «Filtros»): anuncia el estado abierto/cerrado.
+  expanded?: boolean;
+  // Adorno decorativo tras la etiqueta (p. ej. «▾»), oculto a los lectores de pantalla.
+  suffix?: string;
 }) {
   const inactive = disabled || busy;
   // Variantes sólidas: el estado presionado oscurece el fondo en lugar de bajar la opacidad.
@@ -45,7 +75,11 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={busy ? { disabled: true, busy: true } : { disabled }}
+      accessibilityState={
+        busy
+          ? { disabled: true, busy: true, ...(expanded === undefined ? {} : { expanded }) }
+          : { disabled, ...(expanded === undefined ? {} : { expanded }) }
+      }
       disabled={inactive}
       onPress={() => {
         if (!inactive) onPress();
@@ -59,6 +93,15 @@ export function Button({
       ]}
     >
       <Text style={[styles.label, styles[`${variant}Label`]]}>{label}</Text>
+      {suffix ? (
+        <Text
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+          style={[styles.label, styles[`${variant}Label`], styles.buttonSuffix]}
+        >
+          {suffix}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -74,6 +117,8 @@ export function Chip({
   size = 'md',
   tone = 'neutral',
   suffix,
+  role = 'radio',
+  check = true,
 }: {
   label: string;
   selected: boolean;
@@ -82,17 +127,34 @@ export function Chip({
   accessibilityLabel?: string;
   size?: 'md' | 'sm';
   // `gasto` / `ingreso`: el elegido toma el tinte del tipo del formulario (docs/008 §6.13).
-  tone?: 'neutral' | 'gasto' | 'ingreso';
+  // `movimientos`: tinte del módulo Movimientos (filtros del Historial, docs/008 §6.14).
+  tone?: 'neutral' | 'gasto' | 'ingreso' | 'movimientos';
   // Adorno decorativo tras la etiqueta (p. ej. «▾»), oculto a los lectores de pantalla.
   suffix?: string;
+  // `button` para chips que ejecutan una acción (quitar un filtro) en lugar de elegir una opción.
+  role?: 'radio' | 'button';
+  // Muestra «✓» en el chip elegido (los chips de filtro activo usan «✕» en su lugar).
+  check?: boolean;
 }) {
   const small = size === 'sm';
   const tinted = selected && tone !== 'neutral';
+  const toneStyle =
+    tone === 'gasto'
+      ? styles.chipExpense
+      : tone === 'ingreso'
+        ? styles.chipIncome
+        : styles.chipMovimientos;
+  const toneText =
+    tone === 'gasto'
+      ? styles.chipTextExpense
+      : tone === 'ingreso'
+        ? styles.chipTextIncome
+        : styles.chipTextMovimientos;
   return (
     <Pressable
-      accessibilityRole="radio"
+      accessibilityRole={role}
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ selected, disabled }}
+      accessibilityState={role === 'radio' ? { selected, disabled } : { disabled }}
       disabled={disabled}
       onPress={onPress}
       hitSlop={small ? { top: sizes.chipHitSlop, bottom: sizes.chipHitSlop } : undefined}
@@ -100,11 +162,11 @@ export function Chip({
         styles.chip,
         small && styles.chipSm,
         selected && styles.chipSelected,
-        tinted && (tone === 'gasto' ? styles.chipExpense : styles.chipIncome),
+        tinted && toneStyle,
         disabled && styles.disabled,
       ]}
     >
-      {selected ? (
+      {selected && check ? (
         <Text
           testID="chip-check"
           importantForAccessibility="no"
@@ -113,7 +175,7 @@ export function Chip({
             styles.chipText,
             small && styles.chipTextSm,
             styles.chipTextSelected,
-            tinted && (tone === 'gasto' ? styles.chipTextExpense : styles.chipTextIncome),
+            tinted && toneText,
           ]}
         >
           ✓
@@ -124,7 +186,7 @@ export function Chip({
           styles.chipText,
           small && styles.chipTextSm,
           selected && styles.chipTextSelected,
-          tinted && (tone === 'gasto' ? styles.chipTextExpense : styles.chipTextIncome),
+          tinted && toneText,
         ]}
       >
         {label}
@@ -133,7 +195,13 @@ export function Chip({
         <Text
           importantForAccessibility="no"
           accessibilityElementsHidden
-          style={[styles.chipText, small && styles.chipTextSm, { color: colors.text2 }]}
+          style={[
+            styles.chipText,
+            small && styles.chipTextSm,
+            {
+              color: tinted && tone === 'movimientos' ? moduleColors.movimientos.ink : colors.text2,
+            },
+          ]}
         >
           {suffix}
         </Text>
@@ -297,11 +365,15 @@ export function Screen({
   testID?: string;
 }) {
   const insets = useSystemInsets();
+  const margin = useScreenMargin();
   const content = scroll ? (
     <ScrollView
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={[
-        padded && { padding: 16, paddingBottom: bottomBar ? 16 : insets.bottom + 16 },
+        padded && {
+          padding: margin,
+          paddingBottom: bottomBar ? margin : insets.bottom + margin,
+        },
         contentContainerStyle,
       ]}
     >
@@ -360,9 +432,218 @@ export function ErrorBox({
           label={retryLabel}
           accessibilityLabel={retryAccessibilityLabel}
           onPress={onRetry}
-          variant="primary"
+          variant="secondary"
         />
       ) : null}
+    </View>
+  );
+}
+
+export type ModuleKey = 'movimientos' | 'calendario' | 'reportes' | 'mas';
+
+const MODULE_GLYPHS: Record<ModuleKey, string> = {
+  movimientos: '📋',
+  calendario: '📅',
+  reportes: '📊',
+  mas: '🏷️',
+};
+
+// Cuadrado con el color del módulo (docs/008 §6.14): 36 dp; 28 dp con fuente del sistema ≥ 130 %;
+// se oculta con fuente ≥ 175 % para dejar el ancho al título. Decorativo.
+export function ModuleTile({ module }: { module: ModuleKey }) {
+  const { fontScale } = useWindowDimensions();
+  if (fontScale >= 1.75) return null;
+  const size = fontScale >= 1.3 ? sizes.moduleTileSm : sizes.moduleTile;
+  return (
+    <View
+      testID="module-tile"
+      importantForAccessibility="no"
+      accessibilityElementsHidden
+      style={[
+        styles.moduleTile,
+        { width: size, height: size, backgroundColor: moduleColors[module].tile },
+      ]}
+    >
+      <Text style={styles.moduleGlyph}>{MODULE_GLYPHS[module]}</Text>
+    </View>
+  );
+}
+
+// Título de pantalla: mosaico del módulo, título 24/30 (header) y subrayado amarillo. Sin el nombre de
+// la cuenta (lo muestra la barra de contexto). El tope de escala solo aplica a este título.
+export function ScreenTitle({ title, module }: { title: string; module: ModuleKey }) {
+  return (
+    <View style={styles.titleRow}>
+      <ModuleTile module={module} />
+      <View style={styles.titleBlock}>
+        <Text accessibilityRole="header" maxFontSizeMultiplier={1.6} style={styles.titleText}>
+          {title}
+        </Text>
+        <View importantForAccessibility="no" style={styles.titleUnderline} />
+      </View>
+    </View>
+  );
+}
+
+// Mosaico de resumen (docs/008 §6.5). `neutral` no lleva burbuja ni color. Con `wide` la etiqueta va a
+// la izquierda y la cifra a la derecha. La cifra se recibe ya formateada (la app no calcula).
+export function SummaryTile({
+  kind,
+  label,
+  value,
+  wide = false,
+  hint,
+  testID,
+}: {
+  kind: 'income' | 'expense' | 'neutral';
+  label: string;
+  value: string;
+  wide?: boolean;
+  // Pista decorativa bajo la cifra (p. ej. «Ver movimientos ›» en Reportes).
+  hint?: string;
+  testID?: string;
+}) {
+  const bubble =
+    kind === 'neutral' ? null : (
+      <View
+        importantForAccessibility="no"
+        accessibilityElementsHidden
+        style={[
+          styles.bubble,
+          { backgroundColor: kind === 'income' ? colors.incomeSoft : colors.expenseSoft },
+        ]}
+      >
+        <Text
+          style={[
+            styles.bubbleGlyph,
+            { color: kind === 'income' ? colors.incomeText : colors.expenseText },
+          ]}
+        >
+          {kind === 'income' ? '↑' : '↓'}
+        </Text>
+      </View>
+    );
+  const valueColor =
+    kind === 'income' ? colors.income : kind === 'expense' ? colors.expense : colors.text;
+  return (
+    <View
+      testID={testID}
+      style={[styles.summaryTile, shadows.card, wide ? styles.summaryWide : styles.summaryHalf]}
+    >
+      <View style={styles.summaryLabelRow}>
+        {bubble}
+        <Text style={styles.summaryLabel}>{label}</Text>
+      </View>
+      <Text style={[styles.summaryValue, tabularNums, { color: valueColor }]}>{value}</Text>
+      {hint ? <Text style={styles.summaryHint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+// Flecha de período (‹ ›): círculo de 32 dp dentro de una zona táctil de 48 dp (docs/008 §6.6).
+export function MonthArrow({
+  glyph,
+  label,
+  disabled = false,
+  onPress,
+}: {
+  glyph: string;
+  label: string;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[styles.arrowZone, disabled && styles.arrowDisabled]}
+    >
+      <View
+        importantForAccessibility="no"
+        accessibilityElementsHidden
+        style={[styles.arrowCircle, shadows.card]}
+      >
+        <Text style={styles.arrowGlyph}>{glyph}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+// Botón con aspecto de campo para elegir una fecha («Desde» / «Hasta»): 48 dp, valor o «Elegir».
+export function DateField({
+  label,
+  value,
+  display,
+  onPress,
+  testID,
+}: {
+  label: string;
+  // Fecha elegida en AAAA-MM-DD ('' = sin elegir) y su texto visible ya formateado.
+  value: string;
+  display: string;
+  onPress: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value ? display : 'sin elegir'}`}
+      onPress={onPress}
+      style={styles.dateField}
+    >
+      <Text style={styles.dateFieldLabel}>{label}</Text>
+      <Text style={[styles.dateFieldValue, !value && styles.dateFieldEmpty]}>
+        {value ? display : 'Elegir'}
+      </Text>
+    </Pressable>
+  );
+}
+
+// Carga con texto (docs/008 §6.14 punto 6): nunca muestra datos anteriores.
+export function LoadingState({ text, testID }: { text: string; testID?: string }) {
+  return (
+    <View style={styles.stateBlock}>
+      <ActivityIndicator size="large" color={colors.brand700} testID={testID} />
+      <Text style={styles.stateText}>{text}</Text>
+    </View>
+  );
+}
+
+// Vacío con siguiente paso. El dibujo definitivo es de R5: mientras tanto, círculo con el tinte del
+// módulo y su glifo (se oculta con fuente ≥ 175 %).
+export function EmptyState({
+  module,
+  glyph,
+  message,
+  actionLabel,
+  onAction,
+  testID,
+}: {
+  module: ModuleKey;
+  glyph: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  testID?: string;
+}) {
+  const { fontScale } = useWindowDimensions();
+  return (
+    <View testID={testID} style={styles.stateBlock}>
+      {fontScale >= 1.75 ? null : (
+        <View
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+          style={[styles.emptyCircle, { backgroundColor: moduleColors[module].tile }]}
+        >
+          <Text style={styles.emptyGlyph}>{glyph}</Text>
+        </View>
+      )}
+      <Text style={styles.stateText}>{message}</Text>
+      {actionLabel && onAction ? <Button label={actionLabel} onPress={onAction} /> : null}
     </View>
   );
 }
@@ -412,6 +693,8 @@ const styles = StyleSheet.create({
   button: {
     minHeight: sizes.touchMin,
     paddingHorizontal: 14,
+    flexDirection: 'row',
+    gap: 6,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.md,
@@ -429,7 +712,8 @@ const styles = StyleSheet.create({
   dangerSolidPressed: { backgroundColor: colors.expenseText, borderColor: colors.expenseText },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
-  label: { ...typography.button, textAlign: 'center' },
+  label: { ...typography.button, textAlign: 'center', flexShrink: 1 },
+  buttonSuffix: { fontWeight: '400' },
   primaryLabel: { color: colors.white },
   secondaryLabel: { color: colors.brand700 },
   ghostLabel: { color: colors.text },
@@ -448,10 +732,18 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
   },
-  chipSm: { minHeight: sizes.chipSmHeight, paddingHorizontal: 12 },
+  // Compacto (36 dp de alto) pero con zona táctil de al menos 48 × 48 dp: el alto se completa con
+  // hitSlop vertical (filas separadas 12 dp) y el ancho con minWidth, sin invadir al vecino.
+  chipSm: { minHeight: sizes.chipSmHeight, minWidth: sizes.touchMin, paddingHorizontal: 12 },
   chipSelected: { borderWidth: 1.5, borderColor: colors.text, backgroundColor: colors.segBg },
   chipExpense: { borderWidth: 2, borderColor: colors.expense, backgroundColor: colors.expenseSoft },
   chipIncome: { borderWidth: 2, borderColor: colors.income, backgroundColor: colors.incomeSoft },
+  chipMovimientos: {
+    borderWidth: 1.5,
+    borderColor: moduleColors.movimientos.ink,
+    backgroundColor: moduleColors.movimientos.tile,
+  },
+  chipTextMovimientos: { color: moduleColors.movimientos.ink },
   chipTextExpense: { color: colors.expenseText },
   chipTextIncome: { color: colors.incomeText },
   chipText: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: colors.text },
@@ -492,6 +784,104 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   snackbarText: { ...typography.body, color: colors.white },
-  errorBox: { alignItems: 'center', padding: 16, gap: 12 },
-  errorText: { color: colors.expenseText, textAlign: 'center' },
+  moduleTile: {
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moduleGlyph: { fontSize: 20, lineHeight: 24 },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  titleBlock: { flex: 1 },
+  titleText: { ...typography.title, color: colors.text },
+  titleUnderline: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    marginTop: spacing.xs,
+    backgroundColor: colors.yellow,
+  },
+  summaryTile: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  summaryHalf: { flex: 1, gap: 4 },
+  summaryWide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  summaryLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  summaryLabel: { ...typography.small, fontWeight: '700', color: colors.text2, flexShrink: 1 },
+  summaryValue: { fontSize: 19, lineHeight: 26, fontWeight: '800', flexShrink: 0 },
+  summaryHint: { ...typography.small, fontWeight: '700', color: colors.brand700 },
+  dateField: {
+    flex: 1,
+    minHeight: sizes.touchMin,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+  },
+  dateFieldLabel: { ...typography.small, fontWeight: '700', color: colors.text2 },
+  dateFieldValue: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: colors.text },
+  dateFieldEmpty: { color: colors.text3 },
+  bubble: {
+    width: 24,
+    height: 24,
+    borderRadius: radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bubbleGlyph: { fontSize: 14, lineHeight: 18, fontWeight: '800' },
+  arrowZone: {
+    width: sizes.touchMin,
+    height: sizes.touchMin,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowDisabled: { opacity: 0.4 },
+  arrowCircle: {
+    width: sizes.monthArrow,
+    height: sizes.monthArrow,
+    borderRadius: sizes.monthArrow / 2,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowGlyph: { fontSize: 18, lineHeight: 22, fontWeight: '800', color: colors.text },
+  stateBlock: {
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    padding: 16,
+  },
+  stateText: { ...typography.body, color: colors.text2, textAlign: 'center' },
+  emptyCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyGlyph: { fontSize: 40, lineHeight: 48 },
+  errorBox: {
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+    borderRadius: radii.lg,
+    backgroundColor: colors.expenseSoft,
+  },
+  errorText: { ...typography.body, color: colors.expenseText, textAlign: 'center' },
 });

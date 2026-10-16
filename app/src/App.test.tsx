@@ -12,8 +12,11 @@ import {
   fakeStorage,
   storedSession,
   USER,
+  relaxTimeoutsForColdCache,
 } from './test-utils';
 import { fakeResourcesApi } from './resources-test-utils';
+
+relaxTimeoutsForColdCache();
 
 // Los módulos nativos no existen en Jest: se sustituyen por dobles.
 jest.mock('./lib/google-auth', () => ({ createGoogleProvider: jest.fn() }));

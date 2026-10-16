@@ -125,6 +125,23 @@ const pairs = [
   ['Borde «hoy» calStrong sobre tarjeta (3:1)', T.calStrong, T.surface, 3],
   ['Borde chip activo movInk sobre movTile (3:1)', T.movInk, T.movTile, 3],
   ['Botón primario brand700 sobre fondo cálido (componente 3:1)', T.brand700, T.bg, 3],
+  // R4 (docs/008 §6.14): Historial, Calendario, Reportes y Categorías
+  ['R4 fila: importe de ingreso incomeText sobre tarjeta', T.incomeText, T.surface],
+  ['R4 fila: importe de gasto expenseText sobre tarjeta', T.expenseText, T.surface],
+  ['R4 celda de calendario: ingreso incomeText (10 sp) sobre celda blanca', T.incomeText, T.surface],
+  ['R4 celda de calendario: gasto expenseText (10 sp) sobre celda blanca', T.expenseText, T.surface],
+  ['R4 celda hoy+elegida: anillo calTile sobre calStrong (3:1)', T.calTile, T.calStrong, 3],
+  ['R4 barra de ingresos de la serie income sobre tarjeta (objeto gráfico 3:1)', T.income, T.surface, 3],
+  ['R4 barra de gastos de la serie expense sobre tarjeta (objeto gráfico 3:1)', T.expense, T.surface, 3],
+  ['R4 fila de categoría archivada: texto sobre archivedRow', T.text, '#F4F0EA'],
+  ['R4 fila de categoría archivada: text2 sobre archivedRow', T.text2, '#F4F0EA'],
+  ['R4 «Archivada» yellowText sobre yellowSoft (insignia)', T.yellowText, T.yellowSoft],
+  ['R4 vista previa: placeholder text3 sobre fondo cálido', T.text3, T.bg],
+  ['R4 chip de filtro activo: movInk sobre movTile', T.movInk, T.movTile],
+  ['R4 chip de filtro activo: borde movInk sobre superficie (3:1)', T.movInk, T.surface, 3],
+  ['R4 error de rango: expenseText sobre fondo cálido', T.expenseText, T.bg],
+  ['R4 ErrorBox con fondo: expenseText sobre expenseSoft', T.expenseText, T.expenseSoft],
+  ['R4 anillo del color elegido: text sobre tarjeta (3:1)', T.text, T.surface, 3],
 ];
 // Tarjetas de cuenta: textos sobre el fondo de la tarjeta y sobre el círculo decorativo.
 for (const [n, card] of ACC) {
@@ -193,4 +210,13 @@ for (const [n, c] of cats) {
   mdc += `| ${n} | \`${c}\` | ${w.toFixed(2)}:1 | ${w >= 3 ? 'Sí' : 'No'} | \`${d.color}\`${d.k ? ` (−${d.k} %)` : ''} | ${ratio('#FFFFFF', d.color).toFixed(2)}:1 | ${dk.toFixed(2)}:1 |\n`;
 }
 console.log(mdc);
+// R4: siete colores del selector de Categorías (CategoriesScreen.CATEGORY_COLORS). El círculo usa categoryFill; «✓» blanco >= 3:1.
+const sel = [['Rojo', '#E53935'], ['Naranja', '#FB8C00'], ['Amarillo', '#FDD835'], ['Verde', '#43A047'], ['Azul', '#1E88E5'], ['Morado', '#8E24AA'], ['Gris', '#757575']];
+let mds = '\n| Color del selector | Valor API | Blanco sobre valor | `catFill` (círculo) | Blanco («✓») sobre `catFill` | `catFill` sobre tarjeta blanca |\n| --- | --- | --- | --- | --- | --- |\n';
+for (const [n, c] of sel) {
+  const d = darkenForWhite(c, 3.0), w = ratio('#FFFFFF', d.color);
+  if (w < 3) fails++;
+  mds += `| ${n} | \`${c}\` | ${ratio('#FFFFFF', c).toFixed(2)}:1 | \`${d.color}\`${d.k ? ` (−${d.k} %)` : ''} | ${w.toFixed(2)}:1 | ${ratio(d.color, '#FFFFFF').toFixed(2)}:1 |\n`;
+}
+console.log(mds);
 if (check && fails) { console.error(`Pares que no cumplen: ${fails}`); process.exit(1); }

@@ -14,7 +14,10 @@ import {
   REFRESH_EXPIRES_AT,
   storedSession,
   USER,
+  relaxTimeoutsForColdCache,
 } from './test-utils';
+
+relaxTimeoutsForColdCache();
 
 jest.mock('./lib/google-auth', () => ({ createGoogleProvider: jest.fn() }));
 jest.mock('./lib/session-storage', () => ({ secureSessionStorage: {} }));
@@ -65,7 +68,7 @@ describe('App: aislamiento de datos entre usuarios', () => {
     await fireEvent.press(await screen.findByRole('button', { name: card('Cuenta de Ana') }));
     await fireEvent.press(await screen.findByRole('tab', { name: 'Más' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Categorías' }));
-    expect(await screen.findByText('Categorías de Cuenta de Ana')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Categorías' })).toBeTruthy();
 
     // Cierra sesión: vuelve al login y no queda nada de A.
     await act(async () => {
@@ -77,7 +80,7 @@ describe('App: aislamiento de datos entre usuarios', () => {
     // Ingresa B: empieza en Mis cuentas (no en la pantalla de A) y su lista no muestra datos de A.
     await fireEvent.press(screen.getByText('Ingresar con Google'));
     expect(await screen.findByRole('header', { name: 'Mis cuentas' })).toBeTruthy();
-    expect(screen.queryByText(/Categorías de/)).toBeNull();
+    expect(screen.queryByRole('header', { name: 'Categorías' })).toBeNull();
     await openProfile();
     expect(screen.getByText(userB.email)).toBeTruthy();
     expect(screen.queryByText(USER.email)).toBeNull();

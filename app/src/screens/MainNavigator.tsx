@@ -28,7 +28,7 @@ import NewAccountScreen from './NewAccountScreen';
 import ReportsScreen from './ReportsScreen';
 import { AccountSwitcherSheet } from './sheets';
 import TransactionFormScreen from './TransactionFormScreen';
-import { Screen, Snackbar } from './ui';
+import { Screen, Snackbar, useScreenMargin } from './ui';
 
 const FAB_TABS: readonly Tab[] = ['cuenta', 'movimientos', 'calendario'];
 
@@ -38,6 +38,7 @@ const FAB_TABS: readonly Tab[] = ['cuenta', 'movimientos', 'calendario'];
 export default function MainNavigator({ api }: { api: ResourcesApi }) {
   const { authorizedCall } = useAuth();
   const insets = useSystemInsets();
+  const margin = useScreenMargin();
   const [nav, setNav] = useState<NavState>({ stack: ROOT, detail: null });
   const [snack, setSnack] = useState<string | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
@@ -283,6 +284,7 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
               account={account}
               api={api}
               onAccountArchived={markArchived}
+              fromForm={route.fromForm === true}
             />
           </View>
         </Screen>
@@ -319,7 +321,7 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
       const { account: active, views } = current;
       // Modo consulta (docs/007 14.12): las pantallas reutilizadas no lo muestran por sí mismas.
       const archivedNotice = active.archivada ? (
-        <View style={styles.notice}>
+        <View style={[styles.notice, { paddingHorizontal: margin }]}>
           <ArchivedNotice />
         </View>
       ) : null;

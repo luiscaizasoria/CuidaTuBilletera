@@ -747,6 +747,323 @@ Se conserva íntegro: cuadrícula propia, lunes primer día, importes compactos 
 - **Eliminar vs archivar (EXISTENTE):** el API elimina solo categorías sin movimientos (incluidos anulados; `409 CATEGORY_IN_USE` si no). Mensaje comprensible ante `CATEGORY_IN_USE` (EXISTENTE «tiene movimientos y no puede eliminarse»): ampliar con la salida: «Esta categoría tiene movimientos, por eso no se puede eliminar. Puedes archivarla: no aparecerá al anotar movimientos nuevos, pero tu historial se conserva.» + [Archivar]. Confirmación de eliminar (EXISTENTE): «¿Eliminar «X»? Esta acción no se puede deshacer.»
 - Estados: carga, vacío por tipo («Aún no tienes categorías de gasto. Crea la primera.»), error + reintento, cuenta archivada (EXISTENTE: «Cuenta archivada: no se pueden crear ni desarchivar categorías.»), límite (EXISTENTE `LIMIT_REACHED`).
 
+### 5.11 Especificación de implementación de R4 (Historial, Calendario, Reportes y Categorías; sin cambiar cálculos ni contratos)
+
+Alcance: presentación y flujo de las cuatro pantallas con el sistema visual de docs/008, conservando datos, cálculos (`lib/calendar.ts`, `lib/reports.ts`, `lib/money.ts`) y contratos de la API. Base: HEAD 281bc86. Docs/003 R4 D1: las barras se dibujan con componentes de React Native, sin `react-native-svg`. Convención: EXISTENTE (ya en el código), APROBADO (decisión del usuario), PROPUESTA (nuevo en esta sección).
+
+#### A. Veredicto de conformidad del código actual con docs/007
+
+Veredicto global: **NO CONFORMES** las cuatro pantallas. Funcionalmente cumplen lo EXISTENTE (estados de carga, error con reintento, paginación, aislamiento por `account.id` mediante `key` en el contenedor, `bottomInset`), pero ninguna aplica aún el sistema visual ni los cambios de §5.6 a §5.10. Se mantienen los `testID` y las etiquetas que las pruebas ya usan.
+
+Defectos comunes a las cuatro (R4-C):
+
+- C1. Títulos «Historial de {cuenta}», «Calendario de {cuenta}», «Reportes de {cuenta}» y «Categorías de {cuenta}» (`screenStyles.title`, 22 bold): §3.5.4 y docs/003 R2 piden títulos sin el nombre de la cuenta (la barra de contexto ya la muestra) y con `ModuleTile`; falta el componente `ScreenTitle`/`ModuleTile` (docs/008 §12), solo existe `moduleColors`.
+- C2. Colores literales de la línea base (`#b3261e`, `#2e7d32`, `#1a73e8`, `#e8f0fe`, `#dddddd`, `#eeeeee`, `#555555`, `#9e9e9e`) en lugar de tokens (`expenseText`, `incomeText`, `calStrong`, `border`, `text2`).
+- C3. Secciones con `screenStyles.section` 16/700 y tarjetas `s.row`: sin `Card`, `SummaryTile` ni encabezados de grupo.
+
+Historial (`HistoryScreen.tsx`, `TransactionRow.tsx`):
+
+- H1. Filtros siempre desplegados (Tipo, Categoría, Rango): §5.6 pide panel plegable con contador y chips de filtro activo con ✕.
+- H2. Rango con dos `TextInput` AAAA-MM-DD y botón «Aplicar rango»: §5.6 y docs/003 R3 D5 piden «Desde» y «Hasta» con el selector de fecha propio (`DatePickerSheet`), sin texto como entrada principal.
+- H3. Lista plana sin agrupar por día (§5.6, prototipo aprobado) y sin contador de resultados.
+- H4. `TransactionRow`: color de categoría como punto de 16 dp (sin `CategoryIcon`), nombre sin límite pero sin `minHeight`, la fecha se repite en cada fila, la nota sin límite de líneas; la etiqueta accesible omite el importe y el tipo; importe solo con color.
+- H5. Estados: vacío «Aún no hay movimientos en esta cuenta» y «No hay movimientos con estos filtros» (no coinciden con §7.2), sin acción [Limpiar filtros] en el vacío, carga sin texto, «Cargar más» sin estado «Cargando…».
+- H6. Chips de categoría de 48 dp (no `size="sm"` con `hitSlop`, P-1) y sin marcar categorías archivadas en el filtro.
+- H7. Defensa de cuenta: el efecto que reinicia la lista depende solo de `filters` y `reloadCount`; hoy no hay fuga porque `MainNavigator` remonta con `key={account.id}`, pero la pantalla no se protege sola.
+
+Calendario (`CalendarScreen.tsx`):
+
+- K1. Cumple la lógica aprobada (4.1): cuadrícula propia, lunes primero, importes compactos, totales del mes y del día, `selected`, «hoy». Celdas con `minHeight: 56` y `margin: 1` (separación 2 dp): no siguen P-3 (alto 52, separación 3, ancho calculado por pantalla).
+- K2. Mes seleccionado y hoy usan azul literal y borde: falta `calStrong`/texto blanco sobre la celda elegida y los importes de la celda elegida no tendrían contraste (se define en E.3).
+- K3. Resumen del mes como una línea de texto («Mes: Ingresos… · Gastos… · Neto…»): §5.7/docs/008 §6.5 piden `SummaryTile`; el texto debe seguir disponible para lectores de pantalla.
+- K4. «Nuevo movimiento» del día es el botón primario y coexiste con el FAB de la pestaña (también «Nuevo movimiento»): dos acciones primarias con el mismo nombre en la misma pantalla.
+- K5. Flechas de mes como `Button` genérico, no «círculo de 32 dp con objetivo de 48 dp» (docs/008 §6.6); el cambio de mes no se anuncia.
+- K6. Textos: «No hay movimientos en este mes» sin punto final y «Sin movimientos este día» más «Este día no tiene movimientos registrados» (dos mensajes para lo mismo).
+
+Reportes (`ReportsScreen.tsx`):
+
+- R1. Modo Mes/Año/Rango como `Chip` en un grupo, no `Segmented` con tono Reportes (P-2, 48 dp).
+- R2. Rango con `TextInput` AAAA-MM-DD y «Aplicar» (mismo defecto que H2); error de formato obsoleto «Escribe fechas válidas con formato AAAA-MM-DD…».
+- R3. Exportación entre las tarjetas y el desglose: §5.8 la pide en una sección propia **al final** («Exportar este período») con texto de alcance.
+- R4. Nombre de categoría en las barras con `numberOfLines={1}` (trunca nombres, incumple D2/§10), sin `CategoryIcon`, barras con el color crudo de la API (sin `categoryFill`, contraste no garantizado) y sin ancho mínimo visible para importes pequeños.
+- R5. Serie «Evolución mensual/anual»: sin leyenda de Ingresos/Gastos (solo color), sin alternativa textual en tabla, etiquetas con `allowFontScaling={false}` de 10 y 11 sp; scroll horizontal sin indicación de que hay más.
+- R6. Estados: carga sin texto («Calculando tu resumen…»), vacío sin «Prueba con otro mes.», tarjetas Ingresos/Gastos sin pista visible de que son tocables.
+- R7. El período por defecto ya es el mes actual (`initialReportsView`): **conforme**.
+
+Categorías (`CategoriesScreen.tsx`):
+
+- G1. Dos secciones fijas «Ingresos» y «Egresos» con tres botones por fila: §5.10 pide segmentado por tipo (Gastos | Ingresos) y una sola acción «⋮» por fila.
+- G2. Terminología: «Egresos», «Tipo egreso/ingreso» en pantalla; el resto de la app dice «Gasto/Ingreso».
+- G3. Colores de 40 dp (no 48), sin nombre visible y la selección solo por borde negro; sin vista previa; en Editar no se muestra el tipo.
+- G4. Fila con punto de color de 16 dp, no `CategoryIcon`.
+- G5. `CATEGORY_IN_USE` muestra la frase corta del mapa de mensajes, sin la salida [Archivar] de §5.10.
+- G6. El formulario es local: Atrás desde el formulario sale de Categorías y descarta el texto sin confirmar (§3.4 pide Formulario → lista → Más, con confirmación de descarte, R3 D1).
+- G7. «Sin categorías» y «Esta cuenta no tiene categorías» no siguen §7.2 (vacío por tipo con siguiente paso).
+- G8. Conforme: eliminar con `Alert` y su texto, crear/editar/archivar/desarchivar, interruptor de archivadas, aviso de cuenta archivada, 409 `ACCOUNT_ARCHIVED` hacia el contenedor, acceso desde Más y «Ir a Categorías» desde el formulario (salida «‹ Volver»).
+
+#### B. Reglas comunes de R4
+
+1. Título de pantalla con `ScreenTitle` (módulo: Movimientos ámbar, Calendario azul, Reportes violeta, Categorías pizarra), `role=header`, sin el nombre de la cuenta: «Movimientos», «Calendario», «Reportes», «Categorías». La barra de contexto sigue arriba (§3.5.4).
+2. Una sola acción primaria por pantalla: Historial y Calendario, el FAB; Reportes, ninguna (Exportar es secundaria); Categorías, «Nueva categoría».
+3. Importes: «-$6.50» con `expenseText` y «+$800.00» con `incomeText`, siempre con signo y la palabra del tipo en la etiqueta accesible; el color de la categoría vive solo en `CategoryIcon`, nunca en el importe.
+4. Nombres de categoría: hasta dos líneas sin elipsis en filas y barras; en Categorías, sin límite de líneas. Solo se trunca texto libre (nota: dos líneas; nombre de cuenta lo resuelve la barra) y la etiqueta accesible lleva el texto completo. Importes y totales nunca se truncan (`flexShrink: 0`).
+5. Estados de toda pantalla (§5): carga con texto, vacío con siguiente paso, error con mensaje y [Reintentar] (`role=alert`), y los mensajes de `resources-messages.ts` **se conservan** (los de §7.4 que difieren no se aplican; ver L.8). Los dibujos de estados vacíos y las guías son R5; R4 entrega textos y el espacio.
+6. Aislamiento: cada pantalla recibe `account` y `key={account.id}` del contenedor (EXISTENTE). Defensa propia en B.7.
+7. Cambio de cuenta sin fuga (aprobado §3.5.2: el selector reinicia filtros, período y mes): al cambiar `account.id` ninguna lista, total ni barra de la cuenta anterior debe verse, ni siquiera un instante; se muestra «cargando» y se descartan respuestas en vuelo (patrón `generation`/`cancelled` EXISTENTE).
+8. Colores solo con tokens (docs/008); sin literales.
+9. `bottomInset` y `keyboardShouldPersistTaps="handled"` se conservan; Reportes y Categorías no llevan FAB ni margen extra.
+
+#### C. Historial (pestaña Movimientos)
+
+Wireframe (360 dp):
+
+```
+ {barra de contexto}
+ [tile] Movimientos
+ 14 movimientos
+ [ Filtros (2) ▾ ]
+ [Gastos ✕] [Alimentación ✕] [Desde 01/10/2026 ✕]      chips activos (36 dp, zona 48)
+ ── Hoy ──────────────────────
+  (ícono) Alimentación            -$6.50
+          Almuerzo con Ana
+ ── Ayer ─────────────────────
+  (ícono) Sueldo                 +$800.00
+ ...
+ [ Cargar más ]
+```
+
+**C.1 Encabezado y contador (PROPUESTA).** Debajo del título, «{total} movimientos» o «1 movimiento»; `total` es el de la API (con los filtros aplicados), nunca la suma de lo cargado. Se oculta mientras carga o hay error. No se muestran totales de dinero en Historial (la lista está paginada: cualquier suma parcial sería engañosa); el dinero del período está en Cuenta y Reportes.
+
+**C.2 Panel de filtros (APROBADO en §5.6; formato PROPUESTA: sección plegable en línea, ver L.1).**
+- Botón «Filtros» (secundario, 48 dp, «▾» cerrado / «▴» abierto, ocultos a lectores) con contador de grupos activos (tipo, categoría, rango = máximo 3): «Filtros» o «Filtros (2)». Etiqueta accesible «Filtros, 2 activos» / «Filtros, ninguno activo», `accessibilityState.expanded`. Cerrado por defecto, también al abrir desde Reportes con filtros iniciales (los chips ya los muestran).
+- Contenido: **Tipo** (`Segmented` tono Movimientos, 48 dp: Todos | Gastos | Ingresos, etiquetas actuales). **Categoría**: chips `sm` (36 dp, `hitSlop` 6 dp arriba y abajo, filas separadas 12 dp, 8 dp entre chips; P-1) «Todas» y una por categoría, ordenadas como llegan de la API; las archivadas llevan «(archivada)» en el texto y la etiqueta «Filtrar por {nombre}». El texto del chip puede pasar a dos líneas; la altura es mínima, no fija. **Rango**: dos botones de 48 dp «Desde» y «Hasta» que muestran «Elegir» o la fecha (`formatDateEs`), con etiqueta «Desde: 01/10/2026» / «Desde: sin elegir». Abren `DatePickerSheet` (R3 D5, tono neutro; ver K). **Limpiar filtros** (ghost) al pie del panel.
+- Aplicar es inmediato: elegir tipo, categoría o fecha relee la página 1 (EXISTENTE: cambiar un filtro reinicia). Desaparece «Aplicar rango».
+- Fecha que invierte el rango: no se aplica, la hoja se cierra y aparece el mensaje (`alert`, bajo el botón) «La fecha «Desde» no puede ser posterior a «Hasta».»; el botón conserva su valor anterior. El mensaje se quita al elegir una fecha válida o limpiar.
+- Cambiar el tipo limpia una categoría de otro tipo (EXISTENTE).
+
+**C.3 Chips de filtro activo (APROBADO §5.6).** Una fila con un chip `sm` por filtro: «Gastos ✕», «{categoría} ✕», «Desde 01/10/2026 ✕», «Hasta 31/10/2026 ✕». Cada uno: `button`, etiqueta «Quitar filtro: Gastos», quita solo ese filtro. Visibles con el panel cerrado o abierto. Sin filtros no hay fila.
+
+**C.4 Agrupación por día (APROBADO en el prototipo y §5.6; no por semana: la semana es de la pestaña Cuenta, 14.11).** Encabezado por fecha, `role=header`, orden tal como lo devuelve la API (más reciente primero): «Hoy», «Ayer» o «{día} {d} de {mes}» (p. ej. «Miércoles 14 de octubre»), con «de {año}» si el año no es el actual. Los movimientos de una misma fecha que continúan en la página siguiente se unen bajo el mismo encabezado (se agrupa sobre la lista ya fusionada por `mergeById`). El día de la semana se calcula con una función pura nueva en `lib/calendar.ts` (sin `Date`, como el resto del archivo).
+
+**C.5 Fila de movimiento (`TransactionRow`; PROPUESTA con visual de docs/008 §12).**
+- Estructura: `CategoryIcon` de 40 dp (archivada: opacidad 0,5), bloque de texto flexible, importe a la derecha sin truncar.
+- Texto: nombre de la categoría (hasta 2 líneas, sin elipsis), debajo la nota (hasta 2 líneas con elipsis; completa en la etiqueta). Si se muestra fuera de un grupo de día (Calendario ya lo agrupa en su cabecera del día), la fecha no se repite: `showDate` por defecto falso en ambas pantallas.
+- Objetivo táctil: toda la fila, `minHeight: 56`; separación entre filas 8 dp.
+- Accesibilidad: `button`; etiqueta «Editar movimiento de {categoría} del {fecha}: {gasto|ingreso} de {monto}{, nota: …}». El prefijo actual se conserva y se añaden tipo, monto y nota (cambia el texto exacto: ver impacto en I).
+- Los movimientos anulados no llegan a la lista (la API devuelve solo el historial vigente); no hay estado «anulado» en R4.
+
+**C.6 Estados.** Carga: indicador y «Cargando movimientos…». Vacío sin filtros: «Aún no hay movimientos. Cuando anotes el primero, aparecerá aquí.» Vacío con filtros: «Ningún movimiento coincide con estos filtros.» + [Limpiar filtros] (48 dp). Error: mensaje + [Reintentar] (vuelve a «cargando»). Error al cargar más: mensaje inline (`alert`) sin perder lo cargado; «Cargar más» sigue disponible como reintento. «Cargar más» muestra «Cargando…» y se deshabilita mientras trabaja (un solo envío). Errores de categorías del filtro: `ErrorBox` dentro del panel con su Reintentar (EXISTENTE).
+
+**C.7 Cambio de cuenta.** El selector reemplaza `detail` y el contenedor remonta la pestaña (`key={account.id}`, EXISTENTE): filtros y lista parten vacíos, se anuncia «Ahora estás en {nombre}» (EXISTENTE). Además la pantalla incluye `account.id` en el efecto de carga y descarta respuestas de la cuenta anterior (B.7).
+
+#### D. Calendario
+
+Wireframe (360 dp):
+
+```
+ {barra de contexto}
+ [tile] Calendario
+ ( ‹ )   Octubre 2026   ( › )
+  L  M  M  J  V  S  D
+ [ 1][ 2][ 3]...                 celdas 44,3 x 52 dp, separación 3
+ Resumen de octubre
+ [↑ Ingresos] [↓ Gastos] [Neto]
+ 14 de octubre
+ Ingresos $... · Gastos $... · Neto $...
+ [ + Anotar en este día ]
+ (ícono) Alimentación  -$6.50
+```
+
+**D.1 Navegación de mes (EXISTENTE, estilo nuevo).** «‹» y «›» como círculo de 32 dp con objetivo de 48 dp, etiquetas «Mes anterior» y «Mes siguiente», deshabilitados en enero de 2000 y diciembre de 2100 (EXISTENTE). El título del mes es `header`. Al cambiar de mes se anuncia el nuevo título («Octubre 2026») con `AccessibilityInfo.announceForAccessibility`, porque el foco queda en la flecha. El día seleccionado pasa al día por defecto del mes (EXISTENTE `defaultDay`).
+
+**D.2 Cuadrícula y P-3 (APROBADO).** Siete columnas, lunes primero (`WEEK_START`), cabeceras con etiqueta larga. Celda: alto 52 dp (`sizes.calendarCellHeight`), separación horizontal y vertical 3 dp, radio 8, fondo `surface`. Ancho = (ancho de ventana − 2 × 16 dp de margen − 6 × 3 dp) / 7: 44,3 dp a 360 dp y ≥ 48 dp con ≥ ≈ 386 dp. Se calcula con `useWindowDimensions` y una función pura probada (`calendarCellWidth`). P-3 solo ampara anchos < ≈ 400 dp y ≥ 44 dp; las zonas táctiles no se solapan. Por debajo de ≈ 350 dp la celda baja de 44 dp: **decisión del usuario L.3**.
+- Contenido: número del día 13/700 y, si hay movimientos, ingreso «+{compacto}» y gasto «−{compacto}» (10 sp, `incomeText`/`expenseText`, una línea, `allowFontScaling={false}` como hoy). El indicador de «hay movimientos» son esas cifras con signo (nunca solo color); la información completa va en la etiqueta y en el detalle del día, que sí escalan con la fuente del sistema.
+- Hoy: borde 2 `calStrong` y «, hoy» en la etiqueta. Día elegido: fondo `calStrong`, número e importes en blanco (con su signo), `accessibilityState.selected`. Un día puede ser hoy y elegido. Celdas vacías (días fuera del mes): sin objetivo táctil.
+- Etiqueta (EXISTENTE): «{d} de {mes}: ingresos $X, gastos $Y, {n} movimiento(s)[, hoy]»; sin movimientos, «{d} de {mes}[, hoy]».
+
+**D.3 Resumen del mes.** Tres `SummaryTile` (Ingresos ↑ verde, Gastos ↓ coral, Neto neutro) con los valores de `monthTotals`; un `—` (dato no seguro) se lee «no disponible». El contenedor es un solo elemento accesible: «Resumen de octubre: ingresos $X, gastos $Y, neto $Z». Sin movimientos en el mes: «No hay movimientos en este mes.» en lugar de las tarjetas. Carga: indicador pequeño; error: `ErrorBox` con «Reintentar calendario» (independiente del día).
+
+**D.4 Detalle del día.** Encabezado `header` «{d} de {mes}». Si el día tiene movimientos, una línea «Ingresos $X · Gastos $Y · Neto $Z» (EXISTENTE); si no, no se muestra esa línea y solo el texto «Este día no tiene movimientos registrados.» (se elimina la duplicidad «Sin movimientos este día»). Botón secundario «+ Anotar en este día» (48 dp, etiqueta accesible «Nuevo movimiento el {d} de {mes}») que llama `onNewTransaction(día)`; con la cuenta archivada queda deshabilitado (`disabled`) y el aviso de cuenta archivada de la pestaña lo explica. Es secundario porque el FAB de la pestaña es la acción primaria («Nuevo movimiento» para hoy). Lista del día con `TransactionRow` (sin fecha), «Cargar más» (EXISTENTE, mismo patrón que C.6), error «Reintentar movimientos del día».
+
+**D.5 Selección y accesibilidad.** Cada celda es un `button` con `selected`; al activar, el foco de TalkBack permanece en la celda (el estado «seleccionado» se anuncia) y el detalle se actualiza debajo con su encabezado alcanzable. No hay anuncio adicional del día (evita duplicar el estado).
+
+#### E. Reportes
+
+Wireframe (360 dp):
+
+```
+ {barra de contexto: saldo actual}
+ [tile] Reportes
+ [ ✓ Mes | Año | Rango ]                    segmentado violeta, 48 dp
+ ( ‹ )   Octubre 2026   ( › )
+ [↑ Ingresos] [↓ Gastos] [Balance]          tocables los dos primeros: «Ver movimientos ›»
+ Gastos por categoría
+  (ícono) Alimentación           $120.00
+          40.0%  ████████░░░░
+ Ingresos por categoría
+ Evolución mensual           [ Gráfico | Tabla ]   (solo Año y Rango)
+  ■ Ingresos  ■ Gastos
+ ─────────────
+ Exportar este período
+ Descarga los movimientos de este período en un archivo para guardarlo o compartirlo.
+ [ Exportar CSV ] [ Exportar PDF ]
+```
+
+**E.1 Período (EXISTENTE; APROBADO mensual por defecto).** Abre en el mes actual (`initialReportsView`). `Segmented` tono Reportes con las etiquetas accesibles «Modo Mes», «Modo Año», «Modo Rango». «‹ ›» como en D.1 («Mes anterior/siguiente», «Año anterior/siguiente»). Cambiar de modo conserva el período visto (EXISTENTE: Rango parte del período actual). El rango se elige con «Desde» y «Hasta» (botones y `DatePickerSheet`, igual que C.2); «Aplicar» se conserva (48 dp, secundario). Faltan fechas al aplicar: «Elige las fechas «Desde» y «Hasta».» (reemplaza el aviso AAAA-MM-DD, que ya no es entrada); orden inválido: «La fecha «Desde» no puede ser posterior a «Hasta».» (EXISTENTE). Debajo: «Del 01/10/2026 al 31/10/2026».
+
+**E.2 Resumen (EXISTENTE; APROBADO 5.8).** Tres `SummaryTile`: Ingresos y Gastos son botones («Ingresos $X. Ver movimientos», con «Ver movimientos ›» visible en 13 sp y 48 dp de alto mínimo) que abren Historial filtrado (pila, Atrás vuelve a Reportes: 14.6); Balance es texto (`accessible`, «Balance $X»), sin color de módulo y con signo «-» si es negativo. Valores = respuesta de la API; la app no suma ni resta.
+
+**E.3 Barras por categoría (APROBADO R4 D1: componentes de React Native).** Una fila por categoría, botón «Ver movimientos» (EXISTENTE etiqueta): `CategoryIcon` 32 dp, nombre (2 líneas, sin elipsis; archivada «(archivada)»), total a la derecha, debajo el porcentaje en texto (`formatPercent`) y la barra: pista `border` de 10 dp, relleno con `categoryFill(color)` (3:1 sobre blanco), ancho = `scaleUnits(total, máximo, 1000)/10` % (EXISTENTE, proporcional a la categoría mayor del grupo, **no** al 100 % del total; el porcentaje en texto es el del total, ver L.5), con mínimo visible de 4 dp si el total es mayor que cero (solo presentación). Alternativa textual: cada fila ya contiene nombre, importe y porcentaje en texto y en la etiqueta («{nombre}: $X, 40.0% de los gastos. Ver movimientos»); la barra es decorativa (`importantForAccessibility="no"`). Grupo vacío: «Sin gastos en este período» / «Sin ingresos en este período».
+
+**E.4 Evolución por período (solo Año y Rango; EXISTENTE; API agrupa por mes o por año).** No existe serie por día: la API solo admite `group` = `month` | `year`; una gráfica por día exigiría un cambio de contrato y queda fuera de R4 (sección M). Elementos:
+- Selector de vista `Segmented` «Gráfico | Tabla» (neutro, 48 dp; por defecto Gráfico).
+- Gráfico: columnas de dos barras por período (EXISTENTE, 56 dp de ancho, barras de 18 dp, alto 80 dp, escala `scaleUnits`), con **leyenda** visible «↑ Ingresos» (`income`) y «↓ Gastos» (`expense`), etiquetas del período y cifras compactas con signo. Cada columna es un elemento accesible: «{período}: ingresos $X, gastos $Y» (EXISTENTE). Aviso bajo el gráfico cuando hay desplazamiento: «Desliza para ver más períodos.» Las cifras pequeñas no escalan con la fuente (hoy `allowFontScaling={false}`); la tabla es la alternativa que sí escala.
+- Tabla: una fila por período con «Período», «Ingresos», «Gastos», «Balance» (valores de la API, sin calcular); cada fila un elemento accesible: «{período}: ingresos $X, gastos $Y, balance $Z». Sin scroll horizontal (filas apiladas si el texto es grande).
+
+**E.5 Exportación (EXISTENTE; reubicada).** Al final: encabezado `header` «Exportar este período», texto «Descarga los movimientos de este período en un archivo para guardarlo o compartirlo.», botones «Exportar CSV» y «Exportar PDF» (secundarios, 48 dp; las etiquetas accesibles actuales se conservan). Mientras exporta: el botón elegido dice «Exportando…», ambos bloqueados, indicador (`export-loading`); doble toque = una sola llamada (EXISTENTE `exporting`). Éxito: se abre el selector de compartir del sistema (sin mensaje propio: Android no informa si se envió). Error: mensaje + [Reintentar exportación]. Un cambio de período descarta la exportación en curso sin compartir (EXISTENTE). Con período sin movimientos no se ofrece exportar. Más > Exportar sigue llevando a la pestaña Reportes (EXISTENTE).
+
+**E.6 Estados.** Carga: indicador y «Calculando tu resumen…». Vacío (`cantidad === 0`): «Sin movimientos en este período. Prueba con otro mes.» (Año: «…otro año.»; Rango: «…otro rango.»). Error: mensaje + «Reintentar reportes» (EXISTENTE etiqueta). Cambiar de período o de cuenta muestra «cargando», no los datos anteriores (EXISTENTE `key`).
+
+#### F. Categorías (acceso desde Más y desde el formulario, EXISTENTE)
+
+**F.1 Lista.** `ScreenTitle` «Categorías» (salida «‹ Más», o «‹ Volver» si se llegó desde Nuevo movimiento: EXISTENTE). `Segmented` neutro «Gastos | Ingresos» (valor interno `egreso`/`ingreso`; Gastos por defecto). Botón primario «+ Nueva categoría» (oculto con la cuenta archivada, EXISTENTE). Interruptor «Mostrar archivadas» (EXISTENTE; la tabla con «Archivadas (n)» de §5.10 exigiría cargar siempre las archivadas, no se rediseña ahora). Si se llegó desde el formulario: ayuda «Crea una categoría y vuelve para anotar tu movimiento.»
+
+**F.2 Fila.** `CategoryIcon` 40 dp (color e ícono de la API), nombre **completo** (sin límite de líneas), descripción si existe, etiqueta «Archivada» (texto en `yellowSoft`/`yellowText`, no solo opacidad), y «⋮» de 48 × 48 dp con etiqueta «Acciones de {nombre}». La fila no es pulsable por sí misma.
+
+**F.3 Menú «⋮» (PROPUESTA sobre §5.10).** Hoja inferior (`Sheet`, sin dependencias) titulada con el nombre, con tres acciones de 48 dp: «Editar», «Archivar» o «Desarchivar», y al final, separada y en rojo (`danger`), «Eliminar». Atrás cierra la hoja. Las etiquetas accesibles actuales («Editar {nombre}», «Archivar {nombre}», «Eliminar {nombre}») se conservan dentro del menú. Con otra operación en curso (`busy`) las acciones quedan deshabilitadas.
+
+**F.4 Formulario (crear/editar; EXISTENTE con ajustes).** Título «Nueva categoría» / «Editar categoría». «Nombre» (obligatorio) y «Descripción (opcional)». Tipo: al crear, preseleccionado el del segmento activo, con dos opciones «Gasto» / «Ingreso» (48 dp, `radio`); al editar, texto «Tipo: Gasto (no se puede cambiar)». Color: siete opciones de 48 × 48 dp con círculo `categoryFill(color)`, «✓» en la elegida y etiqueta «Color {nombre}»; texto «Color: Rojo» o «Color: sin elegir (se asigna uno por defecto)»; opcional como hoy. **Vista previa:** `CategoryIcon` con el color elegido (ícono genérico: la app no ofrece elegir íconos) y el nombre tal como se verá en Nuevo movimiento. «Guardar» (primario, «Guardando…» y bloqueado mientras trabaja) y «Cancelar». Errores en `alert`: «Escribe un nombre.», y los de la API (`CATEGORY_NAME_TAKEN`, `LIMIT_REACHED`) con los textos actuales. Descarte (R3 D1/D4, hook `useDiscardGuard` montado solo mientras el formulario está abierto): Atrás, «Cancelar» con cambios piden confirmación; sin cambios cierran el formulario sin diálogo; Atrás con el formulario abierto **cierra el formulario y no la pantalla** (§3.4).
+
+**F.5 Eliminar y archivar.** Archivar/Desarchivar: sin confirmación (reversible, EXISTENTE). Eliminar: `Alert` «Eliminar categoría» / «¿Eliminar «{nombre}»? Esta acción no se puede deshacer.» / [Cancelar] [Eliminar] (EXISTENTE; §7.3 abrevia la frase: se conserva la existente, ver L.8). Ante `CATEGORY_IN_USE`: aviso inline (`alert`) «Esta categoría tiene movimientos, por eso no se puede eliminar. Puedes archivarla: no aparecerá al anotar movimientos nuevos, pero tu historial se conserva.» con el botón «Archivar «{nombre}»» (48 dp) que ejecuta el archivo; se quita al elegir otra acción. Nombres duplicados y límite: mensajes actuales.
+
+**F.6 Estados.** Carga: indicador y «Cargando categorías…». Vacío por tipo: «Aún no tienes categorías de gasto. Crea la primera.» / «…de ingreso…»; con la cuenta archivada: sin la invitación a crear. Error: mensaje + [Reintentar]. Cuenta archivada: aviso EXISTENTE «Cuenta archivada: no se pueden crear ni desarchivar categorías.» y 409 `ACCOUNT_ARCHIVED` hacia el contenedor (EXISTENTE).
+
+#### G. Textos exactos (español)
+
+| Lugar | Texto |
+| --- | --- |
+| Títulos | «Movimientos», «Calendario», «Reportes», «Categorías» |
+| Contador Historial | «14 movimientos» / «1 movimiento» |
+| Botón de filtros | «Filtros» / «Filtros (2)»; accesible «Filtros, 2 activos» |
+| Rango (botones) | «Desde» / «Hasta»; valor «Elegir» o la fecha; accesible «Desde: 01/10/2026» / «Hasta: sin elegir» |
+| Quitar filtro | «Quitar filtro: Gastos» |
+| Error de rango | «La fecha «Desde» no puede ser posterior a «Hasta».» |
+| Encabezados de día | «Hoy», «Ayer», «Miércoles 14 de octubre» (+ « de 2025» si es otro año) |
+| Cargas | «Cargando movimientos…», «Cargando…» (Cargar más), «Calculando tu resumen…», «Cargando categorías…» |
+| Historial vacío | «Aún no hay movimientos. Cuando anotes el primero, aparecerá aquí.» |
+| Historial filtrado vacío | «Ningún movimiento coincide con estos filtros.» + [Limpiar filtros] |
+| Calendario mes vacío | «No hay movimientos en este mes.» |
+| Calendario día vacío | «Este día no tiene movimientos registrados.» |
+| Botón del día | «+ Anotar en este día» (accesible «Nuevo movimiento el 14 de octubre») |
+| Resumen del mes (accesible) | «Resumen de octubre: ingresos $X, gastos $Y, neto $Z» |
+| Reportes vacío | «Sin movimientos en este período. Prueba con otro mes.» (año / rango según modo) |
+| Rango incompleto | «Elige las fechas «Desde» y «Hasta».» |
+| Pista de tarjetas | «Ver movimientos ›» |
+| Barras vacías | «Sin gastos en este período», «Sin ingresos en este período» |
+| Serie | Leyenda «↑ Ingresos» / «↓ Gastos»; «Gráfico» / «Tabla»; «Desliza para ver más períodos.» |
+| Exportación | «Exportar este período», «Descarga los movimientos de este período en un archivo para guardarlo o compartirlo.», «Exportar CSV», «Exportar PDF», «Exportando…», [Reintentar exportación] |
+| Categorías | «Gastos», «Ingresos», «+ Nueva categoría», «Mostrar archivadas», «Archivada», «Acciones de {nombre}», «Editar», «Archivar», «Desarchivar», «Eliminar» |
+| Vacío por tipo | «Aún no tienes categorías de gasto. Crea la primera.» / «…de ingreso. Crea la primera.» |
+| Formulario | «Nueva categoría», «Editar categoría», «Descripción (opcional)», «Tipo: Gasto (no se puede cambiar)», «Color: Rojo», «Color: sin elegir (se asigna uno por defecto)», «Guardar», «Guardando…», «Cancelar» |
+| Descarte | Nueva: «¿Descartar esta categoría?» / «Lo que escribiste se perderá.»; Editar: «¿Descartar los cambios?» / «Los cambios que hiciste no se guardarán.»; [Seguir editando] [Descartar] |
+| Categoría en uso | «Esta categoría tiene movimientos, por eso no se puede eliminar. Puedes archivarla: no aparecerá al anotar movimientos nuevos, pero tu historial se conserva.» + [Archivar «{nombre}»] |
+| Desde el formulario | «Crea una categoría y vuelve para anotar tu movimiento.» |
+| Anuncios | «Octubre 2026» (cambio de mes) |
+
+#### H. Accesibilidad y objetivos táctiles de R4
+
+- Mínimo 48 dp efectivos: botones «Filtros», «Desde», «Hasta», «Cargar más», «Limpiar filtros», «⋮», colores, flechas de mes (círculo 32 dp con objetivo 48), opciones de segmentado (48 dp, P-2), filas de movimiento (≥ 56 dp), tarjetas Ingresos/Gastos, botones de exportar. **Únicas excepciones aprobadas:** chips `sm` de filtro (36 dp visibles, zona 48 dp, P-1) y celdas de día del calendario (P-3).
+- Roles: `header` en títulos, encabezados de día y de sección; `radio` + `selected` en segmentados y colores; `button` en filas, chips y «⋮»; `alert` en errores; `expanded` en «Filtros»; estados `busy`/`disabled` en carga, guardado y exportación.
+- Foco inicial en el título; orden: barra, título, contenido principal, acciones (§10). Los ornamentos (`CategoryIcon`, barras, «✓», «▾») ocultos a lectores.
+- Color y texto: ingresos/gastos con signo y palabra en la etiqueta; barras con leyenda; calendario con cifras con signo; contraste ≥ 4,5:1 en textos y ≥ 3:1 en barras, íconos y bordes (`categoryFill`, `calStrong`).
+- Fuente del sistema: sin alturas fijas en filas, chips, tarjetas y botones; las cifras de celdas del calendario y de la serie son la excepción documentada y su información equivalente escala en el detalle y la tabla.
+- Teclado: Categorías (nombre y descripción) con «Guardar» alcanzable con el teclado abierto; ya no hay `TextInput` en Historial ni Reportes.
+
+#### I. Criterios de aceptación de R4
+
+Verificables en Jest (A = componente con el fake de `ResourcesApi`; U = prueba unitaria):
+
+1. (A) Los títulos son `header`: «Movimientos», «Calendario», «Reportes» y «Categorías»; no existe «Historial de», «Calendario de», «Reportes de» ni «Categorías de».
+2. (A) Los cinco archivos de pantalla de R4 no contienen colores literales de la línea base (`#b3261e`, `#2e7d32`, `#1a73e8`, `#e8f0fe`, `#dddddd`, `#eeeeee`, `#555555`, `#9e9e9e`); revisión por búsqueda de `qa-engineer` y comprobación de estilos de los elementos clave.
+3. (A) Historial: panel de filtros cerrado por defecto; «Filtros» tiene `expanded` falso, «Filtros (N)» con N = grupos activos y etiqueta «Filtros, N activos».
+4. (A) Con filtros iniciales (desde Reportes) hay un chip por filtro con el panel cerrado; cada chip «Quitar filtro: …» quita solo su filtro y `listTransactions` se llama con la página 1 y los demás filtros.
+5. (A) Tipo y categoría: elegir un tipo limpia una categoría de otro tipo; «Todas» limpia la categoría (regresión).
+6. (A) Rango: «Desde» y «Hasta» abren el selector, no hay `TextInput` de fecha ni «AAAA-MM-DD»; elegir una fecha llama a `listTransactions` con `desde`/`hasta`; una fecha que invierte el rango no llama a la API y muestra el mensaje de C.2.
+7. (A) «Limpiar filtros» (panel y vacío filtrado) restablece y relee sin `tipo`, `categoryId`, `desde` ni `hasta`.
+8. (A) Agrupación: tres fechas producen tres encabezados `header` en el orden recibido; la fecha de hoy dice «Hoy» y la de ayer «Ayer»; un día que continúa en la página 2 no repite el encabezado.
+9. (A) Fila: nombre completo de una categoría de 40 caracteres sin `numberOfLines` de 1, nota con elipsis a dos líneas, importe «-$6.50»/«+$800.00», sin fecha dentro del grupo, `minHeight` ≥ 56, etiqueta con tipo e importe; pulsarla llama a `onOpenTransaction`.
+10. (A) Contador «N movimientos» = `total` de la API (no la cantidad cargada); «1 movimiento» en singular; oculto al cargar o en error.
+11. (A) Estados de Historial: carga con texto; vacío con y sin filtros (con [Limpiar filtros]); error con [Reintentar]; error al cargar más conserva lo cargado; doble toque en «Cargar más» = una sola llamada a la página 2 y texto «Cargando…».
+12. (A) Una respuesta tardía de un filtro anterior no pisa la lista actual (regresión del patrón `generation`).
+13. (A) Re-render de `HistoryScreen` con otro `account.id` sin remontar: no se ve ningún movimiento anterior, se muestra «cargando» y se llama a `listTransactions` con la cuenta nueva.
+14. (U) `lib/calendar.ts`: la función de día de la semana devuelve el día correcto en fechas de control (p. ej. 2026-10-14 es miércoles, 2000-01-01 sábado, 2100-12-31 viernes, bisiesto) y no usa `Date`.
+15. (U) `calendarCellWidth(360)` ≈ 44,3 dp (≥ 44); `calendarCellWidth(412)` ≥ 48; la altura es 52.
+16. (A) Calendario: cuadrícula de 7 columnas con lunes primero, `testID` `calendar-cell-{fecha}` y etiquetas actuales; los días con movimientos muestran «+» y «−» compactos; hoy lleva «, hoy»; solo una celda está `selected`; la celda elegida usa `calStrong`.
+17. (A) «‹»/«›» cambian de mes, llaman a `onViewChange`, anuncian el título (mock de `announceForAccessibility`) y se deshabilitan en 2000-01 y 2100-12.
+18. (A) Elegir un día llama a `onViewChange(mes, día)` y a `listTransactions` con `desde = hasta = día`.
+19. (A) Resumen del mes con etiqueta accesible única; un total no seguro se lee «no disponible»; mes vacío muestra «No hay movimientos en este mes.».
+20. (A) Detalle del día: sin movimientos se muestra solo «Este día no tiene movimientos registrados.» (no «Sin movimientos este día»); con movimientos aparece la línea de ingresos, gastos y neto.
+21. (A) «+ Anotar en este día» llama a `onNewTransaction(día)`; con `canCreate` falso queda con `accessibilityState.disabled`; no comparte etiqueta con el FAB.
+22. (A) Errores independientes del mes y del día, cada uno con su reintento; «Cargar más» del día sin duplicados.
+23. (A) Reportes abre en el mes actual; «‹ ›» y los límites funcionan; el `Segmented` tiene las etiquetas «Modo Mes/Año/Rango» y pasar a Rango parte del período visto.
+24. (A) Rango: botones con selector; sin fechas, «Elige las fechas «Desde» y «Hasta».» sin llamar a la API; orden inválido, mensaje de C.2; válido, se piden resumen, categorías y período con ese rango.
+25. (A) Tarjetas: Ingresos y Gastos son botones que llaman a `onOpenHistory` con tipo, desde y hasta; Balance no es botón; los valores son los de la API.
+26. (A) Barras de categoría: `report-bar-{id}` con el ancho de `scaleUnits` (regresión), mínimo visible con importe pequeño, nombre sin `numberOfLines` de 1, porcentaje en texto, etiqueta completa, fila abre `onOpenHistory({ categoryId, desde, hasta })`.
+27. (A) Serie (Año/Rango): leyenda Ingresos/Gastos visible; cada columna conserva su etiqueta; «Tabla» muestra una fila por período con ingresos, gastos y balance de la respuesta de la API; la vista elegida se conserva al cambiar de pestaña interna si el contenedor la guarda (si no, vuelve a Gráfico).
+28. (A) Exportación: sección «Exportar este período» después de las barras y de la serie; etiquetas «Exportar CSV/PDF» conservadas; doble toque = una llamada a `exportFile`; «Exportando…» y bloqueo; error con «Reintentar exportación»; cambiar de período descarta sin compartir; sin movimientos no se ofrece.
+29. (A) Estados de Reportes: carga con «Calculando tu resumen…»; vacío según modo; error con «Reintentar reportes»; ningún dato del período anterior al cambiar.
+30. (A) Todas las pruebas existentes de cálculo de Reportes y Calendario (`lib/reports.test.ts`, `lib/calendar.test.ts`) siguen en verde sin cambios de expectativas.
+31. (A) Categorías: segmentado Gastos | Ingresos (Gastos por defecto) y lista filtrada por tipo; vacío por tipo con el texto exacto; sin «Egresos» en pantalla.
+32. (A) Fila: `CategoryIcon`, nombre completo sin límite de líneas, descripción, «Archivada» como texto, «⋮» con etiqueta «Acciones de {nombre}» y ≥ 48 dp.
+33. (A) «⋮» abre la hoja con Editar, Archivar/Desarchivar y Eliminar en ese orden, Eliminar con variante `danger`; las etiquetas «Editar X», «Archivar X», «Eliminar X» se conservan; Atrás cierra la hoja.
+34. (A) Crear: el tipo parte del segmento activo; color con «✓» y texto «Color: …»; la vista previa refleja nombre y color; nombre vacío da «Escribe un nombre.» sin llamar a la API; editar muestra «Tipo: … (no se puede cambiar)» y envía solo los campos cambiados (regresión).
+35. (A) Eliminar: `Alert` con el texto vigente; confirmar llama a `deleteCategory`; `CATEGORY_IN_USE` muestra el aviso de F.5 con «Archivar «{nombre}»», que llama a `updateCategory({ archivada: true })`.
+36. (A) Descarte: formulario sucio + Atrás/Cancelar → `Alert` con los textos de G; sin cambios → cierra el formulario sin diálogo; con el formulario abierto Atrás no sale de Categorías; guardando, Atrás se ignora.
+37. (A) Cuenta archivada: sin «+ Nueva categoría», aviso EXISTENTE y 409 `ACCOUNT_ARCHIVED` llama a `onAccountArchived`; `CATEGORY_NAME_TAKEN` y `LIMIT_REACHED` con sus mensajes actuales.
+38. (A) Llegada desde Nuevo movimiento: ayuda «Crea una categoría y vuelve…» y salida «‹ Volver» (regresión de `MainNavigator.test.tsx`).
+39. (A) `MainNavigator`: cambiar de cuenta desde el selector deja las cuatro pantallas sin datos de la cuenta anterior; Atrás Reportes → Historial filtrado → Reportes y Categorías → Más se conservan.
+40. Typecheck, lint, Prettier y la suite completa de `app` en verde (línea base: docs/004).
+
+Solo en dispositivo (N, nivel D de docs/010):
+
+41. (N) Celdas del calendario medidas a 360 y 412 dp: ≥ 44 × 52 dp y ≥ 48 dp a ≥ ≈ 400 dp, sin zonas solapadas; 6 semanas entran o se desplazan sin recortes.
+42. (N) TalkBack: recorre el calendario, anuncia «seleccionado», el cambio de mes, el resumen del mes y el orden barra → título → contenido; las filas leen tipo e importe.
+43. (N) Fuente del sistema al 130 % y 200 %: filas, chips de filtro (se envuelven), tarjetas de Reportes, botones «Desde/Hasta», tabla de la serie y filas de Categorías sin truncar importes ni nombres de categorías habituales.
+44. (N) `DatePickerSheet` desde Historial y Reportes con navegación por gestos y por tres botones (Atrás cierra la hoja) y sin quedar bajo la barra del sistema.
+45. (N) Hoja «⋮» de Categorías y formulario con el teclado abierto: «Guardar» alcanzable; Atrás cierra primero el teclado.
+46. (N) Exportar CSV y PDF en Android real: se abre el selector de compartir y el archivo es legible.
+47. (N) Scroll largo en Historial, Calendario y Reportes: último elemento por encima del FAB y de la barra de pestañas (AND-09).
+48. (N) Zonas ampliadas de los chips `sm` sin solaparse (filas a 12 dp) y barras de ingresos/gastos distinguibles con la leyenda y en escala de grises.
+
+#### J. Archivos que tocaría R4 (PROPUESTA; implementa `mobile-engineer`)
+
+- `app/src/screens/HistoryScreen.tsx`, `TransactionRow.tsx`, `CalendarScreen.tsx`, `ReportsScreen.tsx`, `CategoriesScreen.tsx`.
+- `app/src/screens/ui.tsx`: `ScreenTitle`/`ModuleTile`, `SummaryTile`, círculo de flechas de mes (docs/008 §12). `Segmented` ya admite tono `reportes` y `movimientos`.
+- `app/src/screens/DatePickerSheet.tsx`: hoy exige `tipo` y colorea según gasto/ingreso; necesita un tono neutro (prop opcional) para filtros y rango. No estaba en la lista de docs/009 R4: ver L.2.
+- `app/src/lib/calendar.ts`: función pura de día de la semana y `calendarCellWidth` (o en un helper nuevo); sin tocar `buildMonthGrid`, `monthTotals` ni `lib/reports.ts`.
+- `app/src/screens/MainNavigator.tsx`: pasar a Categorías que viene del formulario (`fromForm`) y conservar la pestaña/vista; sin cambios de rutas.
+- Pruebas: `HistoryScreen.test.tsx`, `CalendarScreen.test.tsx`, `ReportsScreen.test.tsx`, `CategoriesScreen.test.tsx`, `ui.test.tsx`, `calendar.test.ts`, `MainNavigator.test.tsx`, `App.resources.test.tsx`. Cambian: consultas por «Aplicar rango», los `TextInput` Desde/Hasta, «Historial de…», «Aún no hay movimientos en esta cuenta», «No hay movimientos con estos filtros», «Nuevo movimiento» del día, «Editar/Archivar/Eliminar» (ahora dentro de la hoja «⋮»), «Egresos», «Tipo egreso/ingreso» y la etiqueta de `TransactionRow`. No se tocan `/api`, D1, `lib/reports.ts` ni dependencias.
+
+#### K. Reutilización del selector de fecha
+
+Docs/003 R3 D5 aprobó el selector propio para el formulario; §5.6 y §5.8 ya pedían «Desde/Hasta» con él. Se reutiliza `DatePickerSheet` (Modal propio, sin dependencias): mes inicial = el de la fecha elegida o el mes de hoy, «‹ ›» de 48 dp acotados a 2000-2100, Atrás cierra sin cambiar. Para rango de Historial y Reportes el tono es neutro (marca), no el del tipo de movimiento.
+
+#### L. Decisiones y confirmaciones para el usuario (no decididas aquí)
+
+1. Formato del panel de filtros de Historial: sección plegable en línea (recomendada: una sola capa modal, sin teclado, se ven los chips al mismo tiempo) u hoja inferior (§5.6 admite ambas).
+2. Confirmar que R4 incluya `DatePickerSheet.tsx` (tono neutro) y una función de día de la semana en `lib/calendar.ts`; ninguno cambia cálculos aprobados, pero no figuran en docs/009 §3 (se añadieron a la fila R4).
+3. Calendario por debajo de ≈ 350 dp de ancho: la celda baja de 44 dp (a 320 dp ≈ 41 dp); sigue cumpliendo WCAG 2.5.8 (24 dp) pero queda fuera de P-3. Opciones: aceptar (recomendada, la matriz de pruebas es 360 y 412) o ampliar P-3 a 40 dp.
+4. Botón del día en Calendario: pasa a secundario «+ Anotar en este día» porque el FAB ya es el primario «Nuevo movimiento» (hoy hay dos con el mismo nombre). Cambia la etiqueta que usan las pruebas.
+5. Largo de las barras por categoría: se conserva el cálculo actual (relativo a la mayor categoría); el porcentaje en texto es sobre el total del grupo y el usuario podría esperar que coincidan. Alternativa: barra proporcional al porcentaje (cambia el cálculo de presentación). Recomendación: conservar (docs/003 R4 D1).
+6. Texto «Egreso» en Categorías pasa a «Gasto» en pantalla (el dato interno `egreso` no cambia).
+7. Interruptor «Mostrar archivadas» se conserva; «Archivadas (n)» de §5.10 exigiría cargar siempre las archivadas.
+8. Mensajes: se conservan los de `resources-messages.ts` y la frase de eliminar de §5.10; difieren de §7.4/§7.3 en `CATEGORY_NAME_TAKEN` («Ya tienes una categoría con ese nombre.»), `LIMIT_REACHED`, la frase de eliminar y los de conexión. Decidir si se unifican (cambio de texto y de pruebas, no de contrato).
+9. UXQA-R3-03 (Categorías desde el formulario descarta el formulario) sigue siendo comportamiento aceptado; R4 solo añade la ayuda de F.1.
+
+#### M. Fuera de alcance de R4 (listado, sin diseñar)
+
+Serie de Reportes por día (la API solo agrupa por mes o año), gráfico de dona, comparación entre períodos, presupuestos y metas, búsqueda de texto en Historial, edición de ícono de categoría, ilustraciones de estados vacíos y guías (R5), conciliación (Fase 6).
+
 ## 6. Mis cuentas: renombrar, archivar y «solicitar eliminación»
 
 Hechos de contrato (verificados): no existe `DELETE /accounts`; `PATCH /accounts/:id` admite solo `nombre` y `archivada`; docs/001 §5: «Las cuentas se archivan, no se eliminan físicamente» y CLAUDE.md: «La información histórica no se elimina, se archiva».

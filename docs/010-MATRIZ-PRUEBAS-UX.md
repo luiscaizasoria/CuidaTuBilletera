@@ -2,7 +2,7 @@
 
 Matriz reutilizable con la que `mobile-ux-qa` valida cualquier cambio visible de la interfaz móvil (política de CLAUDE.md, «Coordinación y delegación»). Se aplica al rediseño (docs/007, docs/008 y docs/009) y a las fases siguientes. Los criterios detallados de cada pantalla están en docs/007 §11.2 (criterios 1 a 31, trazados en §9) y los tokens y contrastes en docs/008.
 
-Estado actual: **R2 validada por código y pruebas Jest (nivel A y T) y sin dispositivo**; el resultado está en el §11. **R3 revisada por código y Jest (nivel A y T), sin dispositivo: primera revisión RECHAZADA; revalidada tras las correcciones: APROBADA CON OBSERVACIONES (sin defectos altos ni críticos abiertos; cierre condicionado a nivel D)**; el resultado está en el §12 y la revalidación en el §12.8. Las demás fases (R4 a R6) no están ejecutadas. Ninguna fila está validada en dispositivo Android real (nivel D) ni con TalkBack.
+Estado actual: **R2 validada por código y pruebas Jest (nivel A y T) y sin dispositivo**; el resultado está en el §11. **R3 revisada por código y Jest (nivel A y T), sin dispositivo: primera revisión RECHAZADA; revalidada tras las correcciones: APROBADA CON OBSERVACIONES (sin defectos altos ni críticos abiertos; cierre condicionado a nivel D)**; el resultado está en el §12 y la revalidación en el §12.8. **R4 revisada por código y Jest (nivel A y T), sin dispositivo: APROBADA CON OBSERVACIONES (sin defectos altos ni críticos; defectos R4-01 a R4-03 cerrados tras D6, §13.8; cierre condicionado a nivel D)**; el resultado está en el §13. Las demás fases (R5 y R6) no están ejecutadas. Ninguna fila está validada en dispositivo Android real (nivel D) ni con TalkBack.
 
 ## 1. Niveles de evidencia
 
@@ -450,3 +450,184 @@ Decisión: APROBADO CON OBSERVACIONES. UXQA-R3-07 CERRADO (A). Sin defectos alto
 | Documentación | Observación baja | docs/007 §5.5.1 C conserva el párrafo «Helper PROPUESTA: `sanitizeAmountInput`…» (línea 561) y el criterio 20 sigue citándolo; el resto (C.1 y criterios 3 y 4) ya describe `validateAmountText`. Devolver a quien coordina para alinear el texto |
 
 Estado de defectos tras esta revalidación: críticos 0, altos 0, medios 0, bajos 0 de código (R3-07 cerrado); queda la observación documental y los pendientes de nivel D del §12.7 (G21: teclado real, margen inferior, TalkBack, fuente 200 %, 360/412 dp, comportamiento de pegado con `maxLength` 24 en Android). El cierre de R3 sigue condicionado a ese nivel D.
+
+## 13. Informe de ejecución R4 (Historial, Calendario, Reportes y Categorías)
+
+```
+Informe de ejecución UX-QA - R4
+Fecha: 2026-10-16
+Rama y commit evaluados: feat/rediseno-ux-ui sobre 281bc86 (R3), con los cambios de R4 de app/src y docs SIN commit
+Ejecutor: mobile-ux-qa (agentId: lo registra quien coordina; no se dispone aquí)
+Alcance: docs/007 §5.11 (A a M, criterios 1 a 48), docs/008 §6.14 y §3.4, docs/003 Rediseño R4 D1 a D5.
+         HistoryScreen, CalendarScreen, ReportsScreen, CategoriesScreen, TransactionRow, DatePickerSheet, ui.tsx
+         (ScreenTitle, ModuleTile, SummaryTile, MonthArrow, DateField, LoadingState, EmptyState), form-ui.tsx,
+         MainNavigator.tsx, lib/calendar.ts, lib/reports.ts, theme/tokens.ts.
+Entorno: niveles A (Jest) y T (contrast.js y cálculo WCAG propio) y revisión de código. Sin R ni D: no hay emulador,
+         dispositivo ni TalkBack; no se probó 360/412 dp reales, gestos, tres botones, teclado real ni fuente 130 %/200 %.
+Resumen R4: criterios 1 a 40 con nivel A: OK (el 27 con matiz); criterios 41 a 48 (nivel D): PENDIENTE.
+            Defectos: 0 críticos, 0 altos, 1 medio, 2 bajos.
+Decisión: APROBADO CON OBSERVACIONES. Sin defectos críticos ni altos. El medio (UXQA-R4-01) debe corregirse antes del PR
+          (la CI arranca con la caché de Jest fría). El cierre de R4 sigue condicionado al nivel D (criterios 41 a 48).
+```
+
+### 13.1 Comandos y resultados (nivel A/T)
+
+| Comando | Resultado |
+| --- | --- |
+| `cd app && npx jest --ci --maxWorkers=2` (todo, caché caliente) | 38 suites, **1445 pruebas, todas en verde** |
+| `cd app && npx jest --ci --maxWorkers=2` de HistoryScreen, TransactionRow, DatePickerSheet, calendar y reports (primera corrida, caché fría) | **1 FALLA** en `HistoryScreen.test.tsx` «muestra carga, luego los movimientos...»: `Exceeded timeout of 5000 ms`. Resto en verde (109 de 110). Ver UXQA-R4-01 |
+| `cd app && npx jest --ci --no-cache --maxWorkers=2` de History, Calendar, Reports y Categories | **Reproducido**: solo falla la misma prueba de History (167 de 168). Calendar, Reports y Categories pasan, pero tampoco llaman al helper |
+| `cd app && npx jest --ci --maxWorkers=2 src/screens/HistoryScreen.test.tsx` (caché caliente) | 36 pruebas en verde |
+| `cd app && npx jest --ci --maxWorkers=2` de Calendar, Reports, Categories y ui | 4 suites, 181 pruebas en verde |
+| `cd app && npx jest --ci --maxWorkers=2` de MainNavigator, App.resources y tokens | 3 suites, 71 pruebas en verde |
+| `cd app && npx tsc --noEmit` | sin errores |
+| `cd app && npx eslint src --max-warnings=0` | sin avisos |
+| `cd app && npx prettier --check src` | todos los archivos con el estilo |
+| `node docs/design/contrast.js --check` | código de salida 0 (98 pares; mínimo texto 4,60:1; mínimo componente 3,47:1; 7 colores del selector de Categorías con `catFill` ≥ 3:1) |
+| `git diff HEAD --stat -- app/package.json app/package-lock.json` y `grep svg app/package.json` | **sin cambios** y sin `react-native-svg` ni dependencia nativa (docs/003 R4 D1) |
+| `git diff HEAD --numstat -- app/src/lib/calendar.test.ts app/src/lib/reports.test.ts` | `calendar.test.ts`: 43 líneas añadidas, 0 eliminadas; `reports.test.ts` sin cambios (criterio 30) |
+| Cálculo WCAG propio (script en scratchpad, no versionado) | blanco/`calStrong` 5,67; `calStrong`/blanco 5,67 y /`bg` 5,50; `incomeText`/blanco 6,67; `expenseText`/blanco 6,38 y /`expenseSoft` 5,17; `income`/blanco 4,99 y `expense`/blanco 4,82 (cifra de `SummaryTile`, leyenda y barras, objeto gráfico ≥ 3); `text3` sobre `bg` 5,38 y blanco 5,54 (aviso de desplazamiento, placeholder de la vista previa); `text2` sobre `bg` 7,39, sobre `segBg` 6,60, sobre `archivedRow` 6,71; `brand700`/blanco 7,49 («Ver movimientos ›»); `movInk`/`movTile` 8,19; `repInk`/`repTile` 7,68; tinta pizarra/mosaico 8,41; `yellowText`/`yellowSoft` 6,86; `calTile` sobre `calStrong` 4,69 (anillo de hoy+elegida); `borderStrong`/blanco 3,58. Todos los textos ≥ 4,5 y los componentes ≥ 3. Borde `border` de la celda en reposo frente a `bg` 1,19: decorativo (el número del día es el contenido); ver observaciones |
+| `grep` de `#hex`/`rgb(` en `HistoryScreen`, `CalendarScreen`, `ReportsScreen`, `CategoriesScreen`, `TransactionRow`, `ui`, `form-ui`, `DatePickerSheet` y `sheets` | **0 coincidencias** fuera de `CATEGORY_COLORS` (siete valores que se envían a la API: datos, no estilos). Los ocho literales de la línea base no existen |
+
+### 13.2 Resultados por criterio de docs/007 §5.11 I
+
+Nivel ejecutado: «A» = prueba Jest con el fake de `ResourcesApi`; «A + código» = además revisión del código; «U» = unitaria. Los números de línea son de las pruebas.
+
+| Criterio | Nivel exigido | Nivel ejecutado | Resultado | Evidencia | Defecto |
+| --- | --- | --- | --- | --- | --- |
+| 1 Títulos `header` sin nombre de cuenta | A | A + código | OK | `HistoryScreen.test` 87-88; `ReportsScreen.test` 174-175; `CalendarScreen.test` 401; `CategoriesScreen.test` 50; `MainNavigator.test` 190, 205, 302; cada pantalla usa `<ScreenTitle title=... module=...>` (solo «Movimientos», «Calendario», «Reportes», «Categorías») | - |
+| 2 Sin colores literales | A (búsqueda) | Búsqueda + código | OK | 13.1: 0 coincidencias; estilos de calendario, filas y barras salen de `colors`, `moduleColors`, `categoryFill` | - |
+| 3 Panel cerrado; «Filtros (N)»; `expanded` | A | A + código | OK | `HistoryScreen.test` 488, 504; `HistoryScreen.tsx` 320-330 (`expanded={panelOpen}`, `Filtros, N activos`/`Filtros, ninguno activo`) | - |
+| 4 Chips con filtros iniciales y «Quitar filtro» | A | A | OK | 402, 524 (quita solo su filtro y relee la página 1 con los demás) | - |
+| 5 Tipo limpia categoría incompatible; «Todas» | A | A | OK | 281, 569 | - |
+| 6 Rango con selector, sin `TextInput`, rango invertido sin API | A | A + código | OK | 300, 334, 591; `pickDate` cierra la hoja, no filtra y muestra `RANGE_ORDER_ERROR` con `alert`; sin `TextInput` en `HistoryScreen.tsx` | - |
+| 7 «Limpiar filtros» (panel y vacío) | A | A | OK | 359, 430, 604 | - |
+| 8 Agrupación por día | A | A + U | OK | 636, 648; `calendar.test` 302 (Hoy, Ayer, «Miércoles 14 de octubre», año distinto); la agrupación se hace sobre la lista fusionada (`HistoryScreen.tsx` 297-304) | - |
+| 9 Fila de movimiento | A | A + código | OK | `HistoryScreen.test` 688; `TransactionRow.test.tsx`; `TransactionRow.tsx`: `CategoryIcon` 40, nombre `numberOfLines={2}` con `ellipsizeMode="clip"`, nota 2 líneas, importe `flexShrink: 0`, `minHeight: 56`, etiqueta «Editar movimiento de X del F: gasto de $M, nota: ...» | - |
+| 10 Contador = `total` de la API | A | A | OK con matiz | 668 (singular, plural, oculto al cargar o en error). Con total 0 también se oculta (el vacío lo sustituye): conforme, ver 13.4 (d) | - |
+| 11 Estados de Historial; «Cargar más» único | A | A | OK | 106, 118, 186 (doble toque = una llamada, «Cargando…»), 206 (error conserva la lista), 736, 744 | - |
+| 12 Respuesta tardía no pisa | A | A | OK | 221, 755 | - |
+| 13 Cambio de `account.id` sin remontar | A | A + código | OK | 774; `HistoryScreen.tsx` 110-122 reinicia filtros, lista y mensajes en el mismo render (ningún dato anterior se pinta) y el efecto de carga depende de `account.id` | - |
+| 14 Día de la semana, sin `Date` | U | U + código | OK | `calendar.test` 59 (contra `Date.UTC`, 2000 a 2100), 302; `calendar.ts` sin `new Date` ni `Date.` | - |
+| 15 `calendarCellWidth` y altura 52 | U | U + A | OK | Fórmula `(W - 2×16 - 6×3)/7` truncada a centésimas: **360 dp = 44,28** (≥ 44), **412 dp = 51,71** (≥ 48); 7 celdas + 6 huecos = 327,96 dp ≤ 328 dp disponibles. `calendar.test` 289, 296; `CalendarScreen.test` 409; `sizes.calendarCellHeight` = 52 | - |
+| 16 Cuadrícula, estados de celda, cifras con signo | A | A + código | OK | 423, 435, 472, 485; la celda elegida usa `calStrong` y número y cifras en blanco (5,67:1); hoy: borde 2 `calStrong`; hoy+elegida: anillo `calTile` (4,69:1); borde 2 siempre presente (sin saltos); cifras `+`/`−` 10 sp con `allowFontScaling={false}` | - |
+| 17 Flechas de mes, anuncio, límites | A | A | OK | 504 (anuncia «Octubre 2026», 48 dp, límites 2000-01 y 2100-12), 142, 148 | - |
+| 18 Elegir día | A | A | OK | 154, 522 (sin anuncio adicional) | - |
+| 19 Resumen del mes: etiqueta única, «no disponible», mes vacío | A | A + código | OK | 96, 533, 545; contenedor `accessible` con «Resumen de octubre: ingresos $X, gastos $Y, neto $Z»; 2 + 1 de `SummaryTile` (docs/003 R4 D5) | - |
+| 20 Detalle del día | A | A | OK | 176, 551 (solo «Este día no tiene movimientos registrados.»; con movimientos, línea con signos) | - |
+| 21 «+ Anotar en este día» | A | A | OK | 254, 373, 390, 573, 587; etiqueta «Nuevo movimiento el 14 de octubre», distinta de la del FAB; secundario; `disabled` con la cuenta archivada | - |
+| 22 Errores independientes y «Cargar más» | A | A | OK | 208, 226, 238, 602, 614 | - |
+| 23 Reportes: mes actual, `Segmented`, flechas | A | A | OK | `ReportsScreen.test` 277, 300, 348, 809, 822 | - |
+| 24 Rango: botones, avisos, consultas | A | A + código | OK | 348, 389; «Elige las fechas «Desde» y «Hasta».» y orden inválido sin consulta; `applyRange` valida antes de consultar | - |
+| 25 Tarjetas Ingresos/Gastos botones; Balance texto | A | A | OK | 521, 830, 845 (Balance negativo en `text`, no `expenseText`); valores = respuesta de la API | - |
+| 26 Barras de categoría | A | A + código | OK | 209, 860, 881, 915; `ReportsScreen.tsx` 561: `scaleUnits(total, max, 1000)/10` % + `minWidth: 4` si `total > 0`; nombre `numberOfLines={2}` con `clip`; porcentaje en texto; barra `importantForAccessibility="no"`; relleno `categoryFill(color)` | - |
+| 27 Serie: leyenda, Gráfico/Tabla | A | A + código | OK con matiz | 944, 956, 974, 994. La vista elegida **no** se conserva al cambiar de pestaña (permitido por el criterio: «si no, vuelve a Gráfico») ni, además, al cambiar de mes, año o rango (UXQA-R4-02) | UXQA-R4-02 |
+| 28 Exportación al final, anti doble toque | A | A + código | OK | 1005, 1028, 645, 667, 734, 744, 576; la guarda `exporting` es una referencia (síncrona); CSV y PDF conservan sus etiquetas y su entrega; sin movimientos no se ofrece | - |
+| 29 Estados de Reportes | A | A | OK | 1038, 1046, 1067, 1085 | - |
+| 30 Cálculos de Reportes y Calendario intactos | A | A + diff | OK | `reports.test.ts` sin cambios; `calendar.test.ts` solo con líneas añadidas (0 eliminadas); `lib/reports.ts` sin diff | - |
+| 31 Categorías: segmentado, vacío por tipo | A | A | OK | `CategoriesScreen.test` 50, 71, 82, 89; sin «Egresos» en pantalla (el valor interno sigue siendo `egreso`) | - |
+| 32 Fila de categoría | A | A + código | OK | 184, 199; `CategoryIcon` 40, nombre sin `numberOfLines`, «Archivada» como texto, «⋮» 48×48 con «Acciones de {nombre}» | - |
+| 33 Hoja «⋮» | A | A | OK | 205, 227, 233 (Editar, Archivar/Desarchivar, Eliminar con `danger`; «Cerrar» cierra; `onRequestClose` cierra) | - |
+| 34 Formulario: tipo, color, vista previa, validación | A | A + código | OK | 245, 269, 284, 322, 449, 473; 7 colores de 76×72 dp, «✓» y «Color: Rojo»; editar envía solo lo cambiado | - |
+| 35 Eliminar y `CATEGORY_IN_USE` | A | A | OK | 364, 377, 387 (aviso con el texto exacto y [Archivar «nombre»] que llama a `updateCategory({ archivada: true })`) | - |
+| 36 Descarte y Atrás | A | A + código | OK | 506, 513, 526, 535, 555-621; en `CategoryFormCard` el listener que cierra el formulario se registra antes que el del guard, así que el guard (último registrado) se consulta primero; `MainNavigator.test` 971 | - |
+| 37 Cuenta archivada y errores de la API | A | A | OK | 89, 145, 294, 308, 638, 654, 670 | - |
+| 38 Llegada desde Nuevo movimiento | A | A | OK | 625; `MainNavigator.test` 903, 941, 961 («‹ Volver» solo si `fromForm`; `fromForm` se pasa en `MainNavigator.tsx` 286) | - |
+| 39 `MainNavigator` entre cuentas y Atrás | A | A + código | OK con matiz | `MainNavigator.test` 156 (Reportes -> Historial filtrado -> Atrás conserva modo y período), 353 (Categorías -> Más), 562, 591 (Reportes sin datos de la cuenta anterior); Historial, Calendario, Reportes y Categorías tienen además la prueba de cambio de `account.id` sin remontar y el contenedor las remonta con `key={account.id}` (`MainNavigator.tsx` 202, 282, 307). El matiz: a nivel del navegador solo Reportes se prueba de punta a punta; ver 13.4 (g) | - |
+| 40 Typecheck, lint, Prettier y suite | A | A | OK con matiz | 13.1: todo en verde con la caché caliente; con la caché fría falla 1 prueba por tiempo | UXQA-R4-01 |
+| 41 Celdas medidas a 360 y 412 dp en el teléfono | D | - | **PENDIENTE (D)** | No hay dispositivo. Cálculo: 44,28 × 52 dp a 360 y 51,71 × 52 a 412; sin solape (hueco 3). Seis semanas: 6 × 52 + 5 × 3 = 327 dp de alto de cuadrícula | - |
+| 42 TalkBack en calendario, resumen, filas | D | - | **PENDIENTE (D)** | Roles y etiquetas verificados solo en Jest | - |
+| 43 Fuente 130 % y 200 % sin truncar | D | - | **PENDIENTE (D)** | Hay código para fuente grande (tabla apilada con `fontScale ≥ 1,15`, `ModuleTile` 28/oculto, exportación en columna con `≥ 1,3`); sin medir. Riesgo: ver 13.4 (h) | - |
+| 44 `DatePickerSheet` con gestos y tres botones | D | - | **PENDIENTE (D)** | `Modal` con edge-to-edge sin probar en dispositivo (riesgo ya anotado en docs/003 R1/R3) | - |
+| 45 Hoja «⋮» y formulario con teclado abierto | D | - | **PENDIENTE (D)** | `ScrollView` con `keyboardShouldPersistTaps="handled"`; el comportamiento de `KeyboardAvoidingView` en Android (`behavior` indefinido) y el cálculo de `useSystemInsets` con teclado solo se ven en dispositivo | - |
+| 46 Exportar CSV y PDF en Android real | D | - | **PENDIENTE (D)** | La entrega usa `shareExport` (simulado en Jest) | - |
+| 47 Scroll largo sin quedar bajo el FAB ni la barra | D | - | **PENDIENTE (D)** | Historial y Calendario pasan `bottomInset` a `contentContainerStyle`; Reportes y Categorías no llevan FAB (conforme a docs/007 §5.11 B.9). AND-09 sin medir | - |
+| 48 Zonas de chips `sm` y barras en escala de grises | D | - | **PENDIENTE (D)** | `Chip size="sm"` 36 dp con `hitSlop` 6 arriba y abajo y filas a 12 dp: las zonas se tocan sin solaparse (6 + 6 = 12). Escala de grises: ver 13.4 (i) | - |
+
+### 13.3 Verificaciones solicitadas con atención
+
+| Tema | Resultado | Evidencia |
+| --- | --- | --- |
+| Título sin cuenta y una sola acción primaria | OK | Historial y Calendario: el único primario es el FAB (`Button` «Filtros» secundario; «+ Anotar en este día» secundario); Reportes: ningún primario (Exportar, Aplicar y tarjetas secundarias); Categorías: «+ Nueva categoría» (`primary tall`) y, con el formulario abierto, «Guardar» (el botón de nueva categoría se oculta mientras el formulario está abierto, así que sigue habiendo uno). Acción destructiva «Eliminar» separada 8 dp en la hoja y en `danger` |
+| Historial: plegable, chips, rango, validación, agrupación, contador, estados, paginación, cambio de cuenta | OK (A) | Criterios 3 a 13 |
+| Calendario P-3 y estados | OK (A) | Criterios 15 a 22. Celda 44,28 × 52 a 360 dp y 51,71 × 52 a 412; sin solape por tener 3 dp de hueco |
+| SummaryTile 2+1 con etiqueta única | OK | `month-summary` es un solo elemento `accessible`; los tres `SummaryTile` quedan dentro y no se anuncian por separado |
+| «+ Anotar en este día» frente al FAB | OK | Etiquetas distintas («Nuevo movimiento el 14 de octubre» frente a «Nuevo movimiento»); `getByLabelText` exacto no es ambiguo |
+| Reportes: mes por defecto, rango, resumen, barras | OK | Criterios 23 a 26. `package.json` sin cambios y sin `react-native-svg` |
+| Reportes: ancho exacto por escala y mínimo 4 dp | OK | `width: ${scaleUnits(...)/10}%` y `minWidth: 4` si `total > 0`; prueba 881. El porcentaje en texto es sobre el total del grupo (docs/003 R4 D3 punto 5, aprobado por defecto) |
+| Reportes: nombres sin truncar | OK con matiz | `numberOfLines={2}` con `ellipsizeMode="clip"` (hasta 2 líneas, sin puntos suspensivos) tal como fija docs/007 §5.11 B.4; un nombre de más de dos líneas se recortaría sin aviso (misma discrepancia ya registrada en el §12.6 sobre docs/007 «dos líneas o más» frente a docs/008). Se valida en dispositivo |
+| Categorías: operaciones, hoja, color 76×72, vista previa, descarte, Atrás, `CATEGORY_IN_USE`, 409 | OK (A) | Criterios 31 a 38. Crear, editar, archivar, desarchivar, eliminar, interruptor de archivadas y aviso de cuenta archivada conservados |
+| Ayuda desde el formulario | OK | `FROM_FORM_HELP` «Crea una categoría y vuelve para anotar tu movimiento.» solo con `fromForm` |
+| Contraste y objetivos de 48 dp | OK (A, T) | 13.1. 48 dp: botones (`minHeight` 48), `DateField`, `MonthArrow` (zona 48), «⋮» 48×48, `Segmented` 48, filas ≥ 56, tarjetas de Reportes `minHeight` 48. Excepciones aprobadas P-1 (chips `sm`) y P-3 (celdas de día) |
+| Textos exactos en español | OK | Todos los de docs/007 §5.11 G: «Aún no hay movimientos. Cuando anotes el primero, aparecerá aquí.», «Ningún movimiento coincide con estos filtros.», «Cargando movimientos…», «Calculando tu resumen…», «Cargando categorías…», «No hay movimientos en este mes.», «Este día no tiene movimientos registrados.», «Sin movimientos en este período. Prueba con otro mes.» (año/rango), «Elige las fechas «Desde» y «Hasta».», «Exportar este período» y su texto, «Aún no tienes categorías de gasto. Crea la primera.», textos de descarte, `IN_USE_NOTICE`. Sin «Egreso» en pantalla |
+
+### 13.4 Lo declarado por el implementador
+
+| Punto | Clasificación | Evidencia y razonamiento |
+| --- | --- | --- |
+| (a) En Reportes los totales no seguros pasan por `formatCents` y podrían mostrar «$0.00» inventado | **Sin defecto (no alcanzable); observación de robustez** | `formatCents` devuelve «$0.00» para un valor no entero seguro (`money.ts`). Pero `ReportsScreen` solo recibe datos de `getReportSummary`, `getReportByCategory` y `getReportByPeriod`, y sus analizadores (`resources-api.ts` `parseReportSummary`, `parseCategoryGroup`, `parsePeriodReport`) rechazan con `invalid()` cualquier importe que no sea entero seguro (`isCents`), cualquier suma que no cuadre (`exactSum`) y cualquier balance incoherente. Un total no seguro llega a la pantalla como **error con «Reintentar reportes»**, nunca como «$0.00» (prueba `ReportsScreen.test` 250 de exactitud con importes grandes y `resources-api.test`). El Calendario sí tolera una suma no segura y muestra «—» (`monthTotals`). Observación: si en el futuro se relajara el analizador, Reportes mostraría «$0.00» sin aviso; conviene que Reportes use el mismo patrón de «—» que Calendario (no es defecto hoy, ver docs/010 §3, fila «EST: nunca \$0.00 por fallo») |
+| (b) La vista Gráfico/Tabla se reinicia al cambiar de pestaña | **Permitido en la pestaña; defecto bajo en el cambio de período** | El criterio 27 acepta el reinicio al cambiar de pestaña. Pero `PeriodSeries` vive dentro de `ReportContent`, que se desmonta mientras `shown` es `null` (cada cambio de mes, año, rango o reintento muestra «Calculando tu resumen…»). Quien elige «Tabla» y toca «›» vuelve a «Gráfico». UXQA-R4-02 |
+| (c) Margen lateral 16 dp | **Conforme a docs/007; discrepancia documental con docs/008** | `screenStyles.container` usa `padding: 16` y `CALENDAR_SIDE_MARGIN` = 16, coherentes entre sí y con docs/007 §5.11 D.2 («2 × 16 dp»). docs/008 §6.14 dice «16 (20 con ancho ≥ 400)»: ninguna pantalla aplica 20 dp. Con 20 dp a 412 dp la celda sería 50,57 dp (sigue ≥ 48). Se devuelve a `mobile-visual-designer`/`mobile-ux-designer` para alinear los documentos; no es defecto de código |
+| (d) Contador oculto con 0 resultados | **Conforme** | docs/007 §5.11 C.1 oculta el contador solo al cargar o con error y no define «0 movimientos»; con 0 resultados la pantalla muestra el vacío («Aún no hay movimientos...» o «Ningún movimiento coincide...»), sin contradecir. Mostrar «0 movimientos» sobre un vacío sería redundante |
+| (e) Dos «Limpiar filtros» a la vez | **Observación (conforme a la especificación)** | Con el panel abierto, filtros activos y 0 resultados aparecen el ghost del panel (docs/007 C.2) y el botón del vacío (C.6); el criterio 7 pide ambos («panel y vacío filtrado»). Hacen lo mismo. Un lector de pantalla encuentra dos botones con el mismo nombre y no hay ambigüedad de destino. Se podría ocultar el del panel cuando el vacío lo ofrece; no se exige |
+| (f) `relaxTimeoutsForColdCache` en `test-utils.ts` | **Aceptable en sí; mal aplicado: UXQA-R4-01** | Solo sube `jest.setTimeout` a 30 s y `asyncUtilTimeout` a 5 s; no cambia ninguna aserción ni omite pruebas, y es por archivo de prueba. Pero solo la llaman `App.test`, `App.resources.test`, `MainNavigator.test` y `TransactionFormScreen.test`. Las suites nuevas o pesadas de R4 (`HistoryScreen.test`, y por la misma razón `CalendarScreen`, `ReportsScreen`, `CategoriesScreen`) no la llaman y la primera falla con la caché fría, que es el caso de `npm test` en CI |
+
+### 13.5 Defectos
+
+| ID | Pantalla | Caso | Severidad | Pasos | Esperado | Obtenido | Evidencia / archivo |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| UXQA-R4-01 | Historial (pruebas) | Criterio 40 (suite en verde); docs/010 §5 | **Media** (bloquea el PR si la CI falla; corrección trivial) | `cd app && npx jest --ci --no-cache --maxWorkers=2 src/screens/HistoryScreen.test.tsx` (o la primera corrida con la caché de Jest fría) | docs/007 §5.11 I-40: la suite completa en verde; `.github/workflows/ci.yml` ejecuta `npm test` con caché fría (el `cache: npm` solo guarda dependencias) | La prueba «muestra carga, luego los movimientos con categoría y monto con signo» supera los 5000 ms del límite por defecto (transformación en línea de React Native): 1 falla de 168 en las cuatro suites de R4 con `--no-cache`, y 1 de 110 en la primera corrida. Con caché caliente 1445 de 1445 | `app/src/screens/HistoryScreen.test.tsx` (no llama a `relaxTimeoutsForColdCache` de `app/src/test-utils.ts`); mismo riesgo en `CalendarScreen.test.tsx`, `ReportsScreen.test.tsx` y `CategoriesScreen.test.tsx`. Nivel A. Para `mobile-engineer`: llamar al helper una vez al inicio de las cuatro suites (o fijarlo en la configuración de Jest) |
+| UXQA-R4-02 | Reportes (Año y Rango) | EST, ACC (docs/007 §5.11 E.4 y criterio 27) | Baja | Abrir Reportes en modo Año, elegir «Tabla» y tocar «Año anterior» o «Año siguiente» (o «Aplicar» en Rango) | La vista elegida («Gráfico» o «Tabla») se conserva al recorrer períodos: el criterio 27 solo admite el reinicio al cambiar de pestaña interna | La vista vuelve a «Gráfico» en cada cambio de período y en cada «Reintentar reportes», porque `PeriodSeries` guarda `seriesView` y se desmonta con `ReportContent` mientras carga. Quien prefiere la tabla (alternativa accesible de la gráfica) debe volver a elegirla cada vez | `app/src/screens/ReportsScreen.tsx` (`PeriodSeries`, `useState<SeriesView>`, líneas 619-621; desmontaje en 362-385). Nivel A (código). Elevar `seriesView` a `ReportsScreen` (o a `detail.views`) |
+| UXQA-R4-03 | Historial | EST, A11Y | Baja | Abrir Movimientos filtrado por una categoría desde Reportes mientras la lista de categorías aún no cargó, o con su carga fallida (el panel de filtros está cerrado) | docs/007 §5.11 C.3: chip «{categoría} ✕» con etiqueta «Quitar filtro: {categoría}» | Mientras `byId` no tiene la categoría el chip dice «Categoría ✕» y su etiqueta «Quitar filtro: Categoría», y las filas muestran «Categoría» con el ícono gris. Si la carga de categorías falla, el error solo aparece dentro del panel (cerrado por defecto) y el nombre genérico se queda | `app/src/screens/HistoryScreen.tsx` (línea 271 `?? 'Categoría'`; `categories.state.status === 'error'` solo se pinta en el panel, 348-350). Nivel A (código). Mostrar el aviso fuera del panel o conservar el nombre que ya conoce Reportes (`categoryName` en `HistoryFilters`) |
+
+### 13.6 Observaciones sin defecto
+
+- Contraste: ningún par nuevo de R4 incumple AA (13.1). El borde `border` de la celda del calendario en reposo (1,19:1 frente a `bg`) es decorativo, igual que la separación de las tarjetas: el número y las cifras son el contenido; el límite honesto de las barras contra su pista (2,44 a 4,06:1) está aceptado en docs/003 R4 D5.
+- Chips `sm` de categoría: la zona táctil vertical es de 48 dp (P-1), pero el ancho de un chip con un nombre de 3 o 4 letras puede quedar por debajo de 48 dp (relleno de 12 dp a cada lado). Pasa el mínimo de WCAG 2.5.8 (24 dp); se mide en dispositivo (criterio 48).
+- Selector de color de Categorías: cada opción mide 76 × 72 dp fijos y el nombre del color es de 12 sp sin límite de líneas; con fuente al 200 % un nombre como «Naranja» podría salirse de los 72 dp. Se valida en dispositivo (criterio 43).
+- `RANGE_FORMAT_ERROR` en `lib/reports.ts` («Escribe fechas válidas con formato AAAA-MM-DD...») ya no es alcanzable (el rango sale del selector y las fechas vacías se tratan antes). Texto muerto; conviene retirarlo para no contradecir docs/007 E.1.
+- `CalendarScreen` calcula el neto del día restando `ingresos - gastos` en la app (`selectedEntry.ingresos - selectedEntry.gastos`); ambos son enteros seguros, la resta es exacta y la especificación lo conserva como EXISTENTE (docs/007 D.4). Reportes sí muestra el `balance` de la API.
+- Foco inicial en el título (docs/007 §5.11 H): no se fuerza con `setAccessibilityFocus`; se confía en el orden de lectura (barra, título, contenido) como en R2 y R3. Se valida con TalkBack (criterio 42).
+- `ModuleTile` usa emojis (📋 📅 📊 🏷️) como glifo decorativo, ocultos a los lectores; su apariencia depende de la fuente del sistema Android (nivel D).
+- Cobertura del criterio 39: el navegador solo prueba de punta a punta el cambio de cuenta en Reportes; Movimientos y Calendario tienen la prueba de `account.id` en su pantalla y el remontado por `key`. Categorías e Historial filtrado no tienen selector de cuenta alcanzable (barra de solo lectura).
+
+### 13.7 Pendientes (no demostrados) y motivo
+
+Todo nivel D por falta de emulador, dispositivo y TalkBack: criterios 41 a 48 (medición de las celdas a 360 y 412 dp, TalkBack en el calendario, el resumen y las filas, fuente al 130 % y 200 %, `DatePickerSheet` con gestos y tres botones, hoja «⋮» y formulario con el teclado abierto, exportar CSV y PDF en Android real, scroll largo sobre el FAB y la barra de pestañas, zonas de los chips `sm` y barras en escala de grises). Tampoco se ejecutó el nivel R (comparación con `docs/design/capturas/`; `verify.js` valida el prototipo, no la app) ni se tomaron capturas. Safe areas, teclado y `Modal` con edge-to-edge siguen sin demostrarse. Mientras tanto, ninguna de estas filas puede darse por validada en dispositivo.
+
+Regresión: suite completa en verde con la caché caliente (38 suites, 1445 pruebas), tsc, eslint y Prettier sin avisos; la repetirá `qa-engineer` como validación técnica. Los scripts del scratchpad (contraste) no están versionados y no modifican `/app`.
+
+### 13.8 Revalidación R4 tras D6 (margen responsive, chips `sm` y selector de color)
+
+```
+Fecha: 2026-10-16 · Rama: feat/rediseno-ux-ui sobre 281bc86, cambios sin commit · Niveles: A y T (código y Jest); sin R ni D
+Comandos: cd app && npx jest --ci --maxWorkers=2 -> 38 suites, 1466 pruebas, todas en verde
+          npx jest --ci --no-cache de History, Calendar, Reports y Categories -> 180 de 180 (antes fallaba 1)
+          tsc --noEmit, eslint --max-warnings=0, prettier --check -> sin avisos · contrast.js --check -> salida 0 · package.json sin cambios
+Decisión: APROBADO CON OBSERVACIONES. Ningún defecto alto ni crítico. El cierre sigue condicionado al nivel D (criterios 41 a 48).
+```
+
+| Verificación | Resultado | Evidencia |
+| --- | --- | --- |
+| Margen 16/20 con `screenMargin(width)` | OK (A, código) | `tokens.ts`: 20 dp desde 400 dp, 16 por debajo. Lo usan `useScreenMargin`/`useScreenContainerStyle` (`ui.tsx`) en Historial, Calendario, Reportes y Categorías; `Screen padded` (Mis cuentas, Crear cuenta), `MoreScreen`, `AccountSummaryTab`, `TransactionFormScreen` (contenido), el aviso de cuenta archivada de `MainNavigator`, el `Fab` (`right`) y `calendarCellWidth` |
+| Sin doble margen | OK | El relleno lateral se aplica una sola vez por pantalla: `Screen` de pestaña/formulario/Categorías/Historial filtrado usa `padded={false}` y la pantalla interna pone `padding: margin`; el aviso de archivada tiene su propio `paddingHorizontal` y las pantallas con `Screen padded` no lo repiten. Pruebas de `ui`, `MainNavigator` y cada pantalla en verde |
+| Celda del Calendario | OK | `(W - 2m - 18)/7`: 360 dp (m = 16) = **44,29 dp** (≥ 44); 399 dp = 49,86; 400 dp (m = 20) = **48,86**; 412 dp = **50,57** (≥ 48). Alto 52. Siete celdas + 6 huecos = 371,99 dp ≤ 372 dp disponibles a 412 |
+| Chips `sm` 48×48 efectivos | OK (cálculo) | `minHeight` 36 + `hitSlop` 6 arriba y abajo = 48 dp vertical; `minWidth` 48 = 48 dp horizontal. Filas separadas 12 dp: las zonas ampliadas (6 + 6) se tocan sin solaparse; horizontalmente no hay `hitSlop` y el hueco es 8 dp. Cierra la observación de ancho del §13.6. Medición real: criterio 48 (D) |
+| Selector de color | OK (A, código); fuente grande PENDIENTE (D) | `colorOption`: `width: 76`, `minHeight: 72`, sin `height` fija, así que el nombre del color puede crecer en alto sin recorte. Queda el ancho fijo de 76 dp: un nombre largo («Amarillo») al 200 % puede partirse por letras; se valida en dispositivo (criterio 43) |
+| Regresiones en criterios 1 a 40 | Sin regresión | Suite completa en verde (1466). `calendar.test` y `reports.test` sin expectativas eliminadas |
+
+Estado de los defectos de R4:
+
+| ID | Estado | Verificación |
+| --- | --- | --- |
+| UXQA-R4-01 (media) | **Cerrado (A)** | Las cuatro suites de R4 llaman a `relaxTimeoutsForColdCache()`; con `--no-cache` pasan 180 de 180 |
+| UXQA-R4-02 (baja) | **Cerrado (A, código)** | `seriesView` ahora vive en `ReportsScreen` (línea 129) y se pasa a la serie, así que sobrevive al cambio de período y al reintento |
+| UXQA-R4-03 (baja) | **Cerrado (A, código)** | Los chips sin nombre usan un texto neutro y el error de nombres de categorías aparece fuera del panel («No pudimos cargar los nombres de las categorías...» con «Reintentar categorías») |
+
+Residuales (ninguno alto ni crítico):
+
+1. **Baja:** quedan en 16 dp fijos, aunque a ≥ 400 dp el contenido va a 20 dp: el pie fijo de `TransactionFormScreen` (`footer.paddingHorizontal: 16`) y la barra de contexto compacta (`barCompact.paddingHorizontal: 16`, `account-ui.tsx`). Con 412 dp el botón «Guardar» y la barra quedan 4 dp más anchos que el contenido. docs/007 §5.2.5 fija el margen de 16/20 para el contenido de Mis cuentas y docs/008 §6.14 para las pantallas; no menciona pie ni barra, por lo que no es contradicción estricta. Decidir con `mobile-visual-designer` si se alinean.
+2. **Observación:** el aviso temporal (`Snackbar`, `left/right: 16`) y la barra de contexto completa (8 dp interno) no siguen el margen; son superpuestos o de borde a borde y no están cubiertos por la regla.
+3. **Observación:** `LoginScreen` conserva un `#1a73e8` literal y un relleno de 16 dp fijo; es la pantalla del botón de Google (fuera del alcance de R4, no contradice docs/008 mientras se mantenga el color de la marca de Google).
+4. Los márgenes de 16 internos de tarjetas (`Card`, `SummaryTile`, tarjeta total de Mis cuentas, formulario de categoría) son relleno de tarjeta, no margen de pantalla: correctos.
+5. Nivel D pendiente: 360/412 dp reales, fuente 130 % y 200 % (selector de color, chips), zonas de los chips y el cambio 399/400 dp, TalkBack, teclado y exportación real.

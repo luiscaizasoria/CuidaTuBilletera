@@ -13,7 +13,7 @@ import { colors, depth, radii, shadows, sizes, tabularNums, typography } from '.
 import { ArchivedNotice, balanceText } from './account-ui';
 import type { BalanceStatus } from './navigation';
 import TransactionRow, { categoryMap } from './TransactionRow';
-import { Button, Segmented } from './ui';
+import { Button, Segmented, useScreenMargin } from './ui';
 
 export const WEEK_LIMIT = 10;
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
@@ -47,12 +47,16 @@ export default function AccountSummaryTab({
   const ym = parseMonthKey(month) ?? parseMonthKey(today.slice(0, 7)) ?? { year: 2000, month: 1 };
   const prev = shiftMonth(ym.year, ym.month, -1);
   const next = shiftMonth(ym.year, ym.month, 1);
+  const margin = useScreenMargin();
   const saldo = balanceText(account.saldo, balance);
 
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={[styles.content, { paddingBottom: 16 + bottomInset }]}
+      contentContainerStyle={[
+        styles.content,
+        { padding: margin, paddingBottom: margin + bottomInset },
+      ]}
     >
       {account.archivada ? <ArchivedNotice /> : null}
 
@@ -283,6 +287,7 @@ function WeekBlock({
               key={transaction.id}
               transaction={transaction}
               category={state.data.categories.get(transaction.categoryId)}
+              showDate
               onPress={() => onOpenTransaction(transaction)}
             />
           ))

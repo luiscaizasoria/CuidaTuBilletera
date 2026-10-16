@@ -136,4 +136,14 @@ export const sizes = {
   pigZoom: 1.4,
   balanceCardMin: 132,
   balanceCardPig: 104,
+  moduleTile: 36,
+  moduleTileSm: 28,
+  monthArrow: 32,
+  categoryBar: 10,
 } as const;
+
+// Margen lateral de las pantallas (docs/003 R4 D6): 16 dp con ancho menor de 400 dp y 20 dp desde 400 dp.
+export const WIDE_SCREEN_DP = 400;
+export function screenMargin(windowWidth: number): number {
+  return windowWidth >= WIDE_SCREEN_DP ? 20 : 16;
+}

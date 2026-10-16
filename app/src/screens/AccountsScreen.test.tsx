@@ -7,8 +7,10 @@ import { Alert } from 'react-native';
 import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type Page, type ResourcesApi } from '../lib/resources-api';
 import { account, fakeResourcesApi, pageOf } from '../resources-test-utils';
-import { controlledPromise } from '../test-utils';
+import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import AccountsScreen, { ACCOUNTS_ERROR } from './AccountsScreen';
+
+relaxTimeoutsForColdCache();
 
 const mockAuthState: Record<string, unknown> = {};
 const resetAuth = () =>
