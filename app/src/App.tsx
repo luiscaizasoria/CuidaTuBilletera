@@ -28,21 +28,28 @@ function createDefaultResourcesApi(): ResourcesApi {
   return createResourcesApi(readConfig()?.apiUrl ?? '');
 }
 
+// Un solo `Screen` por ruta (docs/003, Decisión R2 D6): lo pone el navegador o esta raíz, nunca
+// las pantallas reutilizadas.
 function Root({ api }: { api: ResourcesApi }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
   if (status === 'initializing') {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" testID="app-loading" />
-      </View>
+      <Screen scroll={false}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" testID="app-loading" />
+        </View>
+      </Screen>
     );
   }
   // Sin disponibilidad temporal la sesión se conserva: se muestra la pantalla principal con reintento.
+  // `key` por usuario: otro usuario monta un navegador nuevo, sin rastro del anterior.
   return status === 'authenticated' || status === 'unavailable' ? (
-    <MainNavigator api={api} />
+    <MainNavigator key={user?.id ?? 'none'} api={api} />
   ) : (
-    <LoginScreen />
+    <Screen scroll={false} padded={false}>
+      <LoginScreen />
+    </Screen>
   );
 }
 
@@ -59,16 +66,15 @@ export default function App({
 
   return (
     <>
-      {/* R2 debe retirar este envoltorio al migrar cada pantalla a Screen (evita relleno duplicado). */}
-      <Screen scroll={false} padded={false} keyboardAvoiding={false} statusBar="bg">
-        {resolved ? (
-          <AuthProvider service={resolved}>
-            <Root api={api} />
-          </AuthProvider>
-        ) : (
+      {resolved ? (
+        <AuthProvider service={resolved}>
+          <Root api={api} />
+        </AuthProvider>
+      ) : (
+        <Screen scroll={false} padded={false}>
           <ConfigMissingScreen />
-        )}
-      </Screen>
+        </Screen>
+      )}
       <StatusBar style="dark" />
     </>
   );

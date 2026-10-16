@@ -19,6 +19,12 @@ import {
 jest.mock('./lib/google-auth', () => ({ createGoogleProvider: jest.fn() }));
 jest.mock('./lib/session-storage', () => ({ secureSessionStorage: {} }));
 
+// R2: solo cambia el recorrido (Mis cuentas es la pantalla inicial y Categorías vive en Más del
+// Detalle de la cuenta). Las aserciones de aislamiento se conservan todas.
+const card = (nombre: string) => new RegExp(`^${nombre}, saldo actual`);
+const openProfile = () =>
+  fireEvent.press(screen.getByRole('button', { name: 'Tu perfil y sesión' }));
+
 describe('App: aislamiento de datos entre usuarios', () => {
   it('tras cerrar sesión e ingresar otro usuario no aparecen datos ni pantallas del anterior', async () => {
     const userB = { id: 'sub-2', email: 'beto@example.com', name: 'Beto' };
@@ -48,18 +54,17 @@ describe('App: aislamiento de datos entre usuarios', () => {
     const gateB = controlledPromise<ReturnType<typeof pageOf<ReturnType<typeof account>>>>();
     const listAccounts = jest
       .fn()
-      // Inicio de A, pantalla Cuentas de A, Inicio de B y pantalla Cuentas de B (con compuerta).
+      // Mis cuentas de A y Mis cuentas de B (con compuerta). Ya no hay un Inicio aparte.
       .mockResolvedValueOnce(pageOf([account({ id: 'a-1', nombre: 'Cuenta de Ana' })]))
-      .mockResolvedValueOnce(pageOf([account({ id: 'a-1', nombre: 'Cuenta de Ana' })]))
-      .mockResolvedValueOnce(pageOf([account({ id: 'b-0', nombre: 'Inicio de Beto' })]))
       .mockReturnValueOnce(gateB.promise);
     const resourcesApi = fakeResourcesApi({ listAccounts });
 
     await render(<App service={service} resourcesApi={resourcesApi} />);
 
-    // Usuario A abre Cuentas y Categorías.
-    await fireEvent.press(await screen.findByText('Cuentas'));
-    await fireEvent.press(await screen.findByLabelText('Abrir Cuenta de Ana'));
+    // Usuario A abre su cuenta y, desde Más, Categorías.
+    await fireEvent.press(await screen.findByRole('button', { name: card('Cuenta de Ana') }));
+    await fireEvent.press(await screen.findByRole('tab', { name: 'Más' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Categorías' }));
     expect(await screen.findByText('Categorías de Cuenta de Ana')).toBeTruthy();
 
     // Cierra sesión: vuelve al login y no queda nada de A.
@@ -69,14 +74,16 @@ describe('App: aislamiento de datos entre usuarios', () => {
     expect(await screen.findByText('Ingresar con Google')).toBeTruthy();
     expect(screen.queryByText(/Cuenta de Ana/)).toBeNull();
 
-    // Ingresa B: empieza en Inicio (no en la pantalla de A) y su lista no muestra datos de A.
+    // Ingresa B: empieza en Mis cuentas (no en la pantalla de A) y su lista no muestra datos de A.
     await fireEvent.press(screen.getByText('Ingresar con Google'));
-    expect(await screen.findByText('Sesión iniciada')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Mis cuentas' })).toBeTruthy();
+    expect(screen.queryByText(/Categorías de/)).toBeNull();
+    await openProfile();
     expect(screen.getByText(userB.email)).toBeTruthy();
     expect(screen.queryByText(USER.email)).toBeNull();
     expect(screen.queryByText(/Cuenta de Ana/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Cerrar' }));
 
-    await fireEvent.press(screen.getByText('Cuentas'));
     expect(await screen.findByTestId('accounts-loading')).toBeTruthy();
     expect(screen.queryByText(/Cuenta de Ana/)).toBeNull();
 
@@ -85,7 +92,8 @@ describe('App: aislamiento de datos entre usuarios', () => {
     );
     expect(await screen.findByText('Cuenta de Beto')).toBeTruthy();
     expect(screen.queryByText(/Cuenta de Ana/)).toBeNull();
-    expect(listAccounts).toHaveBeenCalledTimes(4);
+    // Una lectura por usuario (antes 4: Inicio y Cuentas de cada uno).
+    expect(listAccounts).toHaveBeenCalledTimes(2);
   });
 
   it('una respuesta tardía del usuario anterior no se muestra tras desmontar', async () => {
@@ -106,7 +114,8 @@ describe('App: aislamiento de datos entre usuarios', () => {
     const resourcesApi = fakeResourcesApi({ listAccounts: jest.fn(() => late.promise) });
 
     await render(<App service={service} resourcesApi={resourcesApi} />);
-    await fireEvent.press(await screen.findByText('Cuentas'));
+    // Mis cuentas pide la lista al entrar (antes había que abrir Cuentas desde Inicio).
+    expect(await screen.findByTestId('accounts-loading')).toBeTruthy();
     await act(async () => {
       await service.signOut();
     });
@@ -160,10 +169,9 @@ describe('App: aislamiento de datos entre usuarios', () => {
           account({ id: 'a-2', nombre: 'Segunda de Beto' }),
         ]),
       );
-    // Inicio de A con la primera cuenta, Inicio de A con Banco (tras elegirla) y Inicio de B (con compuerta).
+    // Semana de la cuenta Banco elegida por A y semana de la cuenta de B (con compuerta).
     const listTransactions = jest
       .fn()
-      .mockResolvedValueOnce({ items: [], page: 1, pageSize: 10, total: 0 })
       .mockResolvedValueOnce({
         items: [transaction({ accountId: 'a-2', nota: 'Nota privada de Ana' })],
         page: 1,
@@ -174,8 +182,8 @@ describe('App: aislamiento de datos entre usuarios', () => {
     const resourcesApi = fakeResourcesApi({ listAccounts, listTransactions });
 
     await render(<App service={service} resourcesApi={resourcesApi} />);
-    await fireEvent.press(await screen.findByLabelText('Cuenta Banco de Ana'));
-    expect(await screen.findByText('Saldo de Banco de Ana')).toBeTruthy();
+    await fireEvent.press(await screen.findByRole('button', { name: card('Banco de Ana') }));
+    expect(await screen.findByRole('button', { name: 'Cuenta Banco de Ana' })).toBeTruthy();
     expect(await screen.findByText('Nota privada de Ana')).toBeTruthy();
 
     await act(async () => {
@@ -186,11 +194,19 @@ describe('App: aislamiento de datos entre usuarios', () => {
     expect(screen.queryByText('Nota privada de Ana')).toBeNull();
 
     await fireEvent.press(screen.getByText('Ingresar con Google'));
-    // B empieza con su primera cuenta (no con la a-2 elegida por A) y sin movimientos de A.
-    expect(await screen.findByText('Saldo de Primera de Beto')).toBeTruthy();
+    // B empieza en Mis cuentas (no dentro de la a-2 elegida por A) y sin movimientos de A.
+    expect(await screen.findByText('Primera de Beto')).toBeTruthy();
+    expect(screen.getByRole('header', { name: 'Mis cuentas' })).toBeTruthy();
+    expect(screen.queryByTestId('context-bar')).toBeNull();
+    expect(screen.queryByText('Nota privada de Ana')).toBeNull();
+    expect(screen.queryByText(/de Ana/)).toBeNull();
+    expect(listTransactions).toHaveBeenCalledTimes(1);
+    // B abre la cuenta con el mismo id a-2: mientras carga no aparece nada de A.
+    await fireEvent.press(screen.getByRole('button', { name: card('Segunda de Beto') }));
+    expect(await screen.findByRole('button', { name: 'Cuenta Segunda de Beto' })).toBeTruthy();
     expect(screen.queryByText('Nota privada de Ana')).toBeNull();
     expect(screen.queryByText(/de Ana/)).toBeNull();
     await act(async () => gateTx.resolve({ items: [], page: 1, pageSize: 10, total: 0 }));
-    expect(await screen.findByText('Aún no hay movimientos en esta cuenta')).toBeTruthy();
+    expect(await screen.findByText('Esta semana no has anotado movimientos.')).toBeTruthy();
   });
 });

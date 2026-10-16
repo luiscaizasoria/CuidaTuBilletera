@@ -468,6 +468,64 @@ describe('createResourcesApi: calendario', () => {
   bad('cantidad decimal', body([day('2026-10-01', { cantidad: 1.5 })]));
 });
 
+describe('createResourcesApi: saldo de la cuenta', () => {
+  const balance = (overrides: Record<string, unknown> = {}) => ({
+    accountId: 'acc-1',
+    saldoInicial: 1000,
+    ingresos: 500,
+    gastos: 1750,
+    saldo: -250,
+    ...overrides,
+  });
+
+  it('GET /accounts/:id/balance con token y respuesta validada', async () => {
+    const { api, call } = make(async () => res(200, balance()));
+    await expect(api.getAccountBalance(TOKEN, 'acc-1')).resolves.toEqual(balance());
+    const [url, init] = call();
+    expect(url).toBe('https://api.test/accounts/acc-1/balance');
+    expect(init.method).toBe('GET');
+    expect(init.headers).toEqual({ Authorization: `Bearer ${TOKEN}` });
+  });
+
+  it('codifica el id en la ruta', async () => {
+    const { api, call } = make(async () => res(200, balance({ accountId: 'a/b' })));
+    await api.getAccountBalance(TOKEN, 'a/b');
+    expect(call()[0]).toBe('https://api.test/accounts/a%2Fb/balance');
+  });
+
+  it('404 -> ApiRequestError sin propagar el mensaje del servidor', async () => {
+    const { api } = make(async () => res(404, errBody('NOT_FOUND')));
+    const error = await api.getAccountBalance(TOKEN, 'acc-1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 404, code: 'NOT_FOUND' });
+    expect(String((error as Error).message)).not.toContain('MENSAJE-NO-PROPAGAR');
+  });
+
+  it.each([500, 503])('%s -> AuthError server', async (status) => {
+    const { api } = make(async () => res(status, errBody('INTERNAL')));
+    await expect(api.getAccountBalance(TOKEN, 'acc-1')).rejects.toMatchObject({
+      kind: 'server',
+    });
+  });
+
+  it.each([
+    ['otra cuenta', { accountId: 'acc-2' }],
+    ['saldo no entero', { saldo: -250.5 }],
+    ['saldo inicial no entero', { saldoInicial: 1000.1, saldo: -249.9 }],
+    ['saldo fuera de rango seguro', { saldoInicial: 2 ** 53, saldo: 2 ** 53 - 1250 }],
+    ['ingresos negativos', { ingresos: -500, saldo: -1250 }],
+    ['gastos negativos', { gastos: -1750, saldo: 3250 }],
+    ['saldo como texto', { saldo: '-250' }],
+    ['campo ausente', { ingresos: undefined }],
+    ['suma incoherente', { saldo: -249 }],
+  ])('respuesta inválida (%s) -> AuthError unknown', async (_name, overrides) => {
+    const { api } = make(async () => res(200, balance(overrides)));
+    await expect(api.getAccountBalance(TOKEN, 'acc-1')).rejects.toMatchObject({
+      kind: 'unknown',
+    });
+  });
+});
+
 describe('createResourcesApi: reportes', () => {
   const ACC = 'acc-1';
   const range = { accountId: ACC, desde: '2026-10-01', hasta: '2026-10-31' };

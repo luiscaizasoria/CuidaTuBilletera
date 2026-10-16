@@ -2,7 +2,7 @@
 
 Matriz reutilizable con la que `mobile-ux-qa` valida cualquier cambio visible de la interfaz móvil (política de CLAUDE.md, «Coordinación y delegación»). Se aplica al rediseño (docs/007, docs/008 y docs/009) y a las fases siguientes. Los criterios detallados de cada pantalla están en docs/007 §11.2 (criterios 1 a 31, trazados en §9) y los tokens y contrastes en docs/008.
 
-Estado actual: **ninguna fila está ejecutada sobre la app**. El rediseño no está implementado; esta matriz define qué se probará y cómo.
+Estado actual: **R2 validada por código y pruebas Jest (nivel A y T) y sin dispositivo**; el resultado está en el §11. Las demás fases (R3 a R6) no están ejecutadas. Ninguna fila está validada en dispositivo Android real (nivel D) ni con TalkBack.
 
 ## 1. Niveles de evidencia
 
@@ -154,7 +154,7 @@ Cada criterio de aceptación se cubre con al menos un caso. «Caso» usa los có
 | 27 | Todo visible sin desplazar en 360 × 640; sin huecos > 24 dp en 412 × 915 | Mis cuentas | TAM, AND-08 | R + D |
 | 28 | Total = suma exacta; oculto en carga/error/0-1 cuentas (14.16 aprobada) | Mis cuentas | INF, EST | A |
 | 29 | Tarjeta = un botón, ≥ 88 dp (92 con ≥ 400), etiqueta, color estable | Mis cuentas | DIS, A11Y, ACC | A + R (`.acard`) |
-| 30 | Una acción primaria; Cerrar sesión en hoja de perfil con confirmación | Mis cuentas | ACC, DIS | A + R |
+| 30 | Una acción primaria; Cerrar sesión en hoja de perfil, sin confirmación (docs/003 Decisión R2 D8) | Mis cuentas | ACC, DIS | A + R |
 | 31 | Color por módulo: estado en escala de grises, título `header`, FAB uniforme | Detalle y pestañas | DIS, A11Y | T + R |
 
 Cobertura: criterios 1 a 31 sin huecos. Los casos AND-nn sin criterio propio (AND-09 scroll largo) se ejecutan como regresión de las pantallas con lista.
@@ -186,3 +186,112 @@ Capturas (nomenclatura del §6): lista de rutas <pantalla>-<ancho>.png
 Pendientes y limitaciones (qué no se pudo demostrar y por qué)
 Regresión: suites relacionadas ejecutadas por qa-engineer (comando y resultado)
 ```
+
+## 11. Informe de ejecución R2 (navegación centrada en cuentas)
+
+```
+Informe de ejecución UX-QA - R2
+Fecha: 2026-10-16
+Rama y commit evaluados: feat/rediseno-ux-ui sobre 107a495, con los cambios de app/src SIN commit
+Ejecutor: mobile-ux-qa (agentId: lo registra quien coordina; no se dispone aquí)
+Alcance: R2 de docs/009 (Mis cuentas, Crear cuenta, Detalle con 5 pestañas, Más, selector y hoja de perfil,
+         barra de contexto) y cambios visuales recientes (Button link, accountIcon, archivedRow, yellowBorder, depth.scrim)
+Entorno: niveles A (Jest) y T (contrast.js + cálculo WCAG propio) y revisión de código. Sin R ni D:
+         no hay emulador, dispositivo ni TalkBack; no se probó 360/412 dp, gestos ni tres botones.
+Resumen R2: no se ha ejecutado ningún nivel D ni R; criterios con nivel A completo: OK; el resto PENDIENTE.
+Decisión: sin defectos críticos ni altos. APROBADO CON OBSERVACIONES (4 medias/bajas a corregir o aceptar; ver abajo).
+          El cierre de R2 sigue condicionado a la validación en dispositivo (nivel D) de los criterios marcados PENDIENTE.
+```
+
+### 11.1 Comandos y resultados (nivel A/T)
+
+| Comando | Resultado |
+| --- | --- |
+| `cd app && npx jest --ci --maxWorkers=2` | 34 suites, **1168 pruebas, todas en verde** |
+| `cd app && npx tsc --noEmit` | sin errores |
+| `cd app && npx eslint src --max-warnings=0` | sin avisos |
+| `node docs/design/contrast.js --check` | código de salida 0 |
+| Cálculo WCAG propio de pares de `tokens.ts` (script en scratchpad, no versionado) | `expenseText`/`segBg` 5,52; `expenseText`/blanco 6,38; `expenseText` sobre tarjetas rosa/albaricoque 5,54/5,71; `income`/blanco 4,99; `expense`/blanco 4,82; blanco/`dangerSolid` 4,82; `yellowText`/`yellowSoft` 6,86; `brand700`/blanco 7,49 y /`bg` 7,26; `text2`/`archivedRow` 6,71; `text2` sobre las 6 tarjetas de cuenta 6,5 a 7,0; tinta/mosaico de módulo 7,2 a 8,4; blanco/`brand700` 7,49. Todos ≥ 4,5 (texto). `yellowBorder` frente a blanco 1,67 y a `yellowSoft` 1,48: borde decorativo, la etiqueta «Archivada» lleva texto (ver UXQA-R2-03). |
+
+### 11.2 Resultados por criterio de docs/007 §11.2 relevantes para R2
+
+| Criterio | Pantalla | Nivel exigido | Nivel ejecutado | Resultado | Evidencia (archivo: prueba) | Defecto |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 Safe areas | Todas | D (A parcial) | A parcial | PENDIENTE | `ui.test.tsx` (relleno superior/inferior de `Screen`); `MainNavigator.test.tsx` «cada ruta tiene exactamente un Screen» (sin doble relleno en código: `Screen` con scroll suma `insets.bottom`, sin scroll usa `screen-bottom-inset`, con `bottomBar` lo pone `BottomTabs`). Lo real depende del respaldo de 48 dp de `useSystemInsets` | — |
+| 2 Barra de contexto y 5 pestañas | Detalle | A | A | OK | `MainNavigator.test.tsx` «las cinco pestañas; FAB solo en Cuenta, Movimientos y Calendario», «la barra muestra el saldo en las pestañas distintas de Cuenta»; `account-ui.test.tsx` «tablist con cinco pestañas» | — |
+| 3 Tras login, Mis cuentas; sin «Sesión iniciada» | Bienvenida, Mis cuentas | A | A | OK | `App.test.tsx` (`findHome` = encabezado «Mis cuentas»); no queda «Sesión iniciada» en `app/src` fuera de pruebas | — |
+| 4 Atrás (tabla 3.4) | Todas | A + D | A | A: OK; D: PENDIENTE | `MainNavigator.test.tsx` (Atrás: pestaña -> Cuenta -> Mis cuentas; Categorías -> Más; Nuevo movimiento -> origen; Reportes -> Historial filtrado -> Reportes; ignorado al guardar; raíz no se intercepta; una sola suscripción); `navigation.test.ts`; `sheets.test.tsx` y `AccountsScreen.test.tsx` (hoja cerrada con `onRequestClose`). Gestos y tres botones: sin dispositivo | — |
+| 5-6 Formulario de movimiento | Nuevo movimiento | A | — | FUERA DE R2 (R3) | Solo se comprobó el cableado de R2 (`onDone(changed)`, 409) | — |
+| 7 Saldo, ingresos/gastos del mes y semana | Detalle | A | A | OK | `AccountSummaryTab.test.tsx` (saldo del contenedor, resumen `GET /reports/summary`, semana lunes a domingo, máx. 10, filtros, vacíos) | — |
+| 8 Más: solo nombre, Archivar confirmado, sin eliminar | Más | A | A | OK | `MoreScreen.test.tsx` (título/secciones sin eliminar ni conciliar; renombrar solo `nombre`; archivar con `Alert` que nombra la cuenta, Cancelar no llama al PATCH). Texto del `Alert` idéntico a docs/007 §7 | — |
+| 9 `CATEGORY_IN_USE` | Categorías | A | — | FUERA DE R2 (R4) | Solo cableado del 409 `ACCOUNT_ARCHIVED` | — |
+| 10 48 dp, roles, etiquetas | Todas | A + R + D | A (código) | A: OK; R y D: PENDIENTE | `minHeight` ≥ 48 en `Button`, `Chip`, pestañas (62), `exit`/`retry`/`infoTouch` de la barra, avatar (48×48), `MonthArrow` (`arrowTouch` 48×48, círculo visible 40; prueba «flechas de mes: zona táctil de 48 dp»), filas del selector (56), «Opciones avanzadas» y «Archivadas (n)» (48). `Chip sm` 36 dp + `hitSlop` 6 arriba y abajo = 48 en vertical (`ui.test.tsx`); **no se usa aún en ninguna pantalla** y `hitSlop` es solo vertical (ver UXQA-R2-05). Roles: `tab`, `tablist`, `radio`/`radiogroup`, `button` con estado `expanded`/`selected`/`busy`/`disabled` | UXQA-R2-05 |
+| 11 Fuente 200 % | Detalle | R + D | A (modo de dos filas de la barra) | PENDIENTE | `account-ui.test.tsx` «fuente grande: dos filas» | — |
+| 12 Cierre de sesión | Mis cuentas, Más | A | A | OK | `MainNavigator.test.tsx` (desmontar llama a `clearExports`; otro usuario sin rastro), `App.resources.test.tsx` (sin fuga entre usuarios), `AccountsScreen.test.tsx`/`MoreScreen.test.tsx` (Cerrar sesión sin confirmación, docs/003 R2 D8) | — |
+| 13 Typecheck, lint, pruebas | `app` | A | A | OK (ver §11.1) | — | — |
+| 14-15 Barra por pantalla; fuente única | Internas | A + R | A | A: OK; R: PENDIENTE | Variantes `full`/`readOnly`/`compact` según ruta (`MainNavigator.tsx`); «recorrer las pestañas no relee el saldo ni la lista» | — |
+| 16 Un solo `getAccountBalance` | Detalle | A | A | OK | `MainNavigator.test.tsx` «guardar (changed=true) relee el saldo exactamente una vez»; «Cancelar o editar sin cambios no relee»; «anular relee» | — |
+| 17 Saldo nunca «$0.00» | Barra, Mis cuentas | A | A | OK | `account-ui.test.tsx` (`balanceText` null ante valores no enteros seguros; error: «Saldo no disponible», sin saldo viejo); `AccountSummaryTab.test.tsx`; `MainNavigator.test.tsx` «error de saldo ... Reintentar» | — |
+| 18 Renombrar actualiza la barra sin pedir saldo | Más, barra | A | A | OK | `MainNavigator.test.tsx` «renombrar actualiza la barra con la respuesta del PATCH, sin releer el saldo» | — |
+| 19 Archivar vuelve a Mis cuentas; archivada deshabilita Nuevo movimiento | Más, Detalle | A | A | OK | `MainNavigator.test.tsx` «archivar con confirmación vuelve a Mis cuentas con Archivadas desplegada y el aviso», «cancelar el archivado...», «una cuenta archivada se abre en modo consulta»; `account-ui.test.tsx` «deshabilitado (cuenta archivada)» | — |
+| 20 409 `ACCOUNT_ARCHIVED` con «Volver a la cuenta» | Nuevo movimiento | A | A (solo marcar la cuenta) | OK en R2 / resto R3 | «409 ACCOUNT_ARCHIVED marca la cuenta como archivada (modo consulta)» | — |
+| 21 Nombre de 60 caracteres y saldo negativo | Barra, Mis cuentas | A + R | A (código: `numberOfLines={1}` + elipsis, signo y `expenseText` en negativos) | A: OK; R: PENDIENTE | `AccountsScreen.test.tsx` «tarjetas: ... saldo con signo»; Total con negativos | — |
+| 22 Accesibilidad de la barra | Barra | A + D (TalkBack) | A | A: OK; TalkBack: **PENDIENTE (no ejecutado)** | Rol `text` (sin `header`), etiqueta con nombre/saldo/«archivada», selector con pista; `account-ui.test.tsx` | — |
+| 23 Teclado abierto | Crear cuenta, Nuevo movimiento | D | — | **PENDIENTE (D)** | `KeyboardAvoidingView` sin comportamiento en Android (`behavior` indefinido): depende de `adjustResize`/edge-to-edge, no verificable aquí | — |
+| 24 Selector rápido de cuenta | Barra | A | A | OK | `sheets.test.tsx` (solo activas, ✓ aparte, ninguna marcada si la activa está archivada, error con Reintentar, cerrada no carga); `MainNavigator.test.tsx` «cambiar de cuenta conserva la pestaña, reinicia la vista y lo anuncia», «una respuesta tardía del saldo de A no se aplica tras cambiar a B» (sin fuga entre cuentas: pestañas remontadas por `key` de cuenta) | — |
+| 25 Encabezado de Mis cuentas, avatar 48 dp, alcancía decorativa | Mis cuentas | A + R | A | **PARCIAL**: marca, saludo (primer nombre), título `header`, avatar 48×48 y hoja de perfil OK; **alcancía ausente** | `AccountsScreen.test.tsx`; `tokens.ts` define `headerPig*` pero ningún componente lo usa; `app/assets/` no existe | UXQA-R2-01 |
+| 26 Alcancía 72/48/ausente | Mis cuentas | R + D | — | PENDIENTE (depende de UXQA-R2-01) | — | UXQA-R2-01 |
+| 27 Todo visible en 360 × 640 | Mis cuentas | R + D | — | PENDIENTE | — | — |
+| 28 Total = suma exacta; oculto con 0-1 cuentas, carga y error | Mis cuentas | A | A | OK | `accounts.test.ts` (suma exacta con negativos, excluye archivadas, null con 0-1 o valor no seguro), `AccountsScreen.test.tsx` (con 2+ activas visible, excluye archivadas y lo indica, sin Total en 1 cuenta, carga y error sin cifras) | — |
+| 29 Tarjeta = un botón, ≥ 88/92 dp, color estable | Mis cuentas | A + R | A | A: OK; R: PENDIENTE | `account-ui.test.tsx` (etiqueta «{nombre}, saldo actual {saldo}. Abrir cuenta», 92 dp con ≥ 400), `accounts.test.ts` (hash estable y valores conocidos) | — |
+| 30 Una acción primaria; Cerrar sesión en hoja de perfil sin confirmación | Mis cuentas | A + R | A | A: OK; R: PENDIENTE | `AccountsScreen.test.tsx` (avatar abre la hoja; se cierra con «Cerrar», fuera o Atrás). Hay una sola primaria («+ Nueva cuenta»); en vacío, «Crear mi primera cuenta» | — |
+| 31 Color por módulo | Pestañas | T + R | T + A | T/A: OK; R: PENDIENTE | `account-ui.test.tsx` (pestaña activa con su color de módulo, FAB uniforme `brand700`); tokens de `moduleColors` verificados | — |
+
+### 11.3 Casos transversales (AND-nn) en R2
+
+| Caso | Resultado | Nota |
+| --- | --- | --- |
+| AND-01, AND-02, AND-06, AND-07 (barras del sistema, gestos, tres botones) | PENDIENTE (D) | `useSystemInsets` usa respaldos (24 dp arriba, 48 dp abajo): mejor esfuerzo no validado (docs/003 R0 D7 bis). `Modal` con edge-to-edge sin validar |
+| AND-03, AND-04 (teclado) | PENDIENTE (D) | Sin emulador |
+| AND-05 (Atrás) | A: OK; D: PENDIENTE | Ver criterio 4. La confirmación de descarte no existe en R2 (docs/003 R2 D7, diferida) |
+| AND-08 (360 × 640) | PENDIENTE (R + D) | Riesgo a revisar: barra de contexto completa a 360 dp (salida + mosaico + nombre mín. 64 + selector + saldo) y etiqueta «Movimientos» a 11,5 sp en 72 dp de pestaña; el código envuelve (`flexWrap`) pero no hay medición |
+| AND-09 (scroll largo) | A parcial | `bottomInset` = FAB + 32 (+40 si archivada) en Cuenta, Movimientos y Calendario; Reportes y Más no llevan FAB |
+| AND-10 (textos extensos) | A parcial | Elipsis a una línea en tarjeta y barra; fuente grande en dos filas; sin render |
+| AND-11 (cambio de cuenta sin fuga) | OK (A) | Ver criterio 24 |
+| AND-12 (sesión cerrada) | OK (A) | Ver criterio 12 |
+| AND-13 (red lenta/indisponible) | OK (A) para Mis cuentas, barra, Cuenta, selector | Carga con esqueleto sin cifras, error fijo en español con Reintentar, nunca «$0.00» |
+
+### 11.4 Cambios visuales recientes
+
+| Cambio | Resultado | Evidencia |
+| --- | --- | --- |
+| `Button` variante `link` | OK con observación | Texto `brand700` 700 sobre fondo/blanco 7,3 a 7,5:1; `minHeight` 48 heredado; usada en «Ver todo ›», «Ver» y «Ver todas mis cuentas». **Sin prueba propia en `ui.test.tsx`** (el `it.each` omite `link`): UXQA-R2-04 |
+| `accountIcon` | OK con observación | `accounts.test.ts` («tarjeta» 💳, «banco» 🏦, resto 👛). docs/008 §2.4 pide «ahorro» -> alcancía; no implementado: UXQA-R2-02 |
+| `colors.archivedRow` `#F4F0EA` | OK | Coincide con docs/008 (tarjeta archivada); `text2`/fila 6,71:1; sin sombra ni color de cuenta |
+| `colors.yellowBorder` `#E8C560` | OK con observación | Coincide con docs/008 §6 (etiqueta «Archivada»). Borde decorativo 1,48:1 frente a `yellowSoft`; la información no depende del borde (texto 6,86:1). Se registra para que el contraste no se cite como cumplido |
+| `depth.scrim` `rgba(23,33,31,0.45)` | Observación | No figura en docs/008 y el prototipo usa 0,55: UXQA-R2-03 |
+
+### 11.5 Defectos
+
+Sin defectos críticos ni altos. No bloquean el cierre ni el PR por regla de severidad; el cierre de R2 exige igualmente la validación D pendiente.
+
+| ID | Pantalla | Caso | Severidad | Pasos | Esperado | Obtenido | Evidencia / archivo |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| UXQA-R2-01 | Mis cuentas | DIS, criterios 25 y 26 | Media | Iniciar sesión y abrir Mis cuentas | docs/007 §5.2 y docs/008: alcancía decorativa en el encabezado (72/48 dp o ausente por ancho y fuente) | No hay alcancía; `sizes.headerPig*` sin uso y `app/assets/` no existe. La omisión no está registrada como diferida en docs/003 R2 D1 a D9 ni en docs/009 (asset de R6) | `app/src/screens/AccountsScreen.tsx` (encabezado); `app/src/theme/tokens.ts`. Nivel A (código). Decidir: diferir a R6 con registro o implementar |
+| UXQA-R2-02 | Crear cuenta / Mis cuentas | INF, DIS | Baja | (a) Escribir «Fondo de ahorro» como nombre de cuenta. (b) Escribir «12,5» o «1.2.3» en saldo inicial | (a) docs/008 §2.4: «ahorro» -> alcancía. (b) docs/007 §5.3: `decimal-pad` «con filtrado de caracteres» | (a) Muestra 👛. (b) Se acepta la entrada y el error llega al guardar («El saldo inicial no es válido...») | `app/src/lib/accounts.ts` (`accountIcon`); `app/src/screens/NewAccountScreen.tsx` (`onChangeText={setSaldo}` sin filtro). Nivel A (código) |
+| UXQA-R2-03 | Hojas (perfil, selector) | DIS (tokens) | Baja | Abrir el avatar o el selector | Todo token visual descrito en docs/008 (velo detrás de la hoja); prototipo con 0,55 | `depth.scrim` = 0,45, no documentado; además `archivedRow` y `yellowBorder` están en docs/008 como literales y no en la lista de tokens de §11 | `app/src/theme/tokens.ts`; `docs/008-DISENO-VISUAL.md`. Devolver al diseñador visual para documentar o ajustar |
+| UXQA-R2-04 | Componente base | A11Y, tokens | Baja | Revisar `ui.test.tsx` | docs/010 §5: roles y `minHeight` ≥ 48 de los componentes base con prueba | La variante `link` (usada en 3 pantallas) no tiene prueba propia; solo la cubre indirectamente `AccountSummaryTab.test.tsx` | `app/src/screens/ui.test.tsx` (`it.each` omite `link`). Para `mobile-engineer` |
+| UXQA-R2-05 | Mis cuentas, componentes base | DIS, A11Y | Baja | Revisar la lista Archivadas y `Chip sm` | docs/008 §6: [Ver] `ghost`; fila «Archivadas» 15/700 `text2`; tarjeta presionada con escala 0,98; `Chip sm` con zona de 48 dp | [Ver] usa `link` (`brand700`); la fila usa 16/700 `text`; la tarjeta baja la opacidad a 0,85; «Desarchivar» muestra `busy` en todas las filas a la vez; `Chip sm` amplía solo en vertical (hitSlop arriba y abajo: en horizontal depende del texto) y aún no se usa | `app/src/screens/AccountsScreen.tsx`, `app/src/screens/account-ui.tsx`, `app/src/screens/ui.tsx`. Verificar que las desviaciones fueron aprobadas por el diseñador; si no, ajustar |
+
+### 11.6 Observaciones sin defecto
+
+- Decisión R2 D7 (confirmación al descartar formularios diferida): Crear cuenta y Nuevo movimiento salen con Atrás o Cancelar sin preguntar aunque haya texto escrito (docs/007 §3.4 y §7). Es una decisión del usuario pendiente, no un defecto; AND-05 queda parcial hasta resolverla.
+- Pantalla de Bienvenida: sin rediseñar (botón azul `#1a73e8`, colores literales fuera de `tokens.ts`; blanco sobre ese azul da 4,51:1, AA justo) y docs/009 no le asigna ninguna fase. Se devuelve a quien coordina para planificarla; no es parte de R2.
+- `tsconfig.json` sin seguimiento en la raíz del repositorio (`extends: expo/tsconfig.base`); docs/009 §3 dice que no se toca el de la raíz. Confirmar si es un artefacto del entorno y, si lo es, no incluirlo en el commit.
+- `archivedOpen` de `MainNavigator` se mantiene en `true` tras archivar hasta abrir una cuenta; efecto menor (Archivadas aparece desplegada al volver a Mis cuentas).
+
+### 11.7 Pendientes (no demostrados) y motivo
+
+Todo el nivel D (safe areas, teclado, gestos, tres botones, 360/412 dp, fuente 130/200 %, TalkBack, `Modal` con edge-to-edge) y el nivel R (comparación con `docs/design/capturas/`) por falta de emulador, dispositivo y de la build; no se ejecutó `verify.js` porque valida el prototipo, no la app. Capturas: ninguna.
+
+Regresión: la suite completa (1168 pruebas, incluidas Calendario, Reportes y exportación) pasa; lo repetirá `qa-engineer` como validación técnica.

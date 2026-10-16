@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,12 +12,13 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useLoader, useMutation } from '../hooks/use-loader';
-import type {
-  Account,
-  Category,
-  CategoryType,
-  ResourcesApi,
-  UpdateCategoryInput,
+import {
+  ApiRequestError,
+  type Account,
+  type Category,
+  type CategoryType,
+  type ResourcesApi,
+  type UpdateCategoryInput,
 } from '../lib/resources-api';
 import { Button, ErrorBox, screenStyles as s } from './ui';
 
@@ -34,12 +35,18 @@ export const CATEGORY_COLORS = [
 
 type Form = { kind: 'create' } | { kind: 'edit'; category: Category } | null;
 
+const isAccountArchived = (error: unknown) =>
+  error instanceof ApiRequestError && error.status === 409 && error.code === 'ACCOUNT_ARCHIVED';
+
 export default function CategoriesScreen({
   account,
   api,
+  onAccountArchived,
 }: {
   account: Account;
   api: ResourcesApi;
+  // 409 ACCOUNT_ARCHIVED al crear o desarchivar: el servidor confirma que la cuenta está archivada.
+  onAccountArchived?: (accountId: string) => void;
 }) {
   const { authorizedCall } = useAuth();
   const [showArchived, setShowArchived] = useState(false);
@@ -50,6 +57,22 @@ export default function CategoriesScreen({
   const [color, setColor] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const mutation = useMutation();
+  const accountArchived = useRef(false);
+
+  // Ejecuta la mutación marcando un 409 ACCOUNT_ARCHIVED para avisar al contenedor.
+  async function runWatchingArchived(action: () => Promise<unknown>) {
+    accountArchived.current = false;
+    const ok = await mutation.run(async () => {
+      try {
+        await action();
+      } catch (error) {
+        if (isAccountArchived(error)) accountArchived.current = true;
+        throw error;
+      }
+    });
+    if (!ok && accountArchived.current) onAccountArchived?.(account.id);
+    return ok;
+  }
 
   const { state, reload, refresh } = useLoader(
     () =>
@@ -78,7 +101,7 @@ export default function CategoriesScreen({
     }
     setFormError(null);
     const desc = descripcion.trim();
-    const ok = await mutation.run(() =>
+    const ok = await runWatchingArchived(() =>
       authorizedCall((token) => {
         if (form.kind === 'create') {
           return api.createCategory(token, account.id, {
@@ -103,7 +126,7 @@ export default function CategoriesScreen({
   }
 
   async function setArchived(category: Category, archivada: boolean) {
-    const ok = await mutation.run(() =>
+    const ok = await runWatchingArchived(() =>
       authorizedCall((token) => api.updateCategory(token, category.id, { archivada })),
     );
     if (ok) refresh();

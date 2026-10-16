@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   ScrollView,
   StyleSheet,
   Text,
@@ -39,13 +40,17 @@ export default function TransactionFormScreen({
   transaction,
   initialFecha,
   onDone,
+  onAccountArchived,
 }: {
   account: Account;
   api: ResourcesApi;
   transaction?: Transaction | undefined;
   // Fecha preseleccionada al crear (p. ej. el día elegido en el calendario); si no es válida, hoy.
   initialFecha?: string | undefined;
-  onDone: () => void;
+  // `changed` = hubo escritura (crear, editar con cambios o anular): el contenedor relee el saldo.
+  onDone: (changed: boolean) => void;
+  // 409 ACCOUNT_ARCHIVED al crear: el servidor confirma que la cuenta está archivada.
+  onAccountArchived?: (accountId: string) => void;
 }) {
   const { authorizedCall } = useAuth();
   const editing = transaction !== undefined;
@@ -60,6 +65,15 @@ export default function TransactionFormScreen({
   const [errors, setErrors] = useState<{ monto?: string; categoria?: string; fecha?: string }>({});
   const mutation = useMutation();
   const staleCategories = useRef(false);
+  const accountArchived = useRef(false);
+  const busy = mutation.pending;
+
+  // Mientras se guarda, Atrás se ignora (el listener más reciente tiene prioridad).
+  useEffect(() => {
+    if (!busy) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => subscription.remove();
+  }, [busy]);
 
   // Creación: categorías activas del tipo elegido (gasto -> egreso). Edición: todas, solo para el nombre.
   const {
@@ -112,17 +126,18 @@ export default function TransactionFormScreen({
       if (fecha !== transaction.fecha) changes.fecha = fecha;
       if (note !== (transaction.nota ?? '')) changes.nota = note === '' ? null : note;
       if (Object.keys(changes).length === 0) {
-        onDone(); // sin cambios no se llama a la API
+        onDone(false); // sin cambios no se llama a la API
         return;
       }
       const ok = await mutation.run(() =>
         authorizedCall((token) => api.updateTransaction(token, transaction.id, changes)),
       );
-      if (ok) onDone();
+      if (ok) onDone(true);
       return;
     }
 
     staleCategories.current = false;
+    accountArchived.current = false;
     const ok = await mutation.run(async () => {
       try {
         await authorizedCall((token) =>
@@ -139,12 +154,22 @@ export default function TransactionFormScreen({
         if (error instanceof ApiRequestError && STALE_CATEGORY_CODES.has(error.code)) {
           staleCategories.current = true;
         }
+        if (
+          error instanceof ApiRequestError &&
+          error.status === 409 &&
+          error.code === 'ACCOUNT_ARCHIVED'
+        ) {
+          accountArchived.current = true;
+        }
         throw error;
       }
     });
     if (ok) {
-      onDone();
-    } else if (staleCategories.current) {
+      onDone(true);
+      return;
+    }
+    if (accountArchived.current) onAccountArchived?.(account.id);
+    if (staleCategories.current) {
       setCategoryId(null);
       refresh();
     }
@@ -160,7 +185,7 @@ export default function TransactionFormScreen({
         throw error;
       }
     });
-    if (ok) onDone();
+    if (ok) onDone(true);
   }
 
   function confirmVoid(target: Transaction) {
@@ -170,7 +195,6 @@ export default function TransactionFormScreen({
     ]);
   }
 
-  const busy = mutation.pending;
   const options =
     categories.status === 'ready' ? categories.data.items.filter((c) => !c.archivada) : [];
   const currentCategory =
@@ -297,7 +321,7 @@ export default function TransactionFormScreen({
 
       <View style={s.actions}>
         <Button label="Guardar" variant="primary" disabled={busy} onPress={() => void submit()} />
-        <Button label="Cancelar" disabled={busy} onPress={onDone} />
+        <Button label="Cancelar" disabled={busy} onPress={() => onDone(false)} />
         {transaction ? (
           <Button
             label="Anular movimiento"

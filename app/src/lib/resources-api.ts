@@ -13,6 +13,15 @@ export interface Account {
   updatedAt: string;
 }
 
+// Saldo de una cuenta (`GET /accounts/:id/balance`): saldo = saldoInicial + ingresos - gastos.
+export interface AccountBalance {
+  accountId: string;
+  saldoInicial: number;
+  ingresos: number;
+  gastos: number;
+  saldo: number;
+}
+
 export type CategoryType = 'ingreso' | 'egreso';
 
 export interface Category {
@@ -214,6 +223,8 @@ export interface ResourcesApi {
     id: string,
     input: { nombre?: string; archivada?: boolean },
   ): Promise<Account>;
+  // Relectura del saldo tras crear, editar o anular un movimiento (docs/003, Decisión R2 D2).
+  getAccountBalance(accessToken: string, accountId: string): Promise<AccountBalance>;
   listCategories(
     accessToken: string,
     accountId: string,
@@ -427,6 +438,24 @@ function parseReportSummary(data: Record<string, unknown>, expected: GetReportOp
   return { ...expected, ingresos, gastos, balance, cantidad } as ReportSummary;
 }
 
+// Exige la cuenta pedida, enteros seguros, ingresos y gastos no negativos y la suma coherente.
+function parseAccountBalance(data: Record<string, unknown>, accountId: string): AccountBalance {
+  const { saldoInicial, ingresos, gastos, saldo } = data;
+  if (
+    data.accountId !== accountId ||
+    typeof saldoInicial !== 'number' ||
+    !Number.isSafeInteger(saldoInicial) ||
+    !isCents(ingresos) ||
+    !isCents(gastos) ||
+    typeof saldo !== 'number' ||
+    !Number.isSafeInteger(saldo) ||
+    exactSum([saldoInicial, ingresos, -gastos]) !== saldo
+  ) {
+    return invalid();
+  }
+  return { accountId, saldoInicial, ingresos, gastos, saldo };
+}
+
 function parseCategoryGroup(value: unknown): CategoryReportGroup {
   if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 100) return invalid();
   const items = value.items.map((raw: unknown): CategoryReportItem => {
@@ -590,6 +619,11 @@ export function createResourcesApi(baseUrl: string, fetchImpl: typeof fetch = fe
     async updateAccount(accessToken, accountId, input) {
       const response = await call(accessToken, `/accounts/${id(accountId)}`, 'PATCH', input);
       return parseAccount((await readJson(response)).account);
+    },
+
+    async getAccountBalance(accessToken, accountId) {
+      const response = await call(accessToken, `/accounts/${id(accountId)}/balance`, 'GET');
+      return parseAccountBalance(await readJson(response), accountId);
     },
 
     async listCategories(accessToken, accountId, options = {}) {

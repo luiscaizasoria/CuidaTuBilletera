@@ -222,7 +222,7 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
 ### Reglas de experiencia
 
 - Formulario de movimiento rápido de completar: tipo, categoría y monto en ese orden, con teclado numérico, fecha «Hoy» por defecto y protección contra doble envío.
-- Confirmaciones solo en acciones destructivas o de conciliación.
+- Confirmaciones solo en acciones destructivas o de conciliación, y al abandonar un formulario con cambios sin guardar (docs/003, Rediseño R3 D1). Sin cambios, se sale sin diálogo.
 - Mensajes de error claros y estados de carga, vacío y error en todas las pantallas.
 
 ### Android: safe areas, teclado y accesibilidad

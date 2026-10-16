@@ -382,3 +382,26 @@ describe('HistoryScreen: filtros iniciales', () => {
     });
   });
 });
+
+describe('HistoryScreen: R2 (filtros conservados por el contenedor)', () => {
+  it('onFiltersChange recibe los filtros iniciales y cada cambio, solo con los activos', async () => {
+    const onFiltersChange = jest.fn();
+    await render(
+      <HistoryScreen
+        account={account()}
+        api={makeApi()}
+        onOpenTransaction={onOpen}
+        initialFilters={{ categoryId: 'c-food' }}
+        onFiltersChange={onFiltersChange}
+      />,
+    );
+    await screen.findByText('mov 1');
+    expect(onFiltersChange).toHaveBeenLastCalledWith({ categoryId: 'c-food' });
+    await fireEvent.press(screen.getByRole('radio', { name: 'Gastos' }));
+    await waitFor(() =>
+      expect(onFiltersChange).toHaveBeenLastCalledWith({ tipo: 'gasto', categoryId: 'c-food' }),
+    );
+    await fireEvent.press(screen.getByText('Limpiar filtros'));
+    await waitFor(() => expect(onFiltersChange).toHaveBeenLastCalledWith({}));
+  });
+});

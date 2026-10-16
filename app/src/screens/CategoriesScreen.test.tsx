@@ -266,3 +266,54 @@ describe('CategoriesScreen: acciones', () => {
     );
   });
 });
+
+describe('CategoriesScreen: R2 (409 ACCOUNT_ARCHIVED)', () => {
+  const archivedError = () => new ApiRequestError(409, 'ACCOUNT_ARCHIVED');
+
+  it('crear con 409 ACCOUNT_ARCHIVED avisa al contenedor con el id de la cuenta', async () => {
+    const onAccountArchived = jest.fn();
+    const api = fakeResourcesApi({
+      listCategories: jest.fn(async () => pageOf(items)),
+      createCategory: jest.fn().mockRejectedValue(archivedError()),
+    });
+    await render(
+      <CategoriesScreen account={account()} api={api} onAccountArchived={onAccountArchived} />,
+    );
+    await fireEvent.press(await screen.findByText('Nueva categoría'));
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la categoría'), 'Ocio');
+    await fireEvent.press(screen.getByText('Guardar'));
+    expect(await screen.findByText(/La cuenta está archivada/)).toBeTruthy();
+    expect(onAccountArchived).toHaveBeenCalledWith('acc-1');
+  });
+
+  it('desarchivar con 409 ACCOUNT_ARCHIVED también avisa', async () => {
+    const onAccountArchived = jest.fn();
+    const api = fakeResourcesApi({
+      listCategories: jest.fn(async () =>
+        pageOf([category({ id: 'c-v', nombre: 'Viejo', archivada: true })]),
+      ),
+      updateCategory: jest.fn().mockRejectedValue(archivedError()),
+    });
+    await render(
+      <CategoriesScreen account={account()} api={api} onAccountArchived={onAccountArchived} />,
+    );
+    await fireEvent.press(await screen.findByLabelText('Desarchivar Viejo'));
+    await waitFor(() => expect(onAccountArchived).toHaveBeenCalledWith('acc-1'));
+  });
+
+  it('otros errores no avisan', async () => {
+    const onAccountArchived = jest.fn();
+    const api = fakeResourcesApi({
+      listCategories: jest.fn(async () => pageOf(items)),
+      createCategory: jest.fn().mockRejectedValue(new ApiRequestError(409, 'CATEGORY_NAME_TAKEN')),
+    });
+    await render(
+      <CategoriesScreen account={account()} api={api} onAccountArchived={onAccountArchived} />,
+    );
+    await fireEvent.press(await screen.findByText('Nueva categoría'));
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la categoría'), 'Comida');
+    await fireEvent.press(screen.getByText('Guardar'));
+    await screen.findByText(/Ya existe una categoría/);
+    expect(onAccountArchived).not.toHaveBeenCalled();
+  });
+});

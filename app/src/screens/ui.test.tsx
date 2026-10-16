@@ -5,7 +5,7 @@ import { colors } from '../theme/tokens';
 import { FALLBACK_TOP_DP } from '../theme/useSystemInsets';
 
 describe('Button', () => {
-  it.each(['primary', 'secondary', 'ghost', 'danger'] as const)(
+  it.each(['primary', 'secondary', 'ghost', 'danger', 'dangerSolid'] as const)(
     'variante %s con rol y estado',
     async (variant) => {
       const onPress = jest.fn();
@@ -23,6 +23,25 @@ describe('Button', () => {
       backgroundColor: colors.brand700,
       minHeight: 52,
     });
+  });
+
+  it('tall usa radio 16 (radii.lg)', async () => {
+    await render(<Button label="Ok" variant="primary" tall onPress={() => undefined} />);
+    expect(screen.getByRole('button')).toHaveStyle({ borderRadius: 16 });
+  });
+
+  it('sin tall conserva el radio 12', async () => {
+    await render(<Button label="Ok" onPress={() => undefined} />);
+    expect(screen.getByRole('button')).toHaveStyle({ borderRadius: 12 });
+  });
+
+  it('dangerSolid: fondo y borde expense, texto blanco', async () => {
+    await render(<Button label="Archivar" variant="dangerSolid" onPress={() => undefined} />);
+    expect(screen.getByRole('button')).toHaveStyle({
+      backgroundColor: colors.expense,
+      borderColor: colors.expense,
+    });
+    expect(screen.getByText('Archivar')).toHaveStyle({ color: colors.white });
   });
 
   it('minHeight 48 por defecto', async () => {
@@ -52,6 +71,7 @@ describe('Button', () => {
 });
 
 describe('Chip', () => {
+  // R2: píldora con borde 1.5 (antes borde 2 al seleccionar, docs/007 §6.7); se ajusta el ancho esperado.
   it('rol radio, estado y texto sin ✓', async () => {
     const onPress = jest.fn();
     await render(<Chip label="Efectivo" selected onPress={onPress} />);
@@ -60,7 +80,55 @@ describe('Chip', () => {
     expect(screen.getByText('Efectivo')).toBeTruthy();
     await fireEvent.press(c);
     expect(onPress).toHaveBeenCalled();
-    expect(c).toHaveStyle({ minHeight: 48, borderWidth: 2 });
+    expect(c).toHaveStyle({ minHeight: 48, borderWidth: 1.5 });
+  });
+
+  it('píldora: radio pill, borde 1.5 y superficie', async () => {
+    await render(<Chip label="Gasto" selected={false} onPress={() => undefined} />);
+    expect(screen.getByRole('radio', { name: 'Gasto' })).toHaveStyle({
+      borderRadius: 999,
+      borderWidth: 1.5,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 16,
+    });
+    expect(screen.queryByTestId('chip-check')).toBeNull();
+  });
+
+  it('seleccionado: ✓ en un texto aparte, oculto a la accesibilidad, y etiqueta en negrita', async () => {
+    await render(<Chip label="Gasto" selected onPress={() => undefined} />);
+    const check = screen.getByTestId('chip-check', { includeHiddenElements: true });
+    expect(check).toHaveTextContent('✓');
+    expect(check.props.importantForAccessibility).toBe('no');
+    expect(check.props.accessibilityElementsHidden).toBe(true);
+    expect(screen.getByText('Gasto')).toHaveStyle({ fontWeight: '800' });
+    expect(screen.queryByText('✓ Gasto')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Gasto' })).toHaveStyle({
+      backgroundColor: colors.segBg,
+      borderColor: colors.text,
+    });
+  });
+
+  it('size sm: 36 dp visibles con hitSlop de 6 arriba y abajo', async () => {
+    await render(<Chip label="Todos" size="sm" selected={false} onPress={() => undefined} />);
+    const c = screen.getByRole('radio', { name: 'Todos' });
+    expect(c).toHaveStyle({ minHeight: 36, paddingHorizontal: 12 });
+    expect(c.props.hitSlop).toEqual({ top: 6, bottom: 6 });
+    expect(screen.getByText('Todos')).toHaveStyle({ fontSize: 13, lineHeight: 18 });
+  });
+
+  it('size md no amplía la zona táctil', async () => {
+    await render(<Chip label="Todos" selected={false} onPress={() => undefined} />);
+    expect(screen.getByRole('radio', { name: 'Todos' }).props.hitSlop).toBeUndefined();
+  });
+
+  it('disabled no ejecuta onPress y marca el estado', async () => {
+    const onPress = jest.fn();
+    await render(<Chip label="Todos" selected={false} disabled onPress={onPress} />);
+    const c = screen.getByRole('radio', { name: 'Todos' });
+    await fireEvent.press(c);
+    expect(onPress).not.toHaveBeenCalled();
+    expect(c.props.accessibilityState).toEqual({ selected: false, disabled: true });
   });
 });
 
@@ -221,5 +289,33 @@ describe('Screen', () => {
       height: FALLBACK_TOP_DP,
       backgroundColor: colors.surface,
     });
+  });
+
+  it('sin scroll y sin barra inferior reserva el margen inferior del sistema', async () => {
+    (StatusBar as { currentHeight?: number }).currentHeight = 24;
+    await render(
+      <Screen scroll={false}>
+        <Text>Hola</Text>
+      </Screen>,
+    );
+    expect(screen.getByTestId('screen-bottom-inset')).toHaveStyle({ height: 48 });
+  });
+
+  it('con bottomBar no añade el espaciador (lo pone la barra)', async () => {
+    await render(
+      <Screen scroll={false} bottomBar>
+        <Text>Hola</Text>
+      </Screen>,
+    );
+    expect(screen.queryByTestId('screen-bottom-inset')).toBeNull();
+  });
+
+  it('con scroll no añade el espaciador (lo pone el relleno del contenido)', async () => {
+    await render(
+      <Screen>
+        <Text>Hola</Text>
+      </Screen>,
+    );
+    expect(screen.queryByTestId('screen-bottom-inset')).toBeNull();
   });
 });

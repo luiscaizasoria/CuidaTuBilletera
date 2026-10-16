@@ -27,6 +27,8 @@ export const colors = {
   yellow: '#FFC93C',
   yellowSoft: '#FFF1C2',
   yellowText: '#6B4E00',
+  yellowBorder: '#E8C560',
+  archivedRow: '#F4F0EA', // fondo de la fila de cuenta archivada (docs/008)
   white: '#FFFFFF',
 } as const;
 
@@ -57,6 +59,7 @@ export const depth = {
   circleColor: colors.white,
   circleOpacity: 0.08,
   accountCardCircleOpacity: 0.45,
+  scrim: 'rgba(23,33,31,0.45)', // velo detrás de las hojas inferiores
   blobs: [
     { color: '#FFD966', opacity: 0.35 },
     { color: '#FFB59A', opacity: 0.25 },
@@ -103,8 +106,8 @@ export const shadows = {
   },
 } as const;
 
-// Cifras tabulares para importes.
-export const tabularNums = { fontVariant: ['tabular-nums'] } as const;
+// Cifras tabulares para importes. Tipo mutable: `TextStyle.fontVariant` no acepta tuplas de solo lectura.
+export const tabularNums: { fontVariant: ['tabular-nums'] } = { fontVariant: ['tabular-nums'] };
 
 export const sizes = {
   touchMin: 48,

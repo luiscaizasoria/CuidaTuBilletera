@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import App from './App';
+import type { AuthService } from './lib/auth-service';
 import { createAuthService } from './lib/auth-service';
 import { AuthError } from './lib/auth-types';
 import {
@@ -12,10 +13,25 @@ import {
   storedSession,
   USER,
 } from './test-utils';
+import { fakeResourcesApi } from './resources-test-utils';
 
 // Los módulos nativos no existen en Jest: se sustituyen por dobles.
 jest.mock('./lib/google-auth', () => ({ createGoogleProvider: jest.fn() }));
 jest.mock('./lib/session-storage', () => ({ secureSessionStorage: {} }));
+
+// R2: la pantalla principal es Mis cuentas, que lista cuentas al entrar. Se inyecta una API de
+// recursos falsa para no depender de la red (antes Inicio también listaba cuentas, con un botón
+// «Reintentar carga» distinto del «Reintentar» de la sesión).
+const renderApp = (service?: AuthService) =>
+  render(<App service={service} resourcesApi={fakeResourcesApi()} />);
+// Ancla de la pantalla principal (antes «Sesión iniciada»).
+const findHome = () => screen.findByRole('header', { name: 'Mis cuentas' });
+const getHome = () => screen.getByRole('header', { name: 'Mis cuentas' });
+// R2: «Cerrar sesión» vive en la hoja de perfil (avatar) de Mis cuentas.
+const signOutFromProfile = async () => {
+  await fireEvent.press(await screen.findByRole('button', { name: 'Tu perfil y sesión' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+};
 
 const valid = (): Parameters<typeof fakeStorage>[0] => ({
   kind: 'session',
@@ -49,34 +65,37 @@ describe('App', () => {
   it('mientras restaura la sesión muestra el indicador de carga', async () => {
     const { service } = setup();
     jest.spyOn(service, 'restore').mockReturnValue(new Promise(() => {}));
-    await render(<App service={service} />);
+    await renderApp(service);
     expect(screen.getByTestId('app-loading')).toBeTruthy();
   });
 
   it('sin sesión guardada muestra el login', async () => {
     const { service } = setup();
-    await render(<App service={service} />);
+    await renderApp(service);
     expect(await screen.findByText('Ingresar con Google')).toBeTruthy();
     expect(screen.getByText('CuidaTuBilletera')).toBeTruthy();
   });
 
   it('con una sesión válida guardada entra directo a la pantalla principal', async () => {
     const { service } = setup(valid());
-    await render(<App service={service} />);
-    expect(await screen.findByText('Sesión iniciada')).toBeTruthy();
+    await renderApp(service);
+    expect(await findHome()).toBeTruthy();
+    expect(screen.getByText('Hola, Ana')).toBeTruthy();
+    // El correo y el nombre completos están en la hoja de perfil.
+    await fireEvent.press(screen.getByRole('button', { name: 'Tu perfil y sesión' }));
     expect(screen.getByText(USER.email)).toBeTruthy();
     expect(screen.getByText(USER.name!)).toBeTruthy();
   });
 
   it('el login exitoso lleva a la pantalla principal y cerrar sesión regresa al login', async () => {
     const { service, storage } = setup();
-    await render(<App service={service} />);
+    await renderApp(service);
     await fireEvent.press(await screen.findByText('Ingresar con Google'));
 
-    expect(await screen.findByText('Sesión iniciada')).toBeTruthy();
+    expect(await findHome()).toBeTruthy();
     expect(storage.session()).not.toBeNull();
 
-    await fireEvent.press(screen.getByText('Cerrar sesión'));
+    await signOutFromProfile();
     expect(await screen.findByText('Ingresar con Google')).toBeTruthy();
     expect(storage.isEmpty()).toBe(true);
   });
@@ -84,7 +103,7 @@ describe('App', () => {
   it('cancelar el login no muestra error', async () => {
     const google = fakeGoogle({ signIn: jest.fn(async () => ({ status: 'cancelled' })) });
     const { service } = setup(undefined, google);
-    await render(<App service={service} />);
+    await renderApp(service);
     await fireEvent.press(await screen.findByText('Ingresar con Google'));
 
     await waitFor(() => expect(google.signIn).toHaveBeenCalled());
@@ -99,7 +118,7 @@ describe('App', () => {
       }),
     });
     const { service } = setup(undefined, google);
-    await render(<App service={service} />);
+    await renderApp(service);
     await fireEvent.press(await screen.findByText('Ingresar con Google'));
 
     expect(await screen.findByText(/Google Play Services/)).toBeTruthy();
@@ -108,7 +127,7 @@ describe('App', () => {
   it('durante el inicio muestra carga y no permite pulsar de nuevo', async () => {
     const google = fakeGoogle({ signIn: jest.fn(() => new Promise(() => {})) });
     const { service } = setup(undefined, google);
-    await render(<App service={service} />);
+    await renderApp(service);
     await fireEvent.press(await screen.findByText('Ingresar con Google'));
 
     expect(await screen.findByTestId('login-loading')).toBeTruthy();
@@ -119,8 +138,8 @@ describe('App', () => {
   it('tras un cierre de sesión no confirmado muestra el aviso en el login', async () => {
     const api = fakeApi({ logout: jest.fn().mockRejectedValue(new AuthError('network')) });
     const { service } = setup(valid(), fakeGoogle(), api);
-    await render(<App service={service} />);
-    await fireEvent.press(await screen.findByText('Cerrar sesión'));
+    await renderApp(service);
+    await signOutFromProfile();
 
     expect(await screen.findByText(/no pudimos confirmarlo con el servidor/)).toBeTruthy();
     expect(screen.getByText(/hasta 7 días sin uso/)).toBeTruthy();
@@ -129,10 +148,10 @@ describe('App', () => {
 
   it('si no se pudo borrar el almacenamiento muestra el aviso de almacenamiento seguro', async () => {
     const { service, storage } = setup(valid());
-    await render(<App service={service} />);
-    await screen.findByText('Sesión iniciada');
+    await renderApp(service);
+    await findHome();
     storage.failAlways('clearAll');
-    await fireEvent.press(screen.getByText('Cerrar sesión'));
+    await signOutFromProfile();
 
     expect(await screen.findByText(/No se pudo borrar por completo la sesión/)).toBeTruthy();
   });
@@ -140,21 +159,21 @@ describe('App', () => {
   it('el aviso de cierre desaparece al volver a iniciar sesión', async () => {
     const api = fakeApi({ logout: jest.fn().mockRejectedValue(new AuthError('network')) });
     const { service } = setup(valid(), fakeGoogle(), api);
-    await render(<App service={service} />);
-    await fireEvent.press(await screen.findByText('Cerrar sesión'));
+    await renderApp(service);
+    await signOutFromProfile();
     await screen.findByText(/no pudimos confirmarlo/);
     await fireEvent.press(screen.getByText('Ingresar con Google'));
 
-    expect(await screen.findByText('Sesión iniciada')).toBeTruthy();
+    expect(await findHome()).toBeTruthy();
     expect(screen.queryByText(/no pudimos confirmarlo/)).toBeNull();
   });
 
   it('sin red y con un access vigente muestra la sesión con un aviso de modo degradado', async () => {
     const api = fakeApi({ getMe: jest.fn().mockRejectedValue(new AuthError('network')) });
     const { service } = setup(valid(), fakeGoogle(), api);
-    await render(<App service={service} />);
+    await renderApp(service);
 
-    expect(await screen.findByText('Sesión iniciada')).toBeTruthy();
+    expect(await findHome()).toBeTruthy();
     expect(screen.getByText(/Sin conexión estable/)).toBeTruthy();
     expect(screen.getByText('Reintentar')).toBeTruthy();
   });
@@ -162,7 +181,7 @@ describe('App', () => {
   describe('sesión degradada: botón Reintentar', () => {
     const degradedApp = async (getMe: jest.Mock) => {
       const ctx = setup(valid(), fakeGoogle(), fakeApi({ getMe }));
-      await render(<App service={ctx.service} />);
+      await renderApp(ctx.service);
       await screen.findByText(/Sin conexión estable/);
       ctx.clock.advance(5_000);
       return ctx;
@@ -180,7 +199,7 @@ describe('App', () => {
       expect(ctx.api.getMe).toHaveBeenCalledTimes(2); // una sola comprobación por pulsación
       expect(ctx.api.refresh).not.toHaveBeenCalled();
       expect(screen.queryByText('Reintentar')).toBeNull();
-      expect(screen.getByText('Sesión iniciada')).toBeTruthy();
+      expect(getHome()).toBeTruthy();
     });
 
     it('fallo: conserva la sesión, el aviso y el botón', async () => {
@@ -188,7 +207,7 @@ describe('App', () => {
       const ctx = await degradedApp(getMe);
       await fireEvent.press(screen.getByText('Reintentar'));
       await waitFor(() => expect(getMe).toHaveBeenCalledTimes(2));
-      expect(screen.getByText('Sesión iniciada')).toBeTruthy();
+      expect(getHome()).toBeTruthy();
       expect(screen.getByText(/Sin conexión estable/)).toBeTruthy();
       expect(screen.getByText('Reintentar')).toBeTruthy();
       expect(ctx.storage.session()).not.toBeNull();
@@ -226,7 +245,7 @@ describe('App', () => {
       expect(await screen.findByText(UNVERIFIED)).toBeTruthy();
       expect(screen.queryByText(/Sin conexión estable/)).toBeNull();
       expect(screen.getByText('Reintentar')).toBeTruthy();
-      expect(screen.getByText('Sesión iniciada')).toBeTruthy();
+      expect(getHome()).toBeTruthy();
       expect(ctx.api.refresh).not.toHaveBeenCalled();
       expect(ctx.storage.session()).not.toBeNull();
     });
@@ -265,8 +284,8 @@ describe('App', () => {
 
     it('sin degradación no hay botón Reintentar', async () => {
       const { service } = setup(valid());
-      await render(<App service={service} />);
-      await screen.findByText('Sesión iniciada');
+      await renderApp(service);
+      await findHome();
       expect(screen.queryByText('Reintentar')).toBeNull();
     });
   });
@@ -286,7 +305,7 @@ describe('App', () => {
       session: storedSession({ accessToken: fakeJwt(-10) }),
     };
     const { service, clock } = setup(expired, fakeGoogle(), fakeApi({ refresh }));
-    await render(<App service={service} />);
+    await renderApp(service);
 
     expect(await screen.findByText('Sesión no disponible')).toBeTruthy();
     clock.advance(5_000); // intervalo mínimo entre reintentos que llegan a la red
@@ -294,13 +313,13 @@ describe('App', () => {
     expect(screen.queryByText('Ingresar con Google')).toBeNull();
 
     await fireEvent.press(screen.getByText('Reintentar'));
-    expect(await screen.findByText('Sesión iniciada')).toBeTruthy();
+    expect(await findHome()).toBeTruthy();
     expect(screen.queryByText('Reintentar')).toBeNull();
   });
 
   it('no disponible por almacenamiento: mensaje propio y botón Reintentar', async () => {
     const { service } = setup({ kind: 'unsupported' });
-    await render(<App service={service} />);
+    await renderApp(service);
     expect(await screen.findByText(/almacenamiento seguro de este dispositivo/)).toBeTruthy();
     expect(screen.getByText('Reintentar')).toBeTruthy();
   });
@@ -321,7 +340,7 @@ describe('mensajes de pantalla por causa', () => {
     const google = fakeGoogle({ signInSilently: jest.fn().mockRejectedValue(new AuthError(kind)) });
     const api = fakeApi({ refresh: jest.fn().mockRejectedValue(invalidRefresh()) });
     const { service } = setup(expired(), google, api);
-    await render(<App service={service} />);
+    await renderApp(service);
 
     expect(await screen.findByText('Sesión no disponible')).toBeTruthy();
     expect(screen.getByText(text)).toBeTruthy();
@@ -332,20 +351,20 @@ describe('mensajes de pantalla por causa', () => {
   it('Home no disponible por red: texto de conexión', async () => {
     const api = fakeApi({ refresh: jest.fn().mockRejectedValue(new AuthError('network')) });
     const { service } = setup(expired(), fakeGoogle(), api);
-    await render(<App service={service} />);
+    await renderApp(service);
     expect(await screen.findByText(/No se pudo conectar con el servidor/)).toBeTruthy();
   });
 
   it('Home no disponible por servidor: texto de servidor', async () => {
     const api = fakeApi({ refresh: jest.fn().mockRejectedValue(new AuthError('server', 503)) });
     const { service } = setup(expired(), fakeGoogle(), api);
-    await render(<App service={service} />);
+    await renderApp(service);
     expect(await screen.findByText(/El servidor no está disponible por ahora/)).toBeTruthy();
   });
 
   it('Home no disponible por almacenamiento: texto de almacenamiento', async () => {
     const { service } = setup({ kind: 'unsupported' });
-    await render(<App service={service} />);
+    await renderApp(service);
     expect(await screen.findByText(/No se pudo leer la sesión del almacenamiento/)).toBeTruthy();
   });
 
@@ -363,7 +382,7 @@ describe('mensajes de pantalla por causa', () => {
 
     it("sesión 'revoked': texto neutro, sin afirmar revocación remota", async () => {
       const { service } = revokedSetup();
-      await render(<App service={service} />);
+      await renderApp(service);
 
       expect(await screen.findByText(REVOKED_TEXT)).toBeTruthy();
       expect(screen.queryByText(/revoc/i)).toBeNull();
@@ -372,7 +391,7 @@ describe('mensajes de pantalla por causa', () => {
 
     it("sin sesión 'absent' o tras un cierre voluntario no hay aviso", async () => {
       const { service } = setup();
-      await render(<App service={service} />);
+      await renderApp(service);
       await screen.findByText('Ingresar con Google');
       expect(screen.queryByRole('alert')).toBeNull();
     });
@@ -380,7 +399,7 @@ describe('mensajes de pantalla por causa', () => {
     it('prioridad: un error más específico reemplaza al motivo de cierre', async () => {
       const { service, google } = revokedSetup();
       (google.signIn as jest.Mock).mockRejectedValue(new AuthError('play-services'));
-      await render(<App service={service} />);
+      await renderApp(service);
       await screen.findByText(REVOKED_TEXT);
       await fireEvent.press(screen.getByText('Ingresar con Google'));
 
@@ -390,7 +409,7 @@ describe('mensajes de pantalla por causa', () => {
 
     it('prioridad: el aviso de almacenamiento reemplaza al motivo de cierre', async () => {
       const { service } = revokedSetup(true);
-      await render(<App service={service} />);
+      await renderApp(service);
 
       expect(await screen.findByText(/No se pudo borrar por completo la sesión/)).toBeTruthy();
       expect(screen.queryByText(REVOKED_TEXT)).toBeNull();
@@ -408,7 +427,7 @@ describe('mensajes de pantalla por causa', () => {
         }),
       });
       const { service } = setup(expired(), fakeGoogle(), api);
-      await render(<App service={service} />);
+      await renderApp(service);
 
       expect(await screen.findByText(/La cuenta de Google cambió/)).toBeTruthy();
       expect(screen.queryByText(REVOKED_TEXT)).toBeNull();

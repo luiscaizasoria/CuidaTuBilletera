@@ -348,3 +348,28 @@ describe('CalendarScreen', () => {
     errors.mockRestore();
   });
 });
+
+describe('CalendarScreen: R2 (cuenta archivada y margen inferior)', () => {
+  it('canCreate=false deshabilita «Nuevo movimiento» del día', async () => {
+    await render(
+      <CalendarScreen
+        account={acc}
+        api={makeApi()}
+        initialMonth="2026-10"
+        initialDay="2026-10-15"
+        canCreate={false}
+        {...handlers}
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Nuevo movimiento' });
+    expect(button.props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(button);
+    expect(handlers.onNewTransaction).not.toHaveBeenCalled();
+  });
+
+  it('por defecto «Nuevo movimiento» sigue habilitado', async () => {
+    await renderCalendar();
+    const button = screen.getByRole('button', { name: 'Nuevo movimiento' });
+    expect(button.props.accessibilityState.disabled).toBe(false);
+  });
+});

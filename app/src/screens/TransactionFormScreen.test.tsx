@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, BackHandler } from 'react-native';
 import { todayLocal, yesterdayLocal } from '../lib/dates';
 import { ApiRequestError, type ResourcesApi } from '../lib/resources-api';
 import { account, category, fakeResourcesApi, pageOf, transaction } from '../resources-test-utils';
@@ -32,8 +32,17 @@ function makeApi(overrides: Partial<ResourcesApi> = {}) {
 }
 
 const onDone = jest.fn();
+const onAccountArchived = jest.fn();
 const renderForm = (api = makeApi(), tx?: ReturnType<typeof transaction>) =>
-  render(<TransactionFormScreen account={account()} api={api} transaction={tx} onDone={onDone} />);
+  render(
+    <TransactionFormScreen
+      account={account()}
+      api={api}
+      transaction={tx}
+      onDone={onDone}
+      onAccountArchived={onAccountArchived}
+    />,
+  );
 
 const typeInto = (label: string, value: string) =>
   fireEvent.changeText(screen.getByLabelText(label), value);
@@ -46,6 +55,7 @@ function confirmWith(label: string) {
 
 beforeEach(() => {
   onDone.mockClear();
+  onAccountArchived.mockClear();
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -73,6 +83,7 @@ describe('TransactionFormScreen: nuevo movimiento', () => {
     await typeInto('Nota', '  almuerzo  ');
     await fireEvent.press(screen.getByText('Guardar'));
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(onDone).toHaveBeenCalledWith(true); // R2: hubo cambio, el contenedor relee el saldo
     expect(api.createTransaction).toHaveBeenCalledWith('tok', {
       accountId: 'acc-1',
       categoryId: 'c-food',
@@ -239,6 +250,9 @@ describe('TransactionFormScreen: nuevo movimiento', () => {
       expect(await screen.findByText(text)).toBeTruthy();
       expect(onDone).not.toHaveBeenCalled();
       expect(api.createTransaction).toHaveBeenCalledTimes(1);
+      // R2: solo ACCOUNT_ARCHIVED avisa al contenedor de que la cuenta está archivada.
+      if (code === 'ACCOUNT_ARCHIVED') expect(onAccountArchived).toHaveBeenCalledWith('acc-1');
+      else expect(onAccountArchived).not.toHaveBeenCalled();
       // El botón vuelve a estar disponible.
       expect(
         screen.getByRole('button', { name: 'Guardar' }).props.accessibilityState.disabled,
@@ -290,7 +304,7 @@ describe('TransactionFormScreen: nuevo movimiento', () => {
     const api = makeApi();
     await renderForm(api);
     await fireEvent.press(screen.getByText('Cancelar'));
-    expect(onDone).toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledWith(false); // R2: sin cambio, no se relee el saldo
     expect(api.createTransaction).not.toHaveBeenCalled();
     expect(screen.queryByText('Anular movimiento')).toBeNull();
   });
@@ -322,7 +336,7 @@ describe('TransactionFormScreen: edición y anulación', () => {
     await renderForm(api, tx);
     await typeInto('Monto', '20');
     await fireEvent.press(screen.getByText('Guardar'));
-    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith(true));
     expect(api.updateTransaction).toHaveBeenCalledWith('tok', 'tx-9', { monto: 2000 });
   });
 
@@ -345,6 +359,7 @@ describe('TransactionFormScreen: edición y anulación', () => {
     await fireEvent.press(screen.getByText('Guardar'));
     expect(api.updateTransaction).not.toHaveBeenCalled();
     expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith(false); // R2: editar sin cambios no relee el saldo
   });
 
   it('valida monto y fecha también al editar', async () => {
@@ -400,6 +415,7 @@ describe('TransactionFormScreen: edición y anulación', () => {
     await renderForm(api, tx);
     await fireEvent.press(screen.getByText('Anular movimiento'));
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(onDone).toHaveBeenCalledWith(true);
     expect(api.deleteTransaction).toHaveBeenCalledWith('tok', 'tx-9');
   });
 
@@ -411,6 +427,7 @@ describe('TransactionFormScreen: edición y anulación', () => {
     await renderForm(api, tx);
     await fireEvent.press(screen.getByText('Anular movimiento'));
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(onDone).toHaveBeenCalledWith(true); // «ya anulado» cuenta como cambio
   });
 
   it('anular con error de servidor muestra el mensaje y no cierra', async () => {
@@ -423,5 +440,54 @@ describe('TransactionFormScreen: edición y anulación', () => {
     await fireEvent.press(screen.getByText('Anular movimiento'));
     expect(await screen.findByText(/El servidor no está disponible/)).toBeTruthy();
     expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+describe('TransactionFormScreen: R2 (Atrás mientras guarda y cuenta archivada)', () => {
+  it('mientras guarda, Atrás se ignora; al terminar se retira el listener', async () => {
+    const handlers: (() => boolean | null | undefined)[] = [];
+    let removed = 0;
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_e, handler) => {
+      handlers.push(handler as () => boolean);
+      return { remove: () => (removed += 1) };
+    });
+    const gate = controlledPromise<ReturnType<typeof transaction>>();
+    const api = makeApi({ createTransaction: jest.fn(() => gate.promise) });
+    await renderForm(api);
+    expect(handlers).toHaveLength(0);
+    await fireEvent.press(await screen.findByLabelText('Categoría Comida'));
+    await typeInto('Monto', '5');
+    await fireEvent.press(screen.getByText('Guardar'));
+    expect(handlers).toHaveLength(1);
+    expect(handlers[0]!()).toBe(true);
+    expect(onDone).not.toHaveBeenCalled();
+    await act(async () => gate.resolve(transaction()));
+    expect(removed).toBe(1);
+    expect(onDone).toHaveBeenCalledWith(true);
+  });
+
+  it('409 ACCOUNT_ARCHIVED: avisa con el id de la cuenta y no cierra', async () => {
+    const api = makeApi({
+      createTransaction: jest.fn().mockRejectedValue(new ApiRequestError(409, 'ACCOUNT_ARCHIVED')),
+    });
+    await renderForm(api);
+    await fireEvent.press(await screen.findByLabelText('Categoría Comida'));
+    await typeInto('Monto', '5');
+    await fireEvent.press(screen.getByText('Guardar'));
+    expect(await screen.findByText(/La cuenta está archivada/)).toBeTruthy();
+    expect(onAccountArchived).toHaveBeenCalledTimes(1);
+    expect(onAccountArchived).toHaveBeenCalledWith('acc-1');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('un 409 al editar (no es crear) no marca la cuenta como archivada', async () => {
+    const api = makeApi({
+      updateTransaction: jest.fn().mockRejectedValue(new ApiRequestError(409, 'ACCOUNT_ARCHIVED')),
+    });
+    await renderForm(api, transaction({ id: 'tx-9', categoryId: 'c-food' }));
+    await typeInto('Monto', '20');
+    await fireEvent.press(screen.getByText('Guardar'));
+    await screen.findByText(/La cuenta está archivada/);
+    expect(onAccountArchived).not.toHaveBeenCalled();
   });
 });

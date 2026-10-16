@@ -32,6 +32,16 @@ interface Filters {
 
 const NO_FILTERS: Filters = { tipo: null, categoryId: null, desde: '', hasta: '' };
 
+// Filtros internos -> filtros de navegación (solo los activos).
+function toHistoryFilters(filters: Filters): HistoryFilters {
+  return {
+    ...(filters.tipo ? { tipo: filters.tipo } : {}),
+    ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+    ...(filters.desde ? { desde: filters.desde } : {}),
+    ...(filters.hasta ? { hasta: filters.hasta } : {}),
+  };
+}
+
 type ListState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
@@ -42,12 +52,18 @@ export default function HistoryScreen({
   api,
   onOpenTransaction,
   initialFilters,
+  onFiltersChange,
+  bottomInset,
 }: {
   account: Account;
   api: ResourcesApi;
   onOpenTransaction: (transaction: Transaction) => void;
   // Filtros con los que abre la pantalla (p. ej. desde Reportes). Solo se leen al montar.
   initialFilters?: HistoryFilters;
+  // Notifica los filtros aplicados para conservarlos fuera de la pantalla (pestaña Movimientos).
+  onFiltersChange?: (filters: HistoryFilters) => void;
+  // Margen inferior extra del contenido (p. ej. para no quedar bajo el botón flotante).
+  bottomInset?: number;
 }) {
   const { authorizedCall } = useAuth();
   const [filters, setFilters] = useState<Filters>(() =>
@@ -97,6 +113,14 @@ export default function HistoryScreen({
   useEffect(() => {
     fetchPageRef.current = fetchPage;
   });
+
+  const onFiltersChangeRef = useRef(onFiltersChange);
+  useEffect(() => {
+    onFiltersChangeRef.current = onFiltersChange;
+  });
+  useEffect(() => {
+    onFiltersChangeRef.current?.(toHistoryFilters(filters));
+  }, [filters]);
 
   // Cambiar un filtro (o reintentar) reinicia a la página 1.
   useEffect(() => {
@@ -192,7 +216,11 @@ export default function HistoryScreen({
   const filtered = filters !== NO_FILTERS;
 
   return (
-    <ScrollView style={s.container} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={s.container}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={bottomInset ? { paddingBottom: bottomInset } : undefined}
+    >
       <Text accessibilityRole="header" style={s.title}>
         Historial de {account.nombre}
       </Text>

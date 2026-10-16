@@ -82,6 +82,8 @@ export default function CalendarScreen({
   onViewChange,
   onOpenTransaction,
   onNewTransaction,
+  canCreate = true,
+  bottomInset,
 }: {
   account: Account;
   api: ResourcesApi;
@@ -90,6 +92,10 @@ export default function CalendarScreen({
   onViewChange: (month: string, day: string) => void;
   onOpenTransaction: (transaction: Transaction) => void;
   onNewTransaction: (fecha: string) => void;
+  // false con la cuenta archivada: «Nuevo movimiento» del día queda deshabilitado.
+  canCreate?: boolean;
+  // Margen inferior extra del contenido (p. ej. para no quedar bajo el botón flotante).
+  bottomInset?: number;
 }) {
   const { authorizedCall } = useAuth();
   const today = todayLocal();
@@ -245,7 +251,11 @@ export default function CalendarScreen({
   const showTotal = (cents: number | null) => (cents === null ? '—' : formatCents(cents));
 
   return (
-    <ScrollView style={s.container} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={s.container}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={bottomInset ? { paddingBottom: bottomInset } : undefined}
+    >
       <Text accessibilityRole="header" style={s.title}>
         Calendario de {account.nombre}
       </Text>
@@ -365,7 +375,12 @@ export default function CalendarScreen({
         </Text>
       ) : null}
       <View style={s.actions}>
-        <Button label="Nuevo movimiento" variant="primary" onPress={() => onNewTransaction(day)} />
+        <Button
+          label="Nuevo movimiento"
+          variant="primary"
+          disabled={!canCreate}
+          onPress={() => onNewTransaction(day)}
+        />
       </View>
 
       {dayData === null ? (

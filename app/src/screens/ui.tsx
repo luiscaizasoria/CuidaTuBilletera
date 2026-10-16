@@ -30,10 +30,17 @@ export function Button({
   disabled?: boolean;
   busy?: boolean;
   tall?: boolean;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'link' | 'danger' | 'dangerSolid';
   accessibilityLabel?: string;
 }) {
   const inactive = disabled || busy;
+  // Variantes sólidas: el estado presionado oscurece el fondo en lugar de bajar la opacidad.
+  const solidPressed =
+    variant === 'primary'
+      ? styles.primaryPressed
+      : variant === 'dangerSolid'
+        ? styles.dangerSolidPressed
+        : null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -47,8 +54,7 @@ export function Button({
         styles.button,
         tall && styles.tall,
         styles[variant],
-        variant === 'primary' && pressed && styles.primaryPressed,
-        pressed && variant !== 'primary' && styles.pressed,
+        pressed && (solidPressed ?? styles.pressed),
         inactive && styles.disabled,
       ]}
     >
@@ -57,20 +63,24 @@ export function Button({
   );
 }
 
-// Opción seleccionable (selector de cuenta, tipo, categoría, filtros).
+// Opción seleccionable (tipo, categoría, filtros). Píldora; la elegida muestra «✓» en un texto aparte,
+// oculto a la accesibilidad (el estado ya lo anuncia). `size="sm"` (36 dp) amplía la zona táctil a 48 dp.
 export function Chip({
   label,
   selected,
   onPress,
   disabled = false,
   accessibilityLabel,
+  size = 'md',
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   disabled?: boolean;
   accessibilityLabel?: string;
+  size?: 'md' | 'sm';
 }) {
+  const small = size === 'sm';
   return (
     <Pressable
       accessibilityRole="radio"
@@ -78,9 +88,29 @@ export function Chip({
       accessibilityState={{ selected, disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.chip, selected && styles.chipSelected, disabled && styles.disabled]}
+      hitSlop={small ? { top: sizes.chipHitSlop, bottom: sizes.chipHitSlop } : undefined}
+      style={[
+        styles.chip,
+        small && styles.chipSm,
+        selected && styles.chipSelected,
+        disabled && styles.disabled,
+      ]}
     >
-      <Text style={styles.chipText}>{label}</Text>
+      {selected ? (
+        <Text
+          testID="chip-check"
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+          style={[styles.chipText, small && styles.chipTextSm, styles.chipTextSelected]}
+        >
+          ✓
+        </Text>
+      ) : null}
+      <Text
+        style={[styles.chipText, small && styles.chipTextSm, selected && styles.chipTextSelected]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -253,6 +283,11 @@ export function Screen({
   ) : (
     <View style={[styles.flex, contentContainerStyle]}>{children}</View>
   );
+  // Sin scroll ni barra inferior propia, el margen inferior del sistema se reserva aquí.
+  const bottomSpacer =
+    !scroll && !bottomBar ? (
+      <View testID="screen-bottom-inset" style={{ height: insets.bottom }} />
+    ) : null;
   return (
     <View testID={testID} style={styles.screen}>
       <View
@@ -272,6 +307,7 @@ export function Screen({
       ) : (
         content
       )}
+      {bottomSpacer}
     </View>
   );
 }
@@ -311,7 +347,7 @@ export const screenStyles = StyleSheet.create({
   row: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     padding: 12,
     marginBottom: 8,
   },
@@ -327,7 +363,7 @@ export const screenStyles = StyleSheet.create({
   input: {
     borderWidth: 1.5,
     borderColor: colors.borderStrong,
-    borderRadius: 8,
+    borderRadius: radii.md,
     paddingHorizontal: 12,
     minHeight: 48,
     marginBottom: 8,
@@ -335,7 +371,7 @@ export const screenStyles = StyleSheet.create({
   form: {
     borderWidth: 1,
     borderColor: colors.brand700,
-    borderRadius: 8,
+    borderRadius: radii.sm,
     padding: 12,
     marginBottom: 12,
   },
@@ -355,31 +391,41 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  tall: { minHeight: sizes.primaryTall },
+  tall: { minHeight: sizes.primaryTall, borderRadius: radii.lg },
   primary: { backgroundColor: colors.brand700, borderColor: colors.brand700 },
   primaryPressed: { backgroundColor: colors.brand800, borderColor: colors.brand800 },
   secondary: { backgroundColor: colors.surface, borderColor: colors.brand700 },
   ghost: { backgroundColor: 'transparent' },
+  link: { backgroundColor: 'transparent' },
   danger: { backgroundColor: colors.surface, borderColor: colors.expense },
+  dangerSolid: { backgroundColor: colors.expense, borderColor: colors.expense },
+  dangerSolidPressed: { backgroundColor: colors.expenseText, borderColor: colors.expenseText },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
   label: { ...typography.button, textAlign: 'center' },
   primaryLabel: { color: colors.white },
   secondaryLabel: { color: colors.brand700 },
   ghostLabel: { color: colors.text },
+  linkLabel: { color: colors.brand700, fontWeight: '700' },
   dangerLabel: { color: colors.expenseText },
+  dangerSolidLabel: { color: colors.white },
   chip: {
     minHeight: sizes.touchMin,
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    gap: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.sm,
-    borderWidth: 1,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
   },
-  chipSelected: { borderWidth: 2, borderColor: colors.brand700, backgroundColor: colors.segBg },
-  chipText: { color: colors.text },
+  chipSm: { minHeight: sizes.chipSmHeight, paddingHorizontal: 12 },
+  chipSelected: { borderWidth: 1.5, borderColor: colors.text, backgroundColor: colors.segBg },
+  chipText: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: colors.text },
+  chipTextSm: { fontSize: 13, lineHeight: 18 },
+  chipTextSelected: { fontWeight: '800' },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,

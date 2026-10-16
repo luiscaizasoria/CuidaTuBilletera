@@ -10,6 +10,19 @@ import type {
 } from './lib/auth-types';
 import { AuthError } from './lib/auth-types';
 
+// El mock de jest-expo mide 750 dp y fontScale 2, lo que activa siempre el modo de dos filas de la
+// barra de contexto. Las pruebas fijan una ventana normal salvo que prueben ese modo.
+export function mockWindow(width = 411, fontScale = 1) {
+  // `import *` crea una copia del módulo con la interoperabilidad de Babel: se espía el original.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+    width,
+    height: 800,
+    scale: 2.6,
+    fontScale,
+  });
+}
+
 export const NOW_MS = Date.UTC(2026, 9, 13, 12, 0, 0);
 export const USER: AuthUser = { id: 'sub-1', email: 'ana@example.com', name: 'Ana' };
 export const REFRESH_EXPIRES_AT = '2026-11-13T12:00:00.000Z';

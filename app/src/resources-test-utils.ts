@@ -61,6 +61,13 @@ export function fakeResourcesApi(overrides: Partial<ResourcesApi> = {}): jest.Mo
       categories: [],
     })),
     updateAccount: jest.fn(async (_t, id, input) => account({ id, ...input })),
+    getAccountBalance: jest.fn(async (_t, accountId) => ({
+      accountId,
+      saldoInicial: 1250,
+      ingresos: 0,
+      gastos: 0,
+      saldo: 1250,
+    })),
     listCategories: jest.fn(async () => pageOf([category()])),
     createCategory: jest.fn(async (_t, accountId, input) =>
       category({ id: 'cat-new', accountId, ...input, descripcion: input.descripcion ?? null }),
