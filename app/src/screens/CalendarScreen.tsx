@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { useGuide, useGuides } from '../hooks/use-guides';
 import {
   CALENDAR_CELL_GAP,
   MONTH_NAMES,
@@ -44,12 +45,13 @@ import { colors, moduleColors, radii, sizes, typography } from '../theme/tokens'
 import {
   Button,
   Card,
+  EmptyState,
   ErrorBox,
+  GuideCard,
   MonthArrow,
   ScreenTitle,
   SummaryTile,
   useScreenContainerStyle,
-  screenStyles as s,
 } from './ui';
 
 export const CALENDAR_PAGE_SIZE = 20;
@@ -220,6 +222,12 @@ export default function CalendarScreen({
   if (month?.status === 'ready')
     for (const entry of month.data.days) entries.set(entry.fecha, entry);
   const selectedEntry = entries.get(day);
+  // Guía solo con el mes cargado, sin movimientos y con la cuenta activa (docs/007 §5.12.C).
+  const { dismiss } = useGuides();
+  const { guide, dismissGuide } = useGuide(
+    ['calendario'],
+    month?.status === 'ready' && entries.size === 0 && !account.archivada,
+  );
 
   function changeView(nextYm: YearMonth, nextDay: string) {
     setView({ ym: nextYm, day: nextDay });
@@ -291,6 +299,7 @@ export default function CalendarScreen({
       contentContainerStyle={bottomInset ? { paddingBottom: bottomInset } : undefined}
     >
       <ScreenTitle title="Calendario" module="calendario" />
+      {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
 
       <View style={styles.monthBar}>
         <MonthArrow
@@ -338,7 +347,10 @@ export default function CalendarScreen({
                   accessibilityRole="button"
                   accessibilityLabel={cellLabel(cellDay, ym.month, entry, isToday)}
                   accessibilityState={{ selected }}
-                  onPress={() => changeView(ym, key)}
+                  onPress={() => {
+                    if (entry) dismiss('calendario');
+                    changeView(ym, key);
+                  }}
                   style={({ pressed }) => [
                     styles.cell,
                     cellSize,
@@ -399,7 +411,9 @@ export default function CalendarScreen({
           />
         </View>
       ) : entries.size === 0 ? (
-        <Text style={[s.muted, styles.block]}>No hay movimientos en este mes.</Text>
+        <View style={styles.block}>
+          <EmptyState module="calendario" compact message="No hay movimientos en este mes." />
+        </View>
       ) : (
         <View
           testID="month-summary"
@@ -437,7 +451,11 @@ export default function CalendarScreen({
           </Text>
         ) : null}
         {dayData?.status === 'ready' && dayData.items.length === 0 ? (
-          <Text style={styles.dayEmpty}>Este día no tiene movimientos registrados.</Text>
+          <EmptyState
+            module="calendario"
+            compact
+            message="Este día no tiene movimientos registrados."
+          />
         ) : null}
         <View style={styles.dayAction}>
           <Button
@@ -550,7 +568,6 @@ const styles = StyleSheet.create({
   dayExpense: { fontWeight: '700', color: colors.expenseText },
   dayNet: { fontWeight: '700', color: colors.text },
   daySeparator: { color: colors.text2 },
-  dayEmpty: { ...typography.small, color: colors.text2, marginTop: 4 },
   dayAction: { marginTop: 12 },
   rows: { marginTop: 8 },
   spacer: { marginVertical: 12 },

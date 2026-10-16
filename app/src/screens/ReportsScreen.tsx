@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { useGuide, useGuides } from '../hooks/use-guides';
 import { monthTitle, shiftMonth } from '../lib/calendar';
 import { categoryFill } from '../lib/category-appearance';
 import { formatDateEs, todayLocal } from '../lib/dates';
@@ -49,6 +50,7 @@ import {
   ErrorBox,
   LoadingState,
   MonthArrow,
+  GuideCard,
   ScreenTitle,
   Segmented,
   SummaryTile,
@@ -194,6 +196,13 @@ export default function ReportsScreen({
   // Un estado de otra consulta (otro período, modo o cuenta) cuenta como «cargando».
   const shown = state !== null && state.key === loadKey ? state : null;
 
+  // Guía solo con el resultado cargado y el período sin movimientos (docs/007 §5.12.C).
+  const { dismiss } = useGuides();
+  const { guide, dismissGuide } = useGuide(
+    ['reportes'],
+    shown !== null && shown.status !== 'error' && shown.summary.cantidad === 0,
+  );
+
   function exportAs(summary: ReportSummary, format: ExportFormat) {
     if (exporting.current || loadKey === null) return;
     exporting.current = true;
@@ -291,6 +300,7 @@ export default function ReportsScreen({
   return (
     <ScrollView style={containerStyle} keyboardShouldPersistTaps="handled">
       <ScreenTitle title="Reportes" module="reportes" />
+      {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
 
       <Segmented
         tone="reportes"
@@ -375,7 +385,7 @@ export default function ReportsScreen({
       ) : shown.summary.cantidad === 0 ? (
         <EmptyState
           module="reportes"
-          glyph="📊"
+          art="reportes"
           message={`Sin movimientos en este período. Prueba con ${EMPTY_HINT[view.mode]}.`}
         />
       ) : (
@@ -383,7 +393,10 @@ export default function ReportsScreen({
           summary={shown.summary}
           categories={shown.categories}
           period={shown.period}
-          onOpenHistory={onOpenHistory}
+          onOpenHistory={(filters) => {
+            dismiss('reportes');
+            onOpenHistory(filters);
+          }}
           exportState={exportState !== null && exportState.key === loadKey ? exportState : null}
           onExport={(format) => exportAs(shown.summary, format)}
           seriesView={seriesView}

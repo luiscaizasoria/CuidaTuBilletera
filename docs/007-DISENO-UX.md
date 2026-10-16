@@ -1064,6 +1064,164 @@ Docs/003 R3 D5 aprobó el selector propio para el formulario; §5.6 y §5.8 ya p
 
 Serie de Reportes por día (la API solo agrupa por mes o año), gráfico de dona, comparación entre períodos, presupuestos y metas, búsqueda de texto en Historial, edición de ícono de categoría, ilustraciones de estados vacíos y guías (R5), conciliación (Fase 6).
 
+### 5.12 R5: guías contextuales y estados vacíos ilustrados (especificación; PROPUESTA salvo lo marcado)
+
+Alcance: presentación y una preferencia local. No cambia reglas financieras, endpoints, D1, sesión ni la navegación aprobada (§3), y no añade dependencias nativas. Las guías de §7.1 y la opción «Ver ayudas otra vez» están APROBADAS (14.9, paso 347); el catálogo exacto, las claves de persistencia y las ilustraciones son PROPUESTA hasta que el usuario responda §5.12.H. Las medidas visuales finales las fija `mobile-visual-designer` (docs/008 §9 y componente `EmptyState`, §12).
+
+#### A. Inventario de lo que ya existe (HEAD 3c5630c) y lo que falta
+
+| Elemento | Estado en el código | Falta para R5 |
+| --- | --- | --- |
+| Pista «Toca para ver tus movimientos» | EXISTENTE: `AccountCard hint`, `AccountsScreen.tsx`, solo con una cuenta activa. Es un texto fijo de la tarjeta, no una guía. | Decisión H.4 (convivencia con la guía de la lista). |
+| Mis cuentas sin cuentas | EXISTENTE: bloque propio (`styles.empty`) con «Todavía no tienes cuentas», «Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta.» y [Crear mi primera cuenta] 'tall'. No usa `EmptyState` ni ilustración. Sin cuentas activas pero con archivadas: «No tienes cuentas activas. Puedes crear una o desarchivar una de las anteriores.» | Ilustración (alcancía 120 dp) y unificar con `EmptyState`. |
+| Pestaña Cuenta: semana | EXISTENTE (`WeekEmpty`, `AccountSummaryTab.tsx`): «Tu cuenta está lista.» + «Anota tu primer gasto o ingreso con el botón +.» (solo al llegar de Crear cuenta, `justCreated`); «Esta semana no has anotado movimientos.» + «Toca + para registrar el primero.» (omitido si la cuenta está archivada); con filtro: «Esta semana no tienes gastos/ingresos anotados.» Sin ilustración. | Ilustración «movimientos»; decisión H.5 (botón frente a FAB). |
+| Historial | EXISTENTE: `EmptyState` (glifo en círculo de 96 dp, oculto con `fontScale >= 1.75`): «Aún no hay movimientos. Cuando anotes el primero, aparecerá aquí.» y filtrado «Ningún movimiento coincide con estos filtros.» con [Limpiar filtros]. | Ilustraciones reales (hoja con «+», embudo). |
+| Calendario | EXISTENTE: texto plano «No hay movimientos en este mes.» (`s.muted`) y «Este día no tiene movimientos registrados.» (`dayEmpty`) con el botón «+ Anotar en este día». | Aspecto de vacío (variante compacta, ver F). |
+| Reportes | EXISTENTE: `EmptyState` «Sin movimientos en este período. Prueba con otro mes/otro año/otro rango.» | Ilustración «gráfico». |
+| Categorías | EXISTENTE: `EmptyState` «Aún no tienes categorías de gasto/ingreso. Crea la primera.» (sin la última frase si la cuenta está archivada). | Ilustración. |
+| Archivadas | No aplica: la fila «Archivadas (n)» solo aparece con n > 0; el texto «No tienes cuentas archivadas.» de §7.2 no tiene dónde mostrarse. | Nada (documentar el texto como no usado). |
+| Guías de primera vez (§7.1) | NO EXISTEN: ninguna pantalla tiene tarjeta descartable. | Todo: `lib/guides.ts`, proveedor, `GuideCard`, opción en Más. |
+| «Ver ayudas otra vez» | NO EXISTE en `MoreScreen.tsx` (hoy: Datos de cuenta, Categorías, Exportar, Sesión, Opciones avanzadas). | Fila nueva. |
+| Persistencia de preferencias locales | Solo hay `expo-secure-store` (instalado, `~57.0.4`), usado por `lib/session-storage.ts` para `session_v2`/`session_token`. NO hay `@react-native-async-storage/async-storage` en `package.json`. | R5 usa `expo-secure-store` (ya instalado, sin build nueva). Si el usuario prefiere AsyncStorage sería una dependencia nativa nueva y una build nueva: no se propone. |
+| Ilustraciones | `EmptyState` dibuja un círculo con el `tile` del módulo y un glifo emoji (docs/008 §12). NO existe `app/assets/`; los PNG de `docs/design/assets/` son solo íconos de la app y la alcancía (`adaptive-icon-foreground.png`). Los PNG de vacíos (hoja, embudo, barras) de docs/008 §9 NO existen todavía. La alcancía de Mis cuentas quedó diferida a R6 (docs/003 R4 D6.5). | Decisión H.1. |
+
+#### B. Reglas de las guías
+
+1. **No bloquean.** Son una tarjeta en el flujo de la pantalla, nunca modal ni superpuesta; no tapan ni deshabilitan el contenido, el FAB ni la barra; no toman el foco ni abren el teclado.
+2. **Una a la vez.** Como máximo una `GuideCard` visible por pantalla renderizada y ninguna mientras otra esté visible en la pila (el formulario y Crear cuenta son rutas de pila: solo se evalúa la guía de la ruta superior). Si una pantalla tuviera dos candidatas, gana la primera del catálogo.
+3. **Condición «sin datos».** Aparece solo si la guía no está descartada **y** la pantalla terminó de cargar sin error **y** no hay datos que la hagan innecesaria (columna Condición). No aparece con carga, error ni sesión degradada. No se muestra a quien ya tiene datos (evita molestar a usuarios existentes tras actualizar); ver H.3.
+4. **Descartar.** [Entendido] (48 dp) o [✕] (48 dp, etiqueta «Cerrar ayuda»). Se marca descartada en memoria al instante (la tarjeta desaparece sin esperar) y se guarda de forma asíncrona. Si guardar falla, la guía no reaparece durante la sesión de la app y puede volver al reiniciarla; no se muestra error al usuario.
+5. **Completar la acción también la descarta.** Crear la primera cuenta descarta `cuentas-vacio` y `cuenta-crear`; guardar el primer movimiento descarta `movimiento-nuevo` y `cuenta-detalle`. Evita ver una guía sobre algo que ya hizo.
+6. **No se repiten las descartadas.** Reaparecen únicamente con «Ver ayudas otra vez» (D). Cambiar de cuenta, de pestaña, rotar la pantalla o cerrar y abrir la app no las trae de vuelta.
+7. **Sin datos financieros en el almacenamiento.** Se guarda solo `{ v: 1, vistas: ["id", ...] }`: versión e ids de guías del catálogo. Nunca montos, nombres de cuenta, correos ni ids de cuenta.
+8. **Fallo de lectura o dato corrupto.** Se tratan como «ninguna descartada» (la guía se muestra) y no se rompe la pantalla ni se registra el contenido. Ids desconocidos se ignoran. Una versión mayor a 1 se lee como vacía y **no se sobrescribe** (se conserva en memoria).
+9. **Mientras carga la preferencia** (una lectura asíncrona por usuario) no se muestra ninguna guía: evita el parpadeo de una guía ya descartada.
+10. **Textos en `lib/guides.ts`** (catálogo puro y probado), no repartidos en pantallas.
+
+#### C. Catálogo de guías (ids estables; no se renombran)
+
+Origen del texto: docs/007 §7.1 (APROBADO en 14.9) salvo la fila 2, tomada del prototipo (docs/008 §14, «Toca una cuenta para anotar sus gastos e ingresos.»). Módulo: color del módulo para el tinte de la tarjeta (§3.6).
+
+| # | id | Pantalla | Condición de aparición (además de las reglas 3) | Texto exacto | Acción | Se descarta también al |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `cuentas-vacio` | Mis cuentas | Cero cuentas activas y cero archivadas | «Bienvenido. Empieza creando una cuenta: puede ser tu efectivo, tu banco o tu tarjeta.» | [Entendido]; el botón [Crear mi primera cuenta] del vacío es la acción | Crear la primera cuenta |
+| 2 | `cuentas-lista` | Mis cuentas | Una o más cuentas activas. La lista no sabe si hay movimientos, por eso la condición es solo «hay cuentas activas» (ver H.3) | «Toca una cuenta para anotar sus gastos e ingresos.» | [Entendido] | Abrir una cuenta |
+| 3 | `cuenta-crear` | Crear cuenta | Siempre que no esté descartada (el formulario es de por sí «sin datos») | «El saldo inicial es lo que ya tienes hoy. Si no estás seguro, déjalo vacío.» | [Entendido] | Guardar la cuenta |
+| 4 | `cuenta-detalle` | Detalle, pestaña Cuenta | Cuenta activa (no archivada) y, con lo ya cargado, sin movimientos en la semana ni en el mes mostrados | «Aquí ves cuánto tienes y lo que has anotado. Toca + para registrar un gasto o un ingreso.» | [Entendido]; el FAB es la acción | Guardar un movimiento |
+| 5 | `movimiento-nuevo` | Nuevo movimiento (solo modo nuevo, nunca editar ni anular) | Cuenta activa | «Elige qué fue, escribe cuánto y listo. La fecha es hoy, pero puedes cambiarla.» | [Entendido] | Guardar el movimiento |
+| 6 | `calendario` | Calendario | Mes cargado sin error, cuenta activa y mes sin movimientos (`entries.size === 0`) | «Los días con movimientos muestran sus importes. Toca un día para ver el detalle.» | [Entendido] | Tocar un día con movimientos |
+| 7 | `reportes` | Reportes | Resultado cargado sin error y período sin movimientos | «Aquí ves cuánto entró y cuánto salió en un período. Toca una barra o un total para ver sus movimientos.» | [Entendido] | Abrir «Ver movimientos ›» |
+| 8 | `categorias` | Más > Categorías | Lista cargada sin error y cuenta activa | «Las categorías ordenan tus gastos e ingresos. Puedes cambiarles el nombre y el color.» | [Entendido] | Crear o editar una categoría |
+
+Notas: los movimientos de los puntos 4, 6 y 7 son los que la pantalla ya cargó; no se añade ninguna petición. En 7 la condición «período sin movimientos» hace que la guía y el vacío coincidan: se prioriza la guía arriba y el vacío debajo (sin repetir la misma frase). En Historial no hay guía (el vacío ya explica). La guía 6 y la 7 son ayudas de una pantalla sin datos; con datos no se muestran (regla 3).
+
+Anatomía de `GuideCard` (componente nuevo en `ui.tsx`): superficie con el tinte `tile` del módulo, radio 16, relleno 12 a 16, texto `body` `text`, fila inferior con [Entendido] (`secondary`, 48 dp) y [✕] arriba a la derecha (48 × 48 dp de zona táctil; el glifo puede ser menor). Sin sombra, sin animación obligatoria, sin color de alerta (no es un error). A ≥ 130 % de fuente el texto crece sin truncarse y el botón ocupa todo el ancho; a ≥ 175 % la tarjeta se conserva (es texto útil) y solo se oculta la ilustración de los vacíos.
+
+#### D. «Ver ayudas otra vez» en Más
+
+- Dónde: nueva sección «Ayuda» en `MoreScreen`, entre «Cuenta» y «Sesión» (fuera de Opciones avanzadas): fila de 48 dp o más, `accessibilityRole="button"`, título «Ver ayudas otra vez» y subtítulo «Vuelve a mostrar las guías que cerraste.».
+- Confirmación: **ninguna** (es reversible, no destructiva y no toca datos; §7.3 limita las confirmaciones a lo destructivo). Aviso breve tras éxito (Snackbar existente): «Listo. Verás las ayudas otra vez.»
+- Error al guardar: «No pudimos restablecer las ayudas. Inténtalo de nuevo.» (inline o aviso; la fila vuelve a estar activa).
+- Anti doble toque: la fila se deshabilita mientras guarda (`accessibilityState={{ busy, disabled }}`).
+- Efecto: borra todos los ids de `vistas` del usuario y las guías vuelven a evaluarse en cada pantalla según sus condiciones, sin recargar la app (el estado de guías es compartido, ver I). Es por usuario, no por cuenta; el subtítulo lo dice con «las guías».
+- Con cuenta archivada la fila sigue disponible (no depende de la cuenta).
+
+#### E. Persistencia y alcance de la clave (APROBADO 14.9: «guardadas localmente»; el alcance es PROPUESTA)
+
+- Almacén: `expo-secure-store` (ya instalado). Una sola entrada por usuario: clave `guias_v1_<user.id>` con los caracteres que no sean `A-Z a-z 0-9 . - _` reemplazados por `_` (SecureStore solo admite ese conjunto). Valor `{"v":1,"vistas":["cuentas-vacio",...]}` (< 400 bytes, bajo el límite de 2 KB). Módulo en `lib/guides.ts` con una interfaz inyectable (como `SessionStorage`) para probar sin nativos.
+- **Por usuario, no por cuenta** (recomendado): las guías explican pantallas, no cuentas; con clave por cuenta, crear una segunda cuenta volvería a mostrar las ayudas y contradice «aparecen una sola vez por pantalla» (§7). Dos personas en el mismo teléfono tienen cada una su estado. Alternativa por cuenta: ver H.2.
+- Escritura: leer, modificar y escribir la misma entrada en serie (una cola), para que dos descartes seguidos no se pisen.
+
+#### F. Estados vacíos por pantalla
+
+Componente: `EmptyState` evoluciona a `{ art, message, actionLabel?, onAction?, compact? }`: ilustración decorativa de **96 dp** (alcancía de **120 dp** en cuentas) centrada sobre el círculo con el tinte del módulo, separación 12, texto `body` `text2` centrado, acción debajo. Con `fontScale >= 1.75` la ilustración se oculta y queda texto y acción (conserva el comportamiento actual). `compact` (sin ilustración) para vacíos que comparten pantalla con una cuadrícula.
+
+| Pantalla | Estado | Ilustración (docs/008 §9) | Texto (docs/007 §7.2; EXISTENTE salvo marca) | Acción |
+| --- | --- | --- | --- | --- |
+| Mis cuentas | Sin cuentas ni archivadas | Alcancía 120 dp (ver H.1) | «Todavía no tienes cuentas» + «Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta.» (EXISTENTE; §7.2 dice «Todavía no tienes cuentas.») | [Crear mi primera cuenta] (`tall`, EXISTENTE) |
+| Mis cuentas | Solo archivadas | Alcancía 120 dp | «No tienes cuentas activas. Puedes crear una o desarchivar una de las anteriores.» (EXISTENTE) | [Crear mi primera cuenta] (EXISTENTE; el texto del botón es discutible con archivadas: H.6) |
+| Pestaña Cuenta | Cuenta recién creada | Hoja con «+» ámbar, 96 dp | «Tu cuenta está lista.» + «Anota tu primer gasto o ingreso con el botón +.» (EXISTENTE) | Ninguna propia: el FAB «+ Nuevo movimiento» |
+| Pestaña Cuenta | Semana sin movimientos | Hoja con «+» ámbar | «Esta semana no has anotado movimientos.» + «Toca + para registrar el primero.» (EXISTENTE; sin la segunda línea si está archivada) | FAB (H.5) |
+| Pestaña Cuenta | Semana con filtro sin resultados | Sin ilustración (compact) | «Esta semana no tienes gastos/ingresos anotados.» (EXISTENTE) | Ninguna |
+| Historial | Sin movimientos | Hoja con «+» ámbar | «Aún no hay movimientos. Cuando anotes el primero, aparecerá aquí.» (EXISTENTE) | FAB (cuenta activa); sin botón extra |
+| Historial | Filtros sin resultados | Embudo azul (`calTile`/`calInk`) | «Ningún movimiento coincide con estos filtros.» (EXISTENTE) | [Limpiar filtros] (EXISTENTE) |
+| Calendario | Mes sin movimientos | Sin ilustración (`compact`); la cuadrícula ya ocupa la pantalla | «No hay movimientos en este mes.» (EXISTENTE) | Ninguna (el día seleccionado ofrece «+ Anotar en este día») |
+| Calendario | Día sin movimientos | Sin ilustración (`compact`) | «Este día no tiene movimientos registrados.» (EXISTENTE) | «+ Anotar en este día» (EXISTENTE; deshabilitado si archivada) |
+| Reportes | Período sin movimientos | Barras violeta (`repTile`/`repInk`) | «Sin movimientos en este período. Prueba con otro mes/otro año/otro rango.» (EXISTENTE) | Ninguna (los selectores de período están arriba) |
+| Categorías | Sin categorías del tipo | Etiqueta ámbar del módulo Más (no figura en docs/008 §9: H.1) | «Aún no tienes categorías de gasto/ingreso. Crea la primera.» (EXISTENTE; sin «Crea la primera.» si está archivada) | Ninguna propia: el botón de crear ya está en la pantalla |
+| Archivadas | — | — | «No tienes cuentas archivadas.» no se muestra nunca (la fila no existe con 0) | — |
+
+Cada vacío usa el mismo componente; ninguno promete funciones inexistentes ni celebra («tono sereno», docs/008 §9). Cargando sigue siendo `LoadingState`, nunca un vacío; error sigue siendo `ErrorBox`.
+
+Estado con fuente ≥ 175 % (`fontScale >= 1.75`): ilustración oculta (sin hueco reservado), texto sin truncar con desplazamiento, acción completa de ≥ 48 dp, guía conservada.
+
+#### G. Accesibilidad
+
+1. Ilustraciones y círculos decorativos: `importantForAccessibility="no"` y `accessibilityElementsHidden`; sin `accessibilityLabel`. El significado está en el texto.
+2. El vacío se lee como texto normal en orden: mensaje, luego la acción. No es `alert` (no es error) ni región viva: no se anuncia solo.
+3. `GuideCard`: no es región viva (no interrumpe a TalkBack al aparecer). Orden de lectura: después del título de la pantalla y antes del contenido. [Entendido] `accessibilityRole="button"`; [✕] `accessibilityLabel="Cerrar ayuda"`, ambos con zona táctil de 48 × 48 dp mínimo. Al descartar, el foco de accesibilidad pasa al encabezado de la pantalla (no se pierde en un elemento desmontado) y no hay anuncio extra.
+4. «Ver ayudas otra vez»: rol botón, etiqueta «Ver ayudas otra vez», estado `busy` mientras guarda; el resultado se anuncia con el Snackbar existente (`accessibilityLiveRegion="polite"`).
+5. Contraste: texto `text` sobre el tinte `tile` del módulo ≥ 4.5:1 (verificar con `docs/design/contrast.js`; lo confirma `mobile-visual-designer`).
+6. Las guías respetan el tamaño de fuente del sistema (sin alturas fijas) y las safe areas (están dentro del contenido con scroll, no flotan sobre las barras).
+
+#### H. Decisiones para el usuario (no decididas aquí)
+
+1. **Ilustraciones de los vacíos.** (a) Crear y empaquetar PNG propios en `app/assets/illustrations/` (hoja, embudo, barras, etiqueta; los de docs/008 §9 aún no existen: los produce `mobile-visual-designer`) y copiar `adaptive-icon-foreground.png` para la alcancía ya en R5 (se empaquetan con Metro: no exigen build nueva, pero R6 también usa esa carpeta); (b) mantener el círculo con glifo emoji actual hasta R6 y que R5 solo cambie textos, guías y estructura. Recomendación: (a) para los cuatro vacíos de módulo; la alcancía depende de la nota R4 D6.5 («obligatoria antes del cierre del rediseño»): confirmar si entra en R5 o en R6. Para Calendario y Categorías docs/008 no define dibujo: usar (b) o pedir uno nuevo.
+2. **Alcance de la clave:** por usuario (recomendada) o por cuenta.
+3. **A quién se muestran:** solo con «sin datos» (recomendada) o también a usuarios que ya tienen movimientos la primera vez que abren cada pantalla tras actualizar. Afecta a las guías 2 y 8 que no pueden saber si hay datos.
+4. **Pista «Toca para ver tus movimientos»** (una cuenta activa): conservarla junto a la guía `cuentas-lista` (dos frases parecidas en la misma pantalla) o retirarla cuando la guía esté visible. Recomendación: conservarla y no mostrar `cuentas-lista` con una sola cuenta.
+5. **Vacío de semana: botón frente a FAB.** §7.2 pide [+ Nuevo movimiento] en el vacío; el código lo resuelve con el texto «Toca + para registrar el primero.» porque el FAB ya está visible. Recomendación: mantener el texto y no duplicar el botón.
+6. **Cerrar sesión:** no borrar las guías descartadas (recomendada; preferencia no sensible, ligada al usuario, ver I) o borrarlas al cerrar sesión.
+7. **Texto del botón con solo archivadas:** «Crear mi primera cuenta» (EXISTENTE) o «Crear una cuenta».
+8. **Guía en Historial:** no hay (propuesta); confirmar.
+
+#### I. Cambio de cuenta, de usuario y cierre de sesión
+
+- Estado compartido: un proveedor (p. ej. `GuidesProvider` en el navegador, por encima de las pantallas) carga la entrada del usuario autenticado una vez y la comparte; así «Ver ayudas otra vez» surte efecto sin recargar y las pantallas no leen el almacén por separado.
+- **Cambiar de cuenta** (selector rápido, «‹ Mis cuentas»): no cambia nada; las guías son por usuario. Solo cambian las condiciones «sin datos» (que dependen de la cuenta cargada).
+- **Cambio de usuario** (otro Google en el mismo teléfono): al cambiar `user.id` se descarta el estado en memoria, se muestra sin guías hasta terminar de leer la clave del nuevo usuario (regla B.9) y nunca se usan los ids del anterior.
+- **Cerrar sesión:** el cierre limpia solo `session_v2` y `session_token` (`clearAll`, sin cambios); **no se toca** `guias_v1_*` (recomendado, H.6). Al volver a entrar el mismo usuario no ve de nuevo las ayudas. El estado en memoria se descarta al cerrar sesión. Si el usuario elige borrarlas al salir, sería una llamada extra no bloqueante que no puede impedir ni retrasar el cierre de sesión ni usar la cola de la sesión.
+- Desinstalar la app borra el almacén (Android): las ayudas vuelven; es aceptable.
+- Sesión degradada o sin conexión: las guías no dependen de la API ni de la red.
+
+#### J. Criterios de aceptación de R5
+
+Verificables en Jest (`jest-expo`, pruebas de `lib/guides.ts` y de pantallas con SecureStore simulado):
+
+1. `lib/guides.ts` exporta el catálogo con exactamente los 8 ids de §5.12.C, únicos, y el texto de cada uno igual al de la tabla.
+2. La clave de almacenamiento se construye como `guias_v1_` + `user.id` con caracteres no permitidos reemplazados por `_`, y cumple `/^[A-Za-z0-9._-]+$/`.
+3. Lo que se escribe es solo `{ v: 1, vistas: [...] }` con ids del catálogo, sin duplicados; no contiene montos, nombres, correos ni ids de cuenta (la prueba inspecciona el valor serializado tras usar el flujo completo).
+4. Lectura: vacío/ausente, JSON inválido, forma inesperada y un id desconocido se tratan como «ninguna descartada» (los desconocidos se ignoran) sin lanzar; versión 2 no se sobrescribe al descartar.
+5. Si `getItemAsync` o `setItemAsync` fallan, la pantalla no se rompe, la guía recién descartada no reaparece en esa sesión y no se muestra error.
+6. Mientras la lectura está pendiente no se renderiza ninguna guía; tras resolver, se renderiza solo la no descartada.
+7. Mis cuentas sin cuentas muestra `cuentas-vacio` y el vacío; al pulsar [Entendido] desaparece y, al re-montar la pantalla con el mismo almacén, no vuelve.
+8. Cada guía del catálogo aparece cuando se cumple su condición y no aparece con datos (movimientos, cuentas archivadas donde aplique), en carga, con error ni con cuenta archivada donde la condición lo exige.
+9. Nunca hay dos `GuideCard` a la vez en una misma pantalla (con candidatas simultáneas se ve solo la primera del catálogo).
+10. [Entendido] y [✕] (`accessibilityLabel` «Cerrar ayuda») descartan; ambos tienen zona táctil ≥ 48 dp (altura/`minHeight` y ancho).
+11. Guardar la primera cuenta marca `cuentas-vacio` y `cuenta-crear`; guardar el primer movimiento marca `movimiento-nuevo` y `cuenta-detalle`.
+12. Una guía descartada no reaparece al cambiar de cuenta, de pestaña ni al re-montar.
+13. «Ver ayudas otra vez» existe en Más con ese texto y su subtítulo; al pulsarla vacía `vistas`, muestra el aviso «Listo. Verás las ayudas otra vez.», y las pantallas montadas vuelven a mostrar sus guías sin recargar.
+14. Esa fila se deshabilita (`busy`) mientras guarda; un doble toque produce una sola escritura; si falla, muestra «No pudimos restablecer las ayudas. Inténtalo de nuevo.» y se reactiva.
+15. Dos usuarios (ids distintos) en el mismo almacén simulado tienen estados independientes; al cambiar `user.id` no se ven los ids del usuario anterior.
+16. `signOut` no borra la clave de guías (la prueba comprueba que `deleteItemAsync` solo se llama con `session_v2` y `session_token`), y el módulo de sesión (`session-storage`) no cambia.
+17. Cada estado vacío de §5.12.F muestra su texto exacto y su acción (o ninguna, donde se indica); `EmptyState` renderiza la ilustración decorativa con `importantForAccessibility="no"` y `accessibilityElementsHidden`.
+18. Con `fontScale = 1.75` (y 2) la ilustración no se renderiza, el texto y la acción sí, y la `GuideCard` sigue visible.
+19. La acción de [Limpiar filtros] y las de «+ Anotar en este día» y [Crear mi primera cuenta] conservan sus `testID`/etiquetas actuales y su zona de 48 dp.
+20. Regresión: no cambian endpoints, cálculos, `session-storage`, `auth-service`, navegación (Atrás) ni las pruebas existentes de R2 a R4; `package.json` sin dependencias nuevas; typecheck, lint y Prettier sin errores.
+
+De dispositivo (nivel D, teléfono real; no se pueden marcar hechos sin él):
+
+21. Una guía descartada no vuelve tras cerrar la app desde recientes y reabrirla; vuelve tras «Ver ayudas otra vez».
+22. Las guías no tapan el FAB, la barra de pestañas ni la barra del sistema; con teclado abierto en Nuevo movimiento la guía no empuja el campo de monto fuera de vista.
+23. TalkBack: la guía se lee después del título, [Entendido] y «Cerrar ayuda» se anuncian como botones, el foco no se pierde al descartar y las ilustraciones no se anuncian.
+24. Fuente al 130 %, 175 % y 200 %: textos sin recortar, ilustración oculta desde 175 %, acciones alcanzables.
+25. Anchos de 360 y 412 dp: ilustración de 96 dp (alcancía de 120) centrada, sin solapar texto.
+26. Dos cuentas de Google en el mismo teléfono: cada una conserva sus ayudas.
+
+#### K. Archivos que tocaría R5 (PROPUESTA; implementa `mobile-engineer`)
+
+`app/src/lib/guides.ts` (+ `guides.test.ts`, nuevo), proveedor y hook de guías (`app/src/hooks/use-guides.tsx`, nuevo), `app/src/screens/ui.tsx` (`GuideCard`, `EmptyState` con `art`/`compact`), `AccountsScreen.tsx`, `NewAccountScreen.tsx`, `AccountSummaryTab.tsx`, `TransactionFormScreen.tsx`, `CalendarScreen.tsx`, `ReportsScreen.tsx`, `CategoriesScreen.tsx`, `HistoryScreen.tsx` (solo ilustración), `MoreScreen.tsx` (fila de ayudas), `MainNavigator.tsx` (montar el proveedor) y sus pruebas; `app/assets/illustrations/*` solo si se aprueba H.1(a). No se tocan `/api`, `lib/session-storage.ts`, `lib/auth-service.ts`, `app.json` ni `package.json`.
+
 ## 6. Mis cuentas: renombrar, archivar y «solicitar eliminación»
 
 Hechos de contrato (verificados): no existe `DELETE /accounts`; `PATCH /accounts/:id` admite solo `nombre` y `archivada`; docs/001 §5: «Las cuentas se archivan, no se eliminan físicamente» y CLAUDE.md: «La información histórica no se elimina, se archiva».
@@ -1101,6 +1259,8 @@ Principios: español cotidiano, trato de «tú» (EXISTENTE en los mensajes actu
 | Calendario, primera vez | «Los días con movimientos muestran sus importes. Toca un día para ver el detalle.» |
 | Reportes, primera vez | «Aquí ves cuánto entró y cuánto salió en un período. Toca una barra o un total para ver sus movimientos.» |
 | Más > Categorías, primera vez | «Las categorías ordenan tus gastos e ingresos. Puedes cambiarles el nombre y el color.» |
+
+Especificación de implementación de R5 (catálogo con ids, condiciones, persistencia y criterios): §5.12.
 
 Descarte: botón «Entendido» (48 dp) y gesto de cerrar; el estado «vista» se guarda localmente por guía. Opción en Más: «Ver ayudas otra vez» (APROBADA; 14.9).
 

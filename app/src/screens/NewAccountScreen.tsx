@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, Text, View, type TextInput } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useDiscardGuard } from '../hooks/use-discard-guard';
+import { useGuide, useGuides } from '../hooks/use-guides';
 import { useMutation } from '../hooks/use-loader';
 import { isAccountFormDirty } from '../lib/form-dirty';
 import { AMOUNT_REJECTION_MESSAGES, validateAmountText } from '../lib/money';
@@ -11,7 +12,7 @@ import type { Account, ResourcesApi } from '../lib/resources-api';
 import { isUncertainWriteFailure, LOST_RESPONSE_ACCOUNT } from '../lib/resources-messages';
 import { colors, typography } from '../theme/tokens';
 import { AmountField, CheckboxChip, FieldError, FormTextInput } from './form-ui';
-import { Button } from './ui';
+import { Button, GuideCard } from './ui';
 
 export const BALANCE_TOO_BIG_ERROR = 'El saldo inicial es demasiado grande. Revisa la cifra.';
 export const NEGATIVE_BALANCE_LABEL = 'Es un saldo en contra (debo dinero)';
@@ -28,6 +29,8 @@ export default function NewAccountScreen({
   onCreated: (account: Account) => void;
 }) {
   const { authorizedCall } = useAuth();
+  const { dismiss } = useGuides();
+  const { guide, dismissGuide } = useGuide(['cuenta-crear'], true);
   const [nombre, setNombre] = useState('');
   const [saldo, setSaldo] = useState('');
   const [enContra, setEnContra] = useState(false);
@@ -89,8 +92,11 @@ export default function NewAccountScreen({
         throw error;
       }
     });
-    if (ok && created.current) onCreated(created.current);
-    else if (!ok && uncertain.current) setLostResponse(true);
+    if (ok && created.current) {
+      // Completar la acción también descarta las ayudas de crear la primera cuenta.
+      dismiss(['cuentas-vacio', 'cuenta-crear']);
+      onCreated(created.current);
+    } else if (!ok && uncertain.current) setLostResponse(true);
   }
 
   return (
@@ -110,6 +116,8 @@ export default function NewAccountScreen({
           Nueva cuenta
         </Text>
       </View>
+
+      {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
 
       <Text style={styles.label}>Nombre de la cuenta</Text>
       <FormTextInput

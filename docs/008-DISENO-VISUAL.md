@@ -457,9 +457,66 @@ Propuesta: emoji (o glifo de texto blanco para `ellipsis` y `plus-circle`) sobre
 La dona exige `react-native-svg`. Sin ella: (a) barra horizontal proporcional por categoría (ya existe en `ReportsScreen`) con la paleta nueva, o (b) una barra apilada de 100 % con leyenda. El prototipo muestra la dona como referencia de diseño; **su implementación depende de la decisión 15.3** y no debe darse por aprobada.
 
 
-## 9. Ilustraciones de estados vacíos
+## 9. Ilustraciones de estados vacíos y guías contextuales (R5)
 
-Vacío de cuentas: **la alcancía** (120 dp, oculta con fuente ≥ 175 %). Las demás, trazo simple de 96 dp sobre un círculo con el **tinte del módulo** y trazo en su tinta: movimientos (hoja con «+», ámbar `movTile`/`movInk`), filtros (embudo, azul `calTile`/`calInk`), gráfico (barras, violeta `repTile`/`repInk`), con acento amarillo. Ninguna usa ya el trazo verde de marca. SVG inline en el prototipo; para la app se exportan a PNG propios (sin dependencias). Textos: docs/007 §7.2. Tono sereno, sin celebraciones.
+Vacío de cuentas: **la alcancía** (120 dp, oculta con fuente ≥ 175 %). Las demás, trazo simple de 96 dp sobre un círculo con el **tinte del módulo** y trazo en su tinta: movimientos (hoja con «+», ámbar `movTile`/`movInk`), filtros (embudo, azul `calTile`/`calInk`), gráfico (barras, violeta `repTile`/`repInk`), con acento amarillo. Ninguna usa ya el trazo verde de marca. Textos: docs/007 §7.2. Tono sereno, sin celebraciones.
+
+### 9.1 Inventario de ilustraciones y recursos generados (R5, verificado con `file`)
+
+Herramienta: ImageMagick 6.9 (`convert`, ya en el entorno; no se instaló nada). Fuentes SVG en `docs/design/assets/illustrations/src/`; PNG a **3x** (nítidos en xxhdpi) en `docs/design/assets/illustrations/`. Todos PNG RGBA con fondo transparente, sin `react-native-svg`: `<Image source={require(...)} />` los muestra directamente.
+
+| Ilustración | Uso (docs/007 §5.12.F) | Archivo | Píxeles | Mostrar a | Estado |
+| --- | --- | --- | --- | --- | --- |
+| Hoja con «+» (ámbar) | Semana, cuenta recién creada, Historial vacío | `vacio-movimientos.png` | 288 x 288 | 96 x 96 dp | GENERADA |
+| Embudo (azul) | Historial con filtros sin resultados | `vacio-filtros.png` | 288 x 288 | 96 x 96 dp | GENERADA |
+| Barras (violeta, una amarilla) | Reportes sin movimientos | `vacio-reportes.png` | 288 x 288 | 96 x 96 dp | GENERADA |
+| Etiqueta (ámbar, módulo Más) | Categorías sin categorías | `vacio-categorias.png` | 288 x 288 | 96 x 96 dp | GENERADA; NO figuraba en esta sección: es una propuesta nueva (docs/007 §5.12.H.1) y requiere aprobación; sin ella queda el emoji 🏷️ |
+| Alcancía (con hojas y moneda) | Mis cuentas sin cuentas o solo archivadas | `vacio-alcancia.png` | 360 x 360 | 120 x 120 dp | GENERADA a partir de `adaptive-icon-foreground.png` (recortada al contenido, con 12 dp de margen interno por lado a 360 px, sin la zona segura del ícono). Es raster de 106 KB; no contiene texto |
+| Calendario compacto | Mes/día sin movimientos | ninguna | — | — | Sin ilustración por diseño (`compact`) |
+
+Peso total de los cinco PNG: unos 150 KB. Los círculos de tinte van **dentro** del PNG (dibujo completo en 96 dp); la alcancía no lleva círculo.
+
+Verificación honesta: dimensiones, formato y transparencia comprobados (`file` y lectura del pixel de esquina con alfa 0); revisión visual de una tira con los cinco PNG sobre blanco. NO se probó dentro de la app ni en un dispositivo. El render de ImageMagick no tiene anti-alias de subpíxel perfecto, pero a 3x es suficiente.
+
+**Recomendación: (a) empaquetar en `app/assets/illustrations/`.** Motivo: los PNG existen, son estáticos y se enlazan con `require` (Metro los empaqueta como cualquier asset de JS); no se toca `app.json`, no hay módulo nativo y no exige build nueva (es un cambio solo de JS/assets, entra en una actualización OTA o en la siguiente build sin condiciones adicionales). Costo: unos 150 KB en el paquete y una nota de renombrado (copiar sin cambiar nombres). Riesgo: la etiqueta de Categorías no está aprobada (si no se aprueba se omite el archivo y se conserva el emoji, un solo caso); la alcancía en Mis cuentas es la que docs/003 R4 D6.5 difiere a R6: **su PNG ya existe y puede usarse en R5 si el usuario lo decide; si no, el vacío de Mis cuentas conserva el círculo con 🐷/glifo hasta R6**. Alternativa (b), emoji hasta R6: sin riesgo ni peso, pero R5 pierde la parte visual de los vacíos y no cumple docs/007 §5.12 H.1 (a).
+
+Contrato de `<Image>`: `source={require('../../assets/illustrations/vacio-movimientos.png')}`, `style={{ width: 96, height: 96 }}` (120 para la alcancía), `resizeMode="contain"`, `accessible={false}`, `importantForAccessibility="no"`, `accessibilityElementsHidden`, sin `accessibilityLabel`. Un `Image` sin `width`/`height` explícitos no se muestra: son obligatorios. Mapa sugerido: `art: 'movimientos' | 'filtros' | 'reportes' | 'categorias' | 'alcancia'` (cadena, no la ruta) en `EmptyState`.
+
+### 9.2 Guía contextual (`GuideCard`; implementa docs/007 §5.12.B y C)
+
+- **Superficie:** fondo `moduleColors[módulo].tile` (Mis cuentas y Crear cuenta: `cuenta`; Detalle de cuenta: `cuenta`; Nuevo movimiento: `movimientos`; Calendario: `calendario`; Reportes: `reportes`; Categorías: `mas`). Sin borde y sin sombra (no es error ni elemento elevado): se distingue del fondo por el tinte, el radio 16 (`radii.lg`) y el icono. Es una tarjeta dentro del contenido con scroll, nunca flotante.
+- **Medidas:** ancho completo de la columna (margen lateral 16 dp con ancho < 400 dp, 20 dp desde 400 dp, igual que la pantalla); relleno 16 dp (12 dp vertical abajo); separación 12 dp entre elementos; margen inferior 16 dp. Posición: justo bajo el título o la barra de contexto y antes del contenido (docs/007 §5.12.G.3). Altura libre (nunca fija).
+- **Contenido:** fila superior: mosaico de 28 dp con radio 8 y fondo `surface` (círculo de apoyo) con el glifo de «ayuda» «💡» de 16 sp (decorativo, `importantForAccessibility="no"`), texto `typography.body` en `colors.text` (alineado a la izquierda, sin truncar, `flex: 1`), y a la derecha [✕]. [✕]: zona de 48 x 48 dp (`minWidth`/`minHeight` 48), glifo «✕» de 18 sp en `ink` del módulo, `accessibilityLabel="Cerrar ayuda"`, `accessibilityRole="button"`, desplazado con margen negativo de 8 dp arriba/derecha para no agrandar la tarjeta. Fila inferior: [Entendido] `secondary` (alto mínimo 48, texto `brand700`, relleno `surface`, borde 2 `brand700`), alineada a la izquierda con ancho natural.
+- **Fuente grande:** ≥ 130 %: [Entendido] a ancho completo; ≥ 175 %: se oculta el mosaico «💡», el texto y los dos botones se conservan (nunca se oculta una guía), [✕] se mantiene arriba a la derecha.
+- **Animación mínima:** aparición con opacidad 0 a 1 en 180 ms (igual a «aparición de pantalla», §10) y al descartar, opacidad 1 a 0 en 120 ms con `useNativeDriver: true` y luego se desmonta; sin movimiento ni cambio de altura animado (la pantalla debajo salta una sola vez, es aceptable y barato). Con movimiento reducido (`AccessibilityInfo.isReduceMotionEnabled`): sin animación. Regla de memoria: la tarjeta desaparece al instante en el estado aunque la animación no termine.
+- **Contraste verificado** (`node docs/design/contrast.js --check`, salida 0, 115 pares, mínimo texto 4.60:1, mínimo componente 3.47:1): `text` sobre los cinco `tile` entre 13.28 y 14.07:1; «✕» (`ink`) sobre `cuentaTile` 8.12:1 (el resto de módulos 7.19 a 8.41:1 por los pares de §3.1); borde y texto de [Entendido] `brand700` sobre los cinco `tile` entre 6.03 y 6.39:1; el relleno de [Entendido] es `surface` (texto `brand700` 8.4:1 verificado en §3.1). Sin ningún color nuevo: tokens existentes.
+- **Semántica:** no usa verde ni coral (no es dinero ni error). No es `alert` ni región viva (docs/007 §5.12.G.3).
+
+### 9.3 Composición de `EmptyState` y de cada vacío (implementa docs/007 §5.12.F)
+
+Estructura (columna centrada, `alignItems: 'center'`, `gap` 12, relleno 16, margen lateral de pantalla 16/20): ilustración (96 dp; 120 dp la alcancía; el espacio entre dibujo y título es 12 dp, 16 dp con alcancía) > título `typography.h2` (si existe, `colors.text`, centrado, máx. ancho 320 dp) > mensaje `typography.body` `colors.text2` centrado (máx. ancho 320 dp, sin truncar) > acción (`Button`, ancho natural, mínimo 48 dp; 52 dp `tall` solo para «Crear mi primera cuenta»). Separación vertical entre bloques de pantalla: 16. Altura mínima del bloque 120 (ya existe). Con `fontScale >= 1.75`: sin ilustración y sin hueco reservado; título y mensaje crecen con la fuente, el bloque se desplaza con el scroll de la pantalla y el botón queda a ancho completo (alto mínimo 48). Ilustración siempre decorativa (9.1).
+
+| Estado | Ilustración | Título | Mensaje | Acción |
+| --- | --- | --- | --- | --- |
+| Mis cuentas sin cuentas | Alcancía 120 dp (o círculo con emoji hasta R6, ver 9.1) | «Todavía no tienes cuentas» | «Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta.» | [Crear mi primera cuenta] `primary` `tall` (52 dp), ancho completo hasta 320 dp |
+| Mis cuentas, solo archivadas | Alcancía 120 dp | (sin título) | «No tienes cuentas activas. Puedes crear una o desarchivar una de las anteriores.» | [Crear mi primera cuenta] `primary` `tall` |
+| Semana (recién creada o sin movimientos) | `vacio-movimientos` 96 dp | «Tu cuenta está lista.» / «Esta semana no has anotado movimientos.» | «Anota tu primer gasto o ingreso con el botón +.» / «Toca + para registrar el primero.» | Ninguna (FAB) |
+| Semana filtrada sin resultados | Ninguna (`compact`) | — | «Esta semana no tienes gastos/ingresos anotados.» | Ninguna |
+| Historial vacío | `vacio-movimientos` | «Aún no hay movimientos» | «Cuando anotes el primero, aparecerá aquí.» | Ninguna (FAB) |
+| Historial filtrado | `vacio-filtros` | — | «Ningún movimiento coincide con estos filtros.» | [Limpiar filtros] `secondary` |
+| Calendario, mes o día vacío | Ninguna (`compact`): texto `body` `text2` centrado, relleno vertical 12, sin círculo | — | «No hay movimientos en este mes.» / «Este día no tiene movimientos registrados.» | «+ Anotar en este día» `secondary` (existente) |
+| Reportes vacío | `vacio-reportes` | — | «Sin movimientos en este período. Prueba con otro mes/otro año/otro rango.» | Ninguna |
+| Categorías vacío | `vacio-categorias` (si se aprueba) | — | «Aún no tienes categorías de gasto/ingreso. Crea la primera.» | Ninguna |
+
+Notas: con la guía visible arriba (Reportes, Calendario, Detalle) la guía va primero y el vacío debajo sin repetir la frase (docs/007 §5.12.C). `compact` no deja ningún hueco reservado para la ilustración. El título (`h2`) solo existe en los tres casos donde el texto de docs/007 lo trae como frase propia; en el resto el mensaje va solo.
+
+### 9.4 Sección «Ayuda» en Más y su aviso (docs/007 §5.12.D)
+
+- Posición: entre «Cuenta» y «Sesión». Encabezado de sección igual a los demás de Más (`sectionHeader` existente de `MoreScreen`: `typography.small` 800 en `colors.text2`, margen superior 12).
+- Fila: misma fila `Row` que el resto de Más (lista `surface` de radio 16, alto mínimo 56 y toda la fila táctil); mosaico de 36 dp con radio 10 y tinte `moduleColors.mas.tile`, glifo «💡» de 20 sp (se oculta con fuente ≥ 175 %); título «Ver ayudas otra vez» en 15/700 `colors.text` (el estilo real aprobado de las filas de Más; se unifica aquí en el paso 353, sustituyendo 16/600 y radio 12 que contradecían «mismo estilo»); subtítulo «Vuelve a mostrar las guías que cerraste.» `typography.small` en `colors.text2`; chevron «›» en `text2` a la derecha. Sin color de acción ni de énfasis.
+- Estados: normal; presionada (opacidad 0.85); `busy` (indicador pequeño `ActivityIndicator` de 20 dp en lugar de «›», fila deshabilitada, sin cambiar de tamaño); error.
+- Aviso de éxito: `Snackbar` existente, texto «Listo. Verás las ayudas otra vez.» (fondo `text`, texto blanco, 3 s, sin acción). Error: «No pudimos restablecer las ayudas. Inténtalo de nuevo.» como `ErrorBox` (fondo `expenseSoft`, texto `expenseText`, 5.17:1) bajo la fila, la fila se reactiva.
+- Contraste: título `text` y subtítulo `text2` sobre `surface` (pares de §3.1).
 
 ## 10. Microinteracciones baratas (`Animated` nativo)
 

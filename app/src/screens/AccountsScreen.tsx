@@ -2,15 +2,17 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { useGuide, useGuides } from '../hooks/use-guides';
 import { useLoader, useMutation } from '../hooks/use-loader';
 import { activeAccountsTotal, avatarInitial, firstName } from '../lib/accounts';
+import type { GuideId } from '../lib/guides';
 import { formatCents } from '../lib/money';
 import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, radii, shadows, tabularNums, typography } from '../theme/tokens';
 import { AccountCard, balanceText } from './account-ui';
 import SessionBanner from './SessionBanner';
 import { ProfileSheet } from './sheets';
-import { Button } from './ui';
+import { Button, EmptyState, GuideCard } from './ui';
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
 
@@ -93,6 +95,7 @@ function AccountsList({
   const { authorizedCall } = useAuth();
   const [archivedOpen, setArchivedOpen] = useState(initialArchivedOpen);
   const mutation = useMutation();
+  const { dismiss } = useGuides();
   // Una sola lectura con las archivadas: la lista se separa en la app.
   const { state, reload, refresh } = useLoader(
     () =>
@@ -101,6 +104,19 @@ function AccountsList({
       ),
     'accounts',
   );
+
+  // Guías (docs/007 §5.12.C): solo con la lista cargada. Con una sola cuenta la pista fija de la
+  // tarjeta ya orienta (docs/003, R5 D5), por eso `cuentas-lista` pide dos o más cuentas activas.
+  const loadedItems = state.status === 'ready' ? state.data.items : [];
+  const activeCount = loadedItems.filter((account) => !account.archivada).length;
+  const archivedCount = loadedItems.length - activeCount;
+  const candidates: GuideId[] =
+    activeCount === 0 && archivedCount === 0
+      ? ['cuentas-vacio']
+      : activeCount >= 2
+        ? ['cuentas-lista']
+        : [];
+  const { guide, dismissGuide } = useGuide(candidates, state.status === 'ready');
 
   async function unarchive(account: Account) {
     const ok = await mutation.run(() =>
@@ -130,6 +146,7 @@ function AccountsList({
 
   return (
     <View>
+      {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
       {total ? (
         <View
           accessible
@@ -154,26 +171,27 @@ function AccountsList({
       ) : null}
 
       {active.length === 0 ? (
-        <View style={styles.empty}>
-          {archived.length === 0 ? (
-            <>
-              <Text style={styles.emptyTitle}>Todavía no tienes cuentas</Text>
-              <Text style={styles.body}>
-                Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta.
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.body}>
-              No tienes cuentas activas. Puedes crear una o desarchivar una de las anteriores.
-            </Text>
-          )}
-          <Button
-            label="Crear mi primera cuenta"
-            variant="primary"
+        // La alcancía queda para R6 (docs/003, R4 D6.5): se conserva el círculo con emoji.
+        archived.length === 0 ? (
+          <EmptyState
+            module="cuenta"
+            glyph="🐷"
+            title="Todavía no tienes cuentas"
+            message="Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta."
+            actionLabel="Crear mi primera cuenta"
+            onAction={onCreateAccount}
             tall
-            onPress={onCreateAccount}
           />
-        </View>
+        ) : (
+          <EmptyState
+            module="cuenta"
+            glyph="🐷"
+            message="No tienes cuentas activas. Puedes crear una o desarchivar una de las anteriores."
+            actionLabel="Crear mi primera cuenta"
+            onAction={onCreateAccount}
+            tall
+          />
+        )
       ) : (
         <>
           {active.map((account) => (
@@ -181,7 +199,10 @@ function AccountsList({
               key={account.id}
               account={account}
               hint={active.length === 1 ? 'Toca para ver tus movimientos' : undefined}
-              onPress={() => onOpenAccount(account)}
+              onPress={() => {
+                dismiss('cuentas-lista');
+                onOpenAccount(account);
+              }}
             />
           ))}
           <Button
@@ -319,8 +340,6 @@ const styles = StyleSheet.create({
   coinText: { fontSize: 18, fontWeight: '900', color: colors.text },
   totalLabel: { ...typography.small, fontWeight: '700', color: colors.text2 },
   totalAmount: { ...typography.totalAmount, color: colors.text },
-  empty: { gap: 12, paddingVertical: 16 },
-  emptyTitle: { ...typography.h2, color: colors.text },
   errorBox: { alignItems: 'center', padding: 16, gap: 12 },
   errorText: { ...typography.body, color: colors.expenseText, textAlign: 'center' },
   archived: { marginTop: 16, gap: 8 },

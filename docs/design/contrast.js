@@ -142,6 +142,24 @@ const pairs = [
   ['R4 error de rango: expenseText sobre fondo cálido', T.expenseText, T.bg],
   ['R4 ErrorBox con fondo: expenseText sobre expenseSoft', T.expenseText, T.expenseSoft],
   ['R4 anillo del color elegido: text sobre tarjeta (3:1)', T.text, T.surface, 3],
+  // R5 (docs/008 §9.2): GuideCard (fondo = tile del módulo) y estados vacíos
+  ['R5 guía: text sobre cuentaTile', T.text, T.cuentaTile],
+  ['R5 guía: text sobre movTile', T.text, T.movTile],
+  ['R5 guía: text sobre calTile', T.text, T.calTile],
+  ['R5 guía: text sobre repTile', T.text, T.repTile],
+  ['R5 guía: text sobre masTile', T.text, T.masTile],
+  ['R5 guía: «✕» (ink) sobre cuentaTile (3:1)', T.cuentaInk, T.cuentaTile, 3],
+  ['R5 guía: borde y texto de [Entendido] brand700 sobre cuentaTile (3:1)', T.brand700, T.cuentaTile, 3],
+  ['R5 guía: borde de [Entendido] brand700 sobre movTile (3:1)', T.brand700, T.movTile, 3],
+  ['R5 guía: borde de [Entendido] brand700 sobre calTile (3:1)', T.brand700, T.calTile, 3],
+  ['R5 guía: borde de [Entendido] brand700 sobre repTile (3:1)', T.brand700, T.repTile, 3],
+  ['R5 guía: borde de [Entendido] brand700 sobre masTile (3:1)', T.brand700, T.masTile, 3],
+  ['R5 vacío: título text sobre fondo cálido', T.text, T.bg],
+  ['R5 vacío: mensaje text2 sobre fondo cálido', T.text2, T.bg],
+  ['R5 ilustración: trazo movInk sobre círculo movTile (3:1)', T.movInk, T.movTile, 3],
+  ['R5 ilustración: trazo calInk sobre círculo calTile (3:1)', T.calInk, T.calTile, 3],
+  ['R5 ilustración: trazo repInk sobre círculo repTile (3:1)', T.repInk, T.repTile, 3],
+  ['R5 ilustración: trazo movInk sobre blanco interior (3:1)', T.movInk, '#FFFFFF', 3],
 ];
 // Tarjetas de cuenta: textos sobre el fondo de la tarjeta y sobre el círculo decorativo.
 for (const [n, card] of ACC) {

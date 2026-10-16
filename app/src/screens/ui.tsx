@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   Animated,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,6 +15,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import type { Guide, GuideModule } from '../lib/guides';
 import { useSystemInsets } from '../theme/useSystemInsets';
 import {
   colors,
@@ -613,27 +615,59 @@ export function LoadingState({ text, testID }: { text: string; testID?: string }
   );
 }
 
-// Vacío con siguiente paso. El dibujo definitivo es de R5: mientras tanto, círculo con el tinte del
-// módulo y su glifo (se oculta con fuente ≥ 175 %).
+// Ilustraciones decorativas de los vacíos (docs/008 §9.1). PNG empaquetados con Metro.
+/* eslint-disable @typescript-eslint/no-require-imports */
+const EMPTY_ART = {
+  movimientos: require('../../assets/illustrations/vacio-movimientos.png'),
+  filtros: require('../../assets/illustrations/vacio-filtros.png'),
+  reportes: require('../../assets/illustrations/vacio-reportes.png'),
+} as const;
+/* eslint-enable @typescript-eslint/no-require-imports */
+
+export type EmptyArt = keyof typeof EMPTY_ART;
+
+// Vacío con siguiente paso (docs/008 §9.3). Dibujo decorativo de 96 dp (`art`) o, mientras no haya
+// ilustración, círculo con el tinte del módulo y su glifo (`glyph`); ambos se ocultan con fuente
+// ≥ 175 % sin dejar hueco. `compact` no lleva dibujo (comparte pantalla con una cuadrícula).
 export function EmptyState({
   module,
   glyph,
+  art,
+  title,
   message,
   actionLabel,
   onAction,
+  tall = false,
+  compact = false,
   testID,
 }: {
-  module: ModuleKey;
-  glyph: string;
+  module: GuideModule;
+  glyph?: string;
+  art?: EmptyArt;
+  title?: string;
   message: string;
   actionLabel?: string;
   onAction?: () => void;
+  tall?: boolean;
+  compact?: boolean;
   testID?: string;
 }) {
   const { fontScale } = useWindowDimensions();
+  const large = fontScale >= 1.75;
+  const showArt = !compact && !large;
   return (
-    <View testID={testID} style={styles.stateBlock}>
-      {fontScale >= 1.75 ? null : (
+    <View testID={testID} style={compact ? styles.stateCompact : styles.stateBlock}>
+      {showArt && art ? (
+        <Image
+          testID="empty-art"
+          source={EMPTY_ART[art]}
+          style={styles.emptyArt}
+          resizeMode="contain"
+          accessible={false}
+          importantForAccessibility="no"
+          accessibilityElementsHidden
+        />
+      ) : showArt && glyph ? (
         <View
           importantForAccessibility="no"
           accessibilityElementsHidden
@@ -641,10 +675,84 @@ export function EmptyState({
         >
           <Text style={styles.emptyGlyph}>{glyph}</Text>
         </View>
-      )}
+      ) : null}
+      {title ? <Text style={styles.stateTitle}>{title}</Text> : null}
       <Text style={styles.stateText}>{message}</Text>
-      {actionLabel && onAction ? <Button label={actionLabel} onPress={onAction} /> : null}
+      {actionLabel && onAction ? (
+        <View style={tall || large ? styles.stateActionWide : undefined}>
+          <Button
+            label={actionLabel}
+            onPress={onAction}
+            tall={tall}
+            variant={tall ? 'primary' : 'secondary'}
+          />
+        </View>
+      ) : null}
     </View>
+  );
+}
+
+// Guía contextual de primera vez (docs/008 §9.2, docs/007 §5.12.B): tarjeta en el flujo de la
+// pantalla, nunca modal. Desaparece al instante al descartarla.
+export function GuideCard({ guide, onDismiss }: { guide: Guide; onDismiss: () => void }) {
+  const { fontScale } = useWindowDimensions();
+  const palette = moduleColors[guide.module];
+  const opacity = useRef(new Animated.Value(0)).current;
+  const wide = fontScale >= 1.3;
+
+  // Nace transparente: con movimiento reducido pasa directo a opaca; si no, aparece en 180 ms.
+  // Sin dato del sistema (promesa rechazada) también queda visible.
+  useEffect(() => {
+    let cancelled = false;
+    let animation: Animated.CompositeAnimation | null = null;
+    Promise.resolve(AccessibilityInfo.isReduceMotionEnabled?.())
+      .then((reduce) => {
+        if (cancelled) return;
+        if (reduce) {
+          opacity.setValue(1);
+          return;
+        }
+        animation = Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true });
+        animation.start();
+      })
+      .catch(() => opacity.setValue(1));
+    return () => {
+      cancelled = true;
+      animation?.stop();
+    };
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      testID={`guide-${guide.id}`}
+      style={[styles.guide, { backgroundColor: palette.tile, opacity }]}
+    >
+      <View style={styles.guideRow}>
+        {fontScale >= 1.75 ? null : (
+          <View importantForAccessibility="no" accessibilityElementsHidden style={styles.guideBulb}>
+            <Text style={styles.guideBulbGlyph}>💡</Text>
+          </View>
+        )}
+        <Text style={styles.guideText}>{guide.text}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar ayuda"
+          onPress={onDismiss}
+          style={styles.guideClose}
+        >
+          <Text
+            importantForAccessibility="no"
+            accessibilityElementsHidden
+            style={[styles.guideCloseGlyph, { color: palette.ink }]}
+          >
+            ✕
+          </Text>
+        </Pressable>
+      </View>
+      <View style={wide ? styles.guideActionWide : styles.guideAction}>
+        <Button label="Entendido" variant="secondary" onPress={onDismiss} />
+      </View>
+    </Animated.View>
   );
 }
 
@@ -867,7 +975,34 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
   },
-  stateText: { ...typography.body, color: colors.text2, textAlign: 'center' },
+  stateCompact: { alignItems: 'center', gap: 8, paddingVertical: 12 },
+  stateTitle: { ...typography.h2, color: colors.text, textAlign: 'center', maxWidth: 320 },
+  stateText: { ...typography.body, color: colors.text2, textAlign: 'center', maxWidth: 320 },
+  stateActionWide: { alignSelf: 'stretch', maxWidth: 320, width: '100%' },
+  emptyArt: { width: 96, height: 96 },
+  guide: { borderRadius: radii.lg, padding: 16, paddingBottom: 12, marginBottom: 16, gap: 12 },
+  guideRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  guideBulb: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.sm,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideBulbGlyph: { fontSize: 16, lineHeight: 20 },
+  guideText: { ...typography.body, color: colors.text, flex: 1 },
+  guideClose: {
+    minWidth: sizes.touchMin,
+    minHeight: sizes.touchMin,
+    marginTop: -8,
+    marginRight: -8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guideCloseGlyph: { fontSize: 18, lineHeight: 22, fontWeight: '800' },
+  guideAction: { alignSelf: 'flex-start' },
+  guideActionWide: { alignSelf: 'stretch' },
   emptyCircle: {
     width: 96,
     height: 96,

@@ -458,7 +458,7 @@ export default function HistoryScreen({
         filtered ? (
           <EmptyState
             module="movimientos"
-            glyph="🔎"
+            art="filtros"
             message="Ningún movimiento coincide con estos filtros."
             actionLabel="Limpiar filtros"
             onAction={clearFilters}
@@ -466,8 +466,9 @@ export default function HistoryScreen({
         ) : (
           <EmptyState
             module="movimientos"
-            glyph="📋"
-            message="Aún no hay movimientos. Cuando anotes el primero, aparecerá aquí."
+            art="movimientos"
+            title="Aún no hay movimientos"
+            message="Cuando anotes el primero, aparecerá aquí."
           />
         )
       ) : (

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useDiscardGuard } from '../hooks/use-discard-guard';
+import { useGuide, useGuides } from '../hooks/use-guides';
 import { useLoader, useMutation } from '../hooks/use-loader';
 import { categoryFill } from '../lib/category-appearance';
 import {
@@ -31,6 +32,7 @@ import {
   EmptyState,
   ErrorBox,
   LoadingState,
+  GuideCard,
   ScreenTitle,
   Segmented,
   useScreenContainerStyle,
@@ -89,6 +91,7 @@ export default function CategoriesScreen({
   const [menuFor, setMenuFor] = useState<Category | null>(null);
   const [inUse, setInUse] = useState<Category | null>(null);
   const mutation = useMutation();
+  const { dismiss } = useGuides();
   const accountArchived = useRef(false);
 
   // Ejecuta la mutación marcando un 409 ACCOUNT_ARCHIVED para avisar al contenedor.
@@ -146,6 +149,7 @@ export default function CategoriesScreen({
       }),
     );
     if (ok) {
+      dismiss('categorias');
       setForm(null);
       refresh();
     }
@@ -186,11 +190,14 @@ export default function CategoriesScreen({
   const busy = mutation.pending;
   const loaded = state.status === 'ready' && state.data.accountId === account.id;
   const items = loaded ? state.data.items.filter((c) => c.tipo === segment) : [];
+  // Guía solo con la lista cargada y la cuenta activa (docs/007 §5.12.C).
+  const { guide, dismissGuide } = useGuide(['categorias'], loaded && !account.archivada);
   const typeWord = segment === 'egreso' ? 'gasto' : 'ingreso';
 
   return (
     <ScrollView style={containerStyle} keyboardShouldPersistTaps="handled">
       <ScreenTitle title="Categorías" module="mas" />
+      {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
 
       {fromForm ? <Text style={styles.help}>{FROM_FORM_HELP}</Text> : null}
 

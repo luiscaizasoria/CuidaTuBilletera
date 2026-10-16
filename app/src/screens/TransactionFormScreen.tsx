@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useDiscardGuard } from '../hooks/use-discard-guard';
+import { useGuide, useGuides } from '../hooks/use-guides';
 import { useLoader, useMutation } from '../hooks/use-loader';
 import { isValidDateString, formatDateEs, todayLocal, yesterdayLocal } from '../lib/dates';
 import { isFormDirty } from '../lib/form-dirty';
@@ -45,7 +46,7 @@ import {
   formStyles,
   TypeToggle,
 } from './form-ui';
-import { Button, Chip, ErrorBox, useScreenMargin } from './ui';
+import { Button, Chip, ErrorBox, GuideCard, useScreenMargin } from './ui';
 
 export const MAX_AMOUNT_CENTS = 99_999_999_999;
 export const NOTE_MAX = 500;
@@ -87,6 +88,7 @@ export default function TransactionFormScreen({
   onOpenCategories?: () => void;
 }) {
   const { authorizedCall } = useAuth();
+  const { dismiss } = useGuides();
   const insets = useSystemInsets();
   const margin = useScreenMargin();
   const editing = transaction !== undefined;
@@ -113,6 +115,11 @@ export default function TransactionFormScreen({
   const accountArchived = useRef(false);
   const uncertain = useRef(false);
   const busy = mutation.pending;
+  // Solo al crear (nunca al editar) y con la cuenta activa.
+  const { guide, dismissGuide } = useGuide(
+    ['movimiento-nuevo'],
+    !editing && !account.archivada && !archivedBlocked,
+  );
 
   // Instantánea inicial (al montar): lo prefijado no cuenta como cambio.
   const initial = useRef({
@@ -279,6 +286,8 @@ export default function TransactionFormScreen({
       }
     });
     if (ok) {
+      // Guardar el primer movimiento también descarta las ayudas de crear y del Detalle.
+      dismiss(['movimiento-nuevo', 'cuenta-detalle']);
       const name = options.find((c) => c.id === categoryId)?.nombre;
       onDone(
         true,
@@ -373,6 +382,8 @@ export default function TransactionFormScreen({
             </Text>
           </Pressable>
         </View>
+
+        {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
 
         <Text style={formStyles.label}>Tipo</Text>
         {editing ? (

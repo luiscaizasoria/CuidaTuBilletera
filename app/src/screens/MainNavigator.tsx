@@ -385,6 +385,7 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
               }}
               onOpenCategories={() => push({ name: 'categories' })}
               onOpenExport={() => setTab('reportes')}
+              onNotify={setSnack}
             />
           );
         default:

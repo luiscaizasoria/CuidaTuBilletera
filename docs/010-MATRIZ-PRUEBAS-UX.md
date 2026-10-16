@@ -631,3 +631,130 @@ Residuales (ninguno alto ni crítico):
 3. **Observación:** `LoginScreen` conserva un `#1a73e8` literal y un relleno de 16 dp fijo; es la pantalla del botón de Google (fuera del alcance de R4, no contradice docs/008 mientras se mantenga el color de la marca de Google).
 4. Los márgenes de 16 internos de tarjetas (`Card`, `SummaryTile`, tarjeta total de Mis cuentas, formulario de categoría) son relleno de tarjeta, no margen de pantalla: correctos.
 5. Nivel D pendiente: 360/412 dp reales, fuente 130 % y 200 % (selector de color, chips), zonas de los chips y el cambio 399/400 dp, TalkBack, teclado y exportación real.
+
+## 14. Informe de ejecución R5 (guías contextuales y estados vacíos ilustrados)
+
+```
+Informe de ejecución UX-QA - R5
+Fecha: 2026-10-16
+Rama y commit evaluados: feat/rediseno-ux-ui sobre 3c5630c (R4), con los cambios de R5 SIN commit
+Ejecutor: mobile-ux-qa (agentId: lo registra quien coordina; no se dispone aquí)
+Alcance: docs/007 §5.12 (A a K, criterios J1 a J26), docs/008 §9.1 a 9.4 y §3.4, docs/003 R5 D1 a D6 y R4 D6.
+         lib/guides.ts, hooks/use-guides.tsx, screens/ui.tsx (GuideCard, EmptyState), AccountsScreen, NewAccountScreen,
+         TransactionFormScreen, AccountSummaryTab, CalendarScreen, ReportsScreen, CategoriesScreen, HistoryScreen,
+         MoreScreen, MainNavigator, App.tsx y app/assets/illustrations/*.
+Entorno: niveles A (Jest y revisión de código) y T (contrast.js y cálculo WCAG propio). Sin R ni D: no hay emulador, dispositivo
+         ni TalkBack. Nada de lo de este informe se ejecutó en Android. J21 a J26 y todo lo de TalkBack, fuentes reales,
+         teclado real y anchos reales quedan PENDIENTES (nivel D). Las ilustraciones se vieron como PNG sueltos, no dentro de la app.
+Resumen R5: J1 a J20 con nivel A: OK (J16 con matiz); J21 a J26 (nivel D): PENDIENTE.
+            Defectos: 0 críticos, 0 altos, 0 medios, 3 bajos (UXQA-R5-01 a 03). Observaciones: 14.6.
+Decisión: APROBADO CON OBSERVACIONES. Ningún defecto alto ni crítico. El cierre de R5 sigue condicionado al nivel D
+          (J21 a J26) y, para el cierre del rediseño, a la alcancía de Mis cuentas (R6, docs/003 R4 D6.5).
+```
+
+### 14.1 Comandos y resultados (nivel A/T)
+
+| Comando | Resultado |
+| --- | --- |
+| `cd app && npx jest --ci --maxWorkers=2` | 42 suites, 1543 pruebas, todas en verde (coincide con lo esperado) |
+| `npx jest --ci --no-cache --maxWorkers=2` sobre `guides.test.tsx`, `use-guides.test.tsx`, `guides.test.ts`, `App.guides.test.tsx`, `MoreScreen.test.tsx`, `HistoryScreen.test.tsx` | 6 suites, 129 pruebas en verde con la caché fría (las suites nuevas llaman a `relaxTimeoutsForColdCache`; no se repite UXQA-R4-01) |
+| `npx tsc --noEmit`, `npx eslint --max-warnings=0 src`, `npx prettier --check src` | sin errores ni avisos |
+| `node docs/design/contrast.js --check` | salida 0 (los 17 pares R5 añadidos al script cumplen) |
+| Cálculo WCAG propio (fórmula de luminancia relativa, scratchpad) | `text` sobre `tile` 13,28 a 14,07:1; «✕» (`ink`) sobre `tile` 7,19 a 8,41:1; `brand700` sobre `tile` 6,03 a 6,39:1; `text2` sobre `tile` 6,14 a 6,50:1. Coincide con docs/008 §9.2 |
+| `git diff --stat -- package.json package-lock.json app.json ../api` | sin cambios: sin dependencias, sin config nativa, sin API |
+
+### 14.2 Resultados por criterio de docs/007 §5.12.J
+
+| J | Resultado | Nivel | Evidencia |
+| --- | --- | --- | --- |
+| 1 Catálogo: 8 ids únicos con el texto exacto | OK | A | `guides.ts` coincide palabra por palabra con la tabla C y con §7.1 (revisión propia de los 8 textos) y `guides.test.ts` «tiene exactamente los 8 ids únicos con el texto aprobado» |
+| 2 Clave `guias_v1_` + id, caracteres no admitidos a `_`, `/^[A-Za-z0-9._-]+$/` | OK | A | `guideStorageKey`; `guides.test.ts` «guias_v1_ + id y reemplaza lo no admitido» |
+| 3 Solo `{v:1,vistas}` con ids del catálogo, sin duplicados ni datos financieros | OK | A | `serializeGuideRecord` solo emite versión e ids en orden de catálogo; `guides.test.ts` «nunca guarda datos financieros ni de identidad»; `App.guides.test` compara el valor guardado con `guideRecord(...)` |
+| 4 Lectura tolerante; versión 2 no se sobrescribe | OK | A | `parseGuideRecord`: ausente, JSON inválido, forma inesperada, ids desconocidos ignorados y `v > 1` bloqueada; `markSeen` y `reset` no escriben si `locked` (pruebas «lectura tolerante» y «no sobrescribe una versión mayor») |
+| 5 Fallo de lectura o de escritura: sin romper, sin reaparecer, sin error | OK con observación | A | `use-guides.test` y `guides.test.tsx` J5. Ver UXQA-R5-03 (lectura fallida y escritura que sí funciona) |
+| 6 Con la lectura pendiente no hay guía | OK | A | `ready` falso hasta resolver; `use-guides.test` y `guides.test.tsx` J6 |
+| 7 `cuentas-vacio` + vacío; Entendido descarta y no vuelve al re-montar | OK | A | `guides.test.tsx` «sin cuentas: guía + vacío…» |
+| 8 Cada guía con su condición y sin ella con datos, carga, error o cuenta archivada | OK | A | Mis cuentas, Crear cuenta, Detalle, Calendario, Reportes y Categorías con pruebas positivas y negativas; Nuevo movimiento no aparece al editar ni archivada. Condiciones en código: `activeCount === 0 && archivedCount === 0`, `activeCount >= 2` (D5), `monthEmpty && weekEmpty && !archivada` (sin filtro), `entries.size === 0 && !archivada`, `cantidad === 0` sin error, `loaded && !archivada` |
+| 9 Nunca dos `GuideCard` a la vez | OK | A | Una sola llamada a `useGuide` por pantalla; `pickGuide` devuelve la primera del catálogo; solo se monta la pestaña activa y la ruta superior de la pila (`MainNavigator` if/else por `route.name`) |
+| 10 [Entendido] y [✕] «Cerrar ayuda», 48 dp | OK | A | `guideClose` `minWidth/minHeight: sizes.touchMin` (48); [Entendido] es `Button` (`minHeight` 48); prueba GuideCard J10 |
+| 11 Completar la acción descarta | OK | A | `NewAccountScreen` descarta `cuentas-vacio` y `cuenta-crear` solo tras guardar; `TransactionFormScreen` descarta `movimiento-nuevo` y `cuenta-detalle` solo tras guardar (no en error) |
+| 12 No reaparece al cambiar de cuenta, de pestaña ni al re-montar | OK | A | Prueba del navegador (cuenta, pestaña y «Ver ayudas otra vez» sin recargar) |
+| 13 «Ver ayudas otra vez»: texto, subtítulo, vacía, aviso, efecto inmediato | OK | A | `HELP_RESET_DONE` exacto; `resetAll` pone `seen: []` en memoria tras guardar; sin confirmación; fila entre «Cuenta» y «Sesión» (encabezado «AYUDA») |
+| 14 `busy`, un solo guardado, error exacto, fila reactivada | OK | A | `resettingHelp` (ref) + `disabled`/`accessibilityState {disabled, busy}`; prueba de doble toque con una escritura; `HELP_RESET_ERROR` exacto en `ErrorBox`; `helpError` se limpia al reintentar |
+| 15 Dos usuarios independientes; sin ids del anterior | OK | A | `use-guides.test` (tres pruebas de cambio de usuario) y `guides.test.tsx` (navegador); ver 14.4 |
+| 16 `signOut` no borra la clave de guías | OK con matiz | A | `guides.ts` no tiene operación de borrado (solo `getItemAsync`/`setItemAsync`; `deleteItemAsync` solo aparece en `session-storage.ts`, sin cambios); `App.guides.test` comprueba que la sesión se limpia y que la clave `guias_v1_sub-1` se conserva y no vuelve la guía; `guides.test.ts` comprueba que `deleteItemAsync` nunca se llama. Matiz: la prueba de `App` usa un almacén de guías en memoria, no el espía de `SecureStore.deleteItemAsync` con los dos nombres de sesión que pide la letra del criterio; la garantía es estructural |
+| 17 Cada vacío con su texto exacto, su acción y la ilustración decorativa | OK con observación | A | Ver 14.3. `importantForAccessibility="no"`, `accessibilityElementsHidden`, `accessible={false}`, sin etiqueta |
+| 18 `fontScale` 1,75 y 2: sin ilustración, texto y acción sí, guía visible | OK | A | `showArt = !compact && !large`; ni dibujo ni círculo con emoji ni hueco; `GuideCard` solo oculta el 💡 y conserva todo; pruebas GuideCard y EmptyState |
+| 19 Acciones conservan `testID`, etiquetas y 48 dp | OK | A | «Limpiar filtros» (`secondary`), «+ Anotar en este día», «Crear mi primera cuenta» (`tall`, 52 dp, `stateActionWide`) |
+| 20 Regresión | OK | A | Suite completa 42/1543; `package.json`, `session-storage`, `auth-service`, API y navegación sin cambios; tsc, eslint y Prettier limpios |
+| 21 Persistencia tras cerrar desde recientes | PENDIENTE | D | Requiere teléfono. En Jest solo se demuestra el re-montaje con el mismo almacén simulado |
+| 22 Guía no tapa FAB, pestañas ni barra; con teclado no empuja el monto | PENDIENTE | D | Por código la guía va dentro del contenido con scroll, no flota; el teclado no se prueba en Jest |
+| 23 TalkBack (orden, botones, foco, ilustraciones) | PENDIENTE | D | Ver UXQA-R5-01 |
+| 24 Fuente 130, 175 y 200 % | PENDIENTE | D | La lógica por `fontScale` está probada con `mockWindow`, no con la fuente real de Android |
+| 25 Anchos 360 y 412 dp, ilustración centrada | PENDIENTE | D | |
+| 26 Dos cuentas de Google en el mismo teléfono | PENDIENTE | D | Solo la simulación de Jest con dos ids |
+
+### 14.3 Textos y estados vacíos (nivel A, revisión de código y pruebas)
+
+| Vacío | Texto en el código | Ilustración | Resultado |
+| --- | --- | --- | --- |
+| Mis cuentas sin cuentas | Título «Todavía no tienes cuentas»; mensaje «Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta.»; [Crear mi primera cuenta] `tall` | Círculo con 🐷 (la alcancía es de R6, D6) | OK |
+| Mis cuentas, solo archivadas | «No tienes cuentas activas. Puedes crear una o desarchivar una de las anteriores.»; mismo botón | Círculo con 🐷 | OK |
+| Pestaña Cuenta recién creada | «Tu cuenta está lista.» + «Anota tu primer gasto o ingreso con el botón +.» | Hoja (PNG) | OK |
+| Pestaña Cuenta, semana vacía | «Esta semana no has anotado movimientos.» + «Toca + para registrar el primero.» (archivada: solo la primera frase) | Hoja (PNG) | OK con observación 14.6-3 |
+| Pestaña Cuenta, filtro sin resultados | «Esta semana no tienes gastos/ingresos anotados.» | Ninguna (`compact`) | OK |
+| Historial vacío | Título «Aún no hay movimientos» + mensaje «Cuando anotes el primero, aparecerá aquí.» | Hoja (PNG) | OK con observación 14.6-4 |
+| Historial filtrado | «Ningún movimiento coincide con estos filtros.» + [Limpiar filtros] `secondary` | Embudo (PNG) | OK |
+| Calendario, mes y día | «No hay movimientos en este mes.» / «Este día no tiene movimientos registrados.» | Ninguna (`compact`) | OK |
+| Reportes | «Sin movimientos en este período. Prueba con otro mes/otro año/otro rango.» | Barras (PNG) | OK |
+| Categorías | «Aún no tienes categorías de gasto/ingreso. Crea la primera.» (archivada: sin la última frase) | Círculo con 🏷️ (sin etiqueta aprobada, D6) | OK |
+
+Ilustraciones: en `app/assets/illustrations/` solo hay `vacio-movimientos.png`, `vacio-filtros.png` y `vacio-reportes.png` (288 x 288, RGBA, idénticos byte a byte a los de `docs/design/assets/illustrations/`, `cmp`). Vistos como imagen: hoja con «+» ámbar, embudo azul y barras violeta con una amarilla, sobre su círculo de tinte; coinciden con docs/008 §9. No hay alcancía ni etiqueta (correcto según D6). `EmptyState` las muestra con `<Image style={{width: 96, height: 96}} resizeMode="contain">`, es decir con ancho y alto fijos. Metro las incluye con `require`; el empaquetado real no se verificó (no se ejecutó build).
+
+### 14.4 Verificaciones solicitadas con atención
+
+| Punto | Resultado | Razonamiento |
+| --- | --- | --- |
+| No bloquean; una a la vez; solo con datos cargados y «sin datos»; no se repiten; completar descarta | OK (A) | `GuideCard` es una `Animated.View` dentro del flujo, sin `Modal` ni posición absoluta ni foco; `useGuide` exige `ready` y la condición de la pantalla; las condiciones se evalúan solo con `status === 'ready'` |
+| Persistencia por usuario y formato | OK (A) | Clave `guias_v1_<id>` y valor `{"v":1,"vistas":[...]}` (14.2, J2 a J4). Sin montos, nombres, correos ni ids de cuenta |
+| `deleteItemAsync` nunca llamado en `signOut` | OK (A) | 14.2, J16 |
+| Cambio de cuenta sin ayudas incorrectas | OK (A) | Las guías son por usuario; la barra de solo lectura y el cambio de cuenta solo afectan a las condiciones «sin datos», que dependen de la cuenta cargada |
+| Cambio de usuario: ¿fuga de la clave de otro usuario? | **Sin fuga hallada** (A, código y pruebas) | (a) `dismiss` y `resetAll` capturan el `userId` de su render: un descarte tardío del usuario A escribe solo en `guias_v1_A` (prueba «un descarte tardío…»). (b) `setLoaded` solo actualiza si `previous.userId === userId`. (c) `current` es `null` mientras `loaded.userId !== userId`, así que al cambiar a B no se ven ids de A y no hay guía hasta leer B. (d) La lectura lenta de A se descarta con `cancelled` (prueba «una lectura lenta…»). (e) `known` solo se usa si `latest.current.userId === userId`. (f) Al cerrar sesión el proveedor se desmonta (el árbol cambia a `LoginScreen`), y entre usuarios `MainNavigator` se remonta por `key`. Riesgos residuales sin efecto financiero: la carga (`store.load`) no pasa por la cola por clave, y un descarte hecho antes de terminar de leer podría ser pisado en memoria por la lectura; no es alcanzable porque no hay guía visible antes de `ready` |
+| «Ver ayudas otra vez» | OK (A) | `busy`, error, doble toque, efecto inmediato y aviso verificados (J13 y J14). Con una versión mayor `reset` no escribe pero `resetAll` devuelve true y la pantalla muestra el aviso: coherente, porque esa versión se lee como vacía (todas las guías se muestran) |
+| `GuideCard`: ✕ 48 dp, [Entendido] 48 dp, ancho completo a 130 %, movimiento reducido | OK (A) con UXQA-R5-02 | Con movimiento reducido no anima |
+| Margen 16/20 | OK (A, código) | La guía no pone margen lateral propio: hereda el de la pantalla (`useScreenContainerStyle`, `Screen padded`, `useScreenMargin` en Detalle y en el formulario), de modo que sigue la regla de R4 D6. Medición real: D |
+| Colores literales | OK | Las líneas añadidas por R5 en `app/src` no contienen ningún literal `#RRGGBB` ni `rgb(`; todo sale de `colors`, `moduleColors` y `radii` |
+| Criterios previos R2 a R4 | Sin regresión | Suite completa 42/1543. Los textos que cambian son los de los vacíos descritos en 14.3 |
+
+### 14.5 Lo declarado por el implementador
+
+| Punto | Clasificación | Evidencia y razonamiento |
+| --- | --- | --- |
+| (a) Foco de accesibilidad al encabezado al descartar: no implementado | **Defecto bajo UXQA-R5-01** (pasa a medio si TalkBack confirma la pérdida de foco) | docs/007 §5.12.G.3 lo pide. Es la misma decisión que en R2 a R4 (no se fuerza `setAccessibilityFocus`; se confía en el orden de lectura). Al desmontarse el botón pulsado, Android deja el foco sin destino claro. No se puede demostrar sin TalkBack (J23) |
+| (b) Animación de salida de 120 ms omitida | **Conforme a docs/007; discrepancia menor con docs/008 §9.2** | docs/007 §5.12.C dice «sin animación obligatoria» y la regla de memoria de docs/008 §9.2 exige que la tarjeta desaparezca al instante. Omitirla es la opción más simple y no afecta ningún criterio J. Observación 14.6-1: documentar la omisión en docs/008 |
+| (c) Fila de Ayuda con estilo de `Row` (15/700, radio 10) frente a 16/600 (`greeting`) y radio 12 | **Observación; contradicción documental, no defecto de código** | docs/008 §9.4 dice a la vez «mismo estilo que las demás filas de Más» y fija 16/600 con mosaico de radio 12 y glifo de 20 sp. El código sigue la primera frase: todas las filas de Más comparten tipografía, radio 10 y glifo de tamaño por defecto, por lo que la fila nueva es coherente con su entorno. Alinear una sola fila con la medida de §9.4 la haría distinta de «Datos de cuenta», «Categorías» y «Exportar». Se devuelve a `mobile-visual-designer` para decidir si se cambian las medidas del documento o todas las filas (UXQA-R5-04 si se confirma el cambio) |
+| (d) Escritura con lectura fallida: reescribe solo lo conocido en memoria | **Defecto bajo UXQA-R5-03** | Sí puede perder descartes previos, ver abajo |
+
+### 14.6 Defectos
+
+| ID | Pantalla | Caso | Severidad | Pasos | Esperado | Obtenido | Evidencia / archivo |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| UXQA-R5-01 | Todas las guías | ACC; docs/007 §5.12.G.3; J23 | Baja (pendiente de TalkBack; media si se confirma) | Con TalkBack, abrir una pantalla con guía, ir a [Entendido] o «Cerrar ayuda» y activarlo | Al descartar, el foco de accesibilidad pasa al encabezado de la pantalla, sin anuncio extra | No hay código que mueva el foco: el nodo enfocado se desmonta y el foco queda sin destino definido (lo decide TalkBack; puede saltar al inicio o a un elemento arbitrario) | `app/src/screens/ui.tsx` (`GuideCard`, `onDismiss` sin `AccessibilityInfo.setAccessibilityFocus`). Nivel A (código); comportamiento real sin demostrar (D) |
+| UXQA-R5-02 | Todas las guías | EST, microinteracción; docs/008 §9.2 | Baja | Abrir cualquier pantalla donde aparezca una guía (movimiento reducido apagado) | La tarjeta aparece con opacidad 0 a 1 en 180 ms | `opacity` nace en 1 (`new Animated.Value(1)`) y solo pasa a 0 cuando `isReduceMotionEnabled()` resuelve: la tarjeta se pinta completa, desaparece un instante y luego se desvanece (parpadeo). Con movimiento reducido no hay parpadeo | `app/src/screens/ui.tsx` (`GuideCard`, `useRef(new Animated.Value(1))` y `opacity.setValue(0)` dentro del `.then`). Nivel A (código); se aprecia en D. `Snackbar` ya empieza en 0 |
+| UXQA-R5-03 | Persistencia | EST; docs/007 §5.12.B.8 y J5 | Baja | 1) El usuario tiene `vistas: ["calendario"]` guardado. 2) Una lectura de SecureStore falla de forma puntual al arrancar (`load` devuelve «ninguna descartada»). 3) El usuario descarta otra guía y la escritura sí funciona | Las guías ya descartadas no se vuelven a mostrar y no se pierde lo guardado | `markSeen` vuelve a leer, cae al `catch` de `readRecord` (vacío) y escribe `addSeen([], known + nuevas)` con lo conocido en memoria, que también está vacío: se sobrescribe `calendario` y esa guía reaparece. Un valor corrupto se sobrescribe a propósito (correcto); el problema es confundir «no pude leer» con «no hay nada». Efecto: solo ayudas repetidas, sin datos financieros ni bloqueo | `app/src/lib/guides.ts` (`readRecord`, `markSeen`, `reset`); `app/src/hooks/use-guides.tsx` (`known`). Nivel A (código); sin prueba que lo cubra. Sugerencia: distinguir el fallo de lectura de «ausente» y, ante un fallo, no sobrescribir (queda descartada solo en memoria) |
+
+### 14.7 Observaciones sin defecto
+
+1. Documentar en docs/008 §9.2 la omisión de la animación de salida y la regla de que la guía desaparece al instante (declarado (b)).
+2. `cuentas-lista` (abrir una cuenta), `calendario` (tocar un día con movimientos) y `reportes` («Ver movimientos ›») se descartan al hacer la acción aunque la guía nunca se haya mostrado (por ejemplo, con una sola cuenta o con datos). Conforme a docs/007 §5.12.C («se descarta también al»), pero el usuario que ya tenía datos no verá después esa guía cuando se cumpla su condición. Decisión de producto, sin cambio.
+3. Pestaña Cuenta con cuenta archivada: la primera frase del vacío («Esta semana no has anotado movimientos.») se muestra como mensaje `body` en `text2`, no como título `h2` como en la cuenta activa; el estilo cambia entre las dos variantes del mismo vacío. docs/008 §9.3 no distingue las dos.
+4. Historial vacío y semana vacía parten la frase en título y mensaje (docs/008 §9.3); docs/007 §5.12.F y §7.2 tienen una sola frase. Para un lector de pantalla son dos elementos. Aceptado por docs/008; alinear docs/007.
+5. Pestaña Cuenta: al cambiar de mes con la guía visible, `MonthSummary` vuelve a cargar, `monthEmpty` pasa a `null` y la guía desaparece mientras carga, con salto de diseño al reaparecer. Es una consecuencia de exigir «datos cargados» (regla B.3); lo mismo ocurre en Calendario al cambiar de mes. Sin cambio exigido.
+6. Con cuenta recién creada coexisten la guía `cuenta-detalle` y el vacío «Tu cuenta está lista»: dos mensajes sobre el botón «+», con texto distinto. Aceptado en docs/007 §5.12.C (notas).
+7. Pestañas de Más: `Row` ahora aplica opacidad 0,85 al presionar a todas las filas, no solo a la de Ayuda (cambio inocuo y coherente con docs/008 §9.4).
+8. `GuideCard` agrupa el texto, ✕ y [Entendido] como elementos separados, con ✕ antes de [Entendido] en el orden de lectura; la etiqueta «Cerrar ayuda» es correcta. Se valida con TalkBack (J23).
+9. `tsconfig.json` en la raíz del repositorio (`extends expo/tsconfig.base`, sin `include`) está sin seguimiento y es anterior a R5 (fecha 15 de octubre); no forma parte de R5. Conviene que quien coordina decida si se versiona o se descarta antes del commit.
+
+### 14.8 Pendientes (no demostrados) y motivo
+
+Todo el nivel D por falta de emulador, dispositivo y TalkBack: J21 a J26 (persistencia tras cerrar desde recientes, guía y FAB, barra de pestañas y barra del sistema, teclado abierto en Nuevo movimiento, TalkBack, fuente 130, 175 y 200 %, 360 y 412 dp, dos cuentas de Google). Tampoco se hizo el nivel R (comparación con `docs/design/capturas/` y con el prototipo), no se tomaron capturas de la app y no se comprobó el empaquetado de los PNG con Metro ni la fuente de los emojis (💡, 🐷, 🏷️) en Android. Mientras tanto ninguna de estas filas puede darse por validada en dispositivo. Pendiente de otros agentes: `qa-engineer` repite typecheck, lint y regresión; la alcancía de Mis cuentas sigue obligatoria antes del cierre del rediseño (R6).

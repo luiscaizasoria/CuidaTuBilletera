@@ -108,9 +108,9 @@ describe('HistoryScreen: estados', () => {
   it('vacío sin filtros y vacío con filtros', async () => {
     const api = makeApi({ listTransactions: jest.fn(async () => pageResult([], 1, 0)) });
     await renderScreen(api);
-    expect(
-      await screen.findByText('Aún no hay movimientos. Cuando anotes el primero, aparecerá aquí.'),
-    ).toBeTruthy();
+    // R5 (docs/008 §9.3): título y mensaje en dos textos.
+    expect(await screen.findByText('Aún no hay movimientos')).toBeTruthy();
+    expect(screen.getByText('Cuando anotes el primero, aparecerá aquí.')).toBeTruthy();
     expect(screen.queryByText('Limpiar filtros')).toBeNull();
     await openFilters();
     await fireEvent.press(screen.getByRole('radio', { name: 'Gastos' }));

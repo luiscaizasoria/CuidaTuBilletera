@@ -1,8 +1,9 @@
 // Pestaña Cuenta del Detalle (docs/007 §5.4): saldo, resumen del mes y movimientos de la semana.
 // El saldo llega del contenedor (fuente única); los bloques cargan y fallan por separado.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { useGuide } from '../hooks/use-guides';
 import { useLoader } from '../hooks/use-loader';
 import { monthTitle, parseMonthKey, shiftMonth, monthKey, weekRange } from '../lib/calendar';
 import { todayLocal } from '../lib/dates';
@@ -13,7 +14,7 @@ import { colors, depth, radii, shadows, sizes, tabularNums, typography } from '.
 import { ArchivedNotice, balanceText } from './account-ui';
 import type { BalanceStatus } from './navigation';
 import TransactionRow, { categoryMap } from './TransactionRow';
-import { Button, Segmented, useScreenMargin } from './ui';
+import { Button, EmptyState, GuideCard, Segmented, useScreenMargin } from './ui';
 
 export const WEEK_LIMIT = 10;
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
@@ -49,6 +50,13 @@ export default function AccountSummaryTab({
   const next = shiftMonth(ym.year, ym.month, 1);
   const margin = useScreenMargin();
   const saldo = balanceText(account.saldo, balance);
+  // Con lo ya cargado: sin movimientos en el mes ni en la semana mostrados (null = sin saber aún).
+  const [monthEmpty, setMonthEmpty] = useState<boolean | null>(null);
+  const [weekEmpty, setWeekEmpty] = useState<boolean | null>(null);
+  const { guide, dismissGuide } = useGuide(
+    ['cuenta-detalle'],
+    !account.archivada && monthEmpty === true && weekEmpty === true,
+  );
 
   return (
     <ScrollView
@@ -59,6 +67,7 @@ export default function AccountSummaryTab({
       ]}
     >
       {account.archivada ? <ArchivedNotice /> : null}
+      {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
 
       <View testID="balance-card" style={[styles.balanceCard, shadows.raised]}>
         <View style={styles.band} {...hidden} />
@@ -104,7 +113,13 @@ export default function AccountSummaryTab({
           onPress={() => next && onMonthChange(monthKey(next.year, next.month))}
         />
       </View>
-      <MonthSummary api={api} accountId={account.id} year={ym.year} month={ym.month} />
+      <MonthSummary
+        api={api}
+        accountId={account.id}
+        year={ym.year}
+        month={ym.month}
+        onEmpty={setMonthEmpty}
+      />
 
       <WeekBlock
         api={api}
@@ -113,6 +128,7 @@ export default function AccountSummaryTab({
         justCreated={justCreated}
         onSeeAll={onSeeAll}
         onOpenTransaction={onOpenTransaction}
+        onEmpty={setWeekEmpty}
       />
     </ScrollView>
   );
@@ -154,11 +170,13 @@ function MonthSummary({
   accountId,
   year,
   month,
+  onEmpty,
 }: {
   api: ResourcesApi;
   accountId: string;
   year: number;
   month: number;
+  onEmpty: (empty: boolean | null) => void;
 }) {
   const { authorizedCall } = useAuth();
   const range = monthRange(year, month);
@@ -166,6 +184,9 @@ function MonthSummary({
     () => authorizedCall((token) => api.getReportSummary(token, { accountId, ...range })),
     `${accountId}|${range.desde}`,
   );
+  useEffect(() => {
+    onEmpty(state.status === 'ready' ? state.data.cantidad === 0 : null);
+  }, [state, onEmpty]);
   if (state.status === 'loading') {
     return <ActivityIndicator size="small" testID="month-summary-loading" style={styles.spacer} />;
   }
@@ -218,6 +239,7 @@ function WeekBlock({
   justCreated,
   onSeeAll,
   onOpenTransaction,
+  onEmpty,
 }: {
   api: ResourcesApi;
   account: Account;
@@ -225,6 +247,7 @@ function WeekBlock({
   justCreated: boolean;
   onSeeAll: () => void;
   onOpenTransaction: (transaction: Transaction) => void;
+  onEmpty: (empty: boolean | null) => void;
 }) {
   const { authorizedCall } = useAuth();
   const [filter, setFilter] = useState<WeekFilter>('todos');
@@ -246,6 +269,10 @@ function WeekBlock({
       }),
     `${account.id}|${week?.desde ?? ''}|${filter}`,
   );
+  // Con filtro un vacío no prueba que la semana no tenga movimientos.
+  useEffect(() => {
+    onEmpty(state.status === 'ready' && filter === 'todos' ? state.data.items.length === 0 : null);
+  }, [state, filter, onEmpty]);
 
   return (
     <View>
@@ -308,24 +335,37 @@ function WeekEmpty({
 }) {
   if (filter !== 'todos') {
     return (
-      <Text style={styles.emptyTitle}>
-        Esta semana no tienes {filter === 'gasto' ? 'gastos' : 'ingresos'} anotados.
-      </Text>
+      <EmptyState
+        module="movimientos"
+        compact
+        message={`Esta semana no tienes ${filter === 'gasto' ? 'gastos' : 'ingresos'} anotados.`}
+      />
     );
   }
   if (justCreated) {
     return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>Tu cuenta está lista.</Text>
-        <Text style={styles.small}>Anota tu primer gasto o ingreso con el botón +.</Text>
-      </View>
+      <EmptyState
+        module="movimientos"
+        art="movimientos"
+        title="Tu cuenta está lista."
+        message="Anota tu primer gasto o ingreso con el botón +."
+      />
     );
   }
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyTitle}>Esta semana no has anotado movimientos.</Text>
-      {archived ? null : <Text style={styles.small}>Toca + para registrar el primero.</Text>}
-    </View>
+  // Archivada: sin la segunda línea (no se puede anotar).
+  return archived ? (
+    <EmptyState
+      module="movimientos"
+      art="movimientos"
+      message="Esta semana no has anotado movimientos."
+    />
+  ) : (
+    <EmptyState
+      module="movimientos"
+      art="movimientos"
+      title="Esta semana no has anotado movimientos."
+      message="Toca + para registrar el primero."
+    />
   );
 }
 

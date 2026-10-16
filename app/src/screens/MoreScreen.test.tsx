@@ -49,16 +49,18 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('MoreScreen: estructura y navegación', () => {
-  it('título, secciones CUENTA y SESIÓN, correo y sin eliminar ni conciliar', async () => {
+  it('título, secciones CUENTA, AYUDA y SESIÓN, correo y sin eliminar ni conciliar', async () => {
     await renderMore();
     expect(screen.getByRole('header', { name: 'Más' })).toBeTruthy();
     expect(screen.getByRole('header', { name: 'CUENTA' })).toBeTruthy();
+    expect(screen.getByRole('header', { name: 'AYUDA' })).toBeTruthy();
     expect(screen.getByRole('header', { name: 'SESIÓN' })).toBeTruthy();
     expect(screen.getByText('Conectado como')).toBeTruthy();
     expect(screen.getByText('ana@example.com')).toBeTruthy();
     expect(screen.queryByText(/Eliminar/)).toBeNull();
     expect(screen.queryByText(/Conciliar/)).toBeNull();
-    expect(screen.queryByText(/Ver ayudas otra vez/)).toBeNull();
+    // R5: «Ver ayudas otra vez» existe y vive en Ayuda, no en Opciones avanzadas.
+    expect(screen.getByText('Ver ayudas otra vez')).toBeTruthy();
   });
 
   it('Categorías y Exportar navegan', async () => {

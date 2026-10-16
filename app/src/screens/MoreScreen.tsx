@@ -1,16 +1,30 @@
 // Pestaña Más del Detalle (docs/007 §5.9): datos de la cuenta, categorías, exportar, sesión y
 // opciones avanzadas (archivar). Sin eliminar cuenta ni conciliar.
 import { useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { useGuides } from '../hooks/use-guides';
 import { useMutation } from '../hooks/use-loader';
 import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, moduleColors, radii, shadows, typography } from '../theme/tokens';
 import { ArchivedNotice } from './account-ui';
 import SessionBanner from './SessionBanner';
-import { Button, screenStyles as s, useScreenMargin } from './ui';
+import { Button, ErrorBox, screenStyles as s, useScreenMargin } from './ui';
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
+
+export const HELP_RESET_DONE = 'Listo. Verás las ayudas otra vez.';
+export const HELP_RESET_ERROR = 'No pudimos restablecer las ayudas. Inténtalo de nuevo.';
 
 export default function MoreScreen({
   api,
@@ -19,6 +33,7 @@ export default function MoreScreen({
   onArchived,
   onOpenCategories,
   onOpenExport,
+  onNotify,
   bottomInset = 0,
 }: {
   api: ResourcesApi;
@@ -27,10 +42,16 @@ export default function MoreScreen({
   onArchived: (account: Account) => void;
   onOpenCategories: () => void;
   onOpenExport: () => void;
+  // Aviso breve (Snackbar del navegador).
+  onNotify?: (message: string) => void;
   bottomInset?: number;
 }) {
   const { authorizedCall, user, signOut } = useAuth();
   const margin = useScreenMargin();
+  const { resetAll } = useGuides();
+  const resettingHelp = useRef(false);
+  const [helpBusy, setHelpBusy] = useState(false);
+  const [helpError, setHelpError] = useState(false);
   const [editing, setEditing] = useState(false);
   const [nombre, setNombre] = useState(account.nombre);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -84,6 +105,19 @@ export default function MoreScreen({
         { text: 'Archivar', style: 'destructive', onPress: () => void doArchive() },
       ],
     );
+  }
+
+  // «Ver ayudas otra vez»: sin confirmación (reversible, no toca datos). Un solo guardado a la vez.
+  async function showHelpAgain() {
+    if (resettingHelp.current) return;
+    resettingHelp.current = true;
+    setHelpBusy(true);
+    setHelpError(false);
+    const ok = await resetAll();
+    resettingHelp.current = false;
+    setHelpBusy(false);
+    if (ok) onNotify?.(HELP_RESET_DONE);
+    else setHelpError(true);
   }
 
   return (
@@ -147,6 +181,22 @@ export default function MoreScreen({
       </View>
 
       <Text accessibilityRole="header" style={styles.sectionHeader}>
+        AYUDA
+      </Text>
+      <View style={[styles.list, shadows.card]}>
+        <Row
+          icon="💡"
+          title="Ver ayudas otra vez"
+          subtitle="Vuelve a mostrar las guías que cerraste."
+          busy={helpBusy}
+          tall
+          last
+          onPress={() => void showHelpAgain()}
+        />
+      </View>
+      {helpError ? <ErrorBox message={HELP_RESET_ERROR} /> : null}
+
+      <Text accessibilityRole="header" style={styles.sectionHeader}>
         SESIÓN
       </Text>
       <View style={[styles.list, styles.session, shadows.card]}>
@@ -201,6 +251,8 @@ function Row({
   expanded,
   onPress,
   last = false,
+  busy = false,
+  tall = false,
 }: {
   icon: string;
   title: string;
@@ -208,27 +260,44 @@ function Row({
   expanded?: boolean;
   onPress: () => void;
   last?: boolean;
+  // Operación en curso: fila deshabilitada con indicador en lugar del chevron.
+  busy?: boolean;
+  // Fila de 56 dp (Ayuda); con fuente ≥ 175 % oculta el mosaico del glifo.
+  tall?: boolean;
 }) {
   const expandable = expanded !== undefined;
+  const { fontScale } = useWindowDimensions();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityHint={subtitle}
-      accessibilityState={expandable ? { expanded } : {}}
+      accessibilityState={busy ? { disabled: true, busy: true } : expandable ? { expanded } : {}}
+      disabled={busy}
       onPress={onPress}
-      style={[styles.row, !last && styles.rowDivider]}
+      style={({ pressed }) => [
+        styles.row,
+        tall && styles.rowTall,
+        !last && styles.rowDivider,
+        pressed && styles.rowPressed,
+      ]}
     >
-      <View style={styles.tile} {...hidden}>
-        <Text>{icon}</Text>
-      </View>
+      {tall && fontScale >= 1.75 ? null : (
+        <View style={styles.tile} {...hidden}>
+          <Text>{icon}</Text>
+        </View>
+      )}
       <View style={styles.flex}>
         <Text style={styles.rowTitle}>{title}</Text>
         {subtitle ? <Text style={styles.small}>{subtitle}</Text> : null}
       </View>
-      <Text style={styles.chevron} {...hidden}>
-        {expandable && expanded ? '▾' : '›'}
-      </Text>
+      {busy ? (
+        <ActivityIndicator size="small" color={colors.text2} testID="row-busy" />
+      ) : (
+        <Text style={styles.chevron} {...hidden}>
+          {expandable && expanded ? '▾' : '›'}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -241,6 +310,8 @@ const styles = StyleSheet.create({
   list: { backgroundColor: colors.surface, borderRadius: radii.lg, paddingHorizontal: 16 },
   session: { paddingVertical: 12, gap: 8 },
   row: { minHeight: 48, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowTall: { minHeight: 56 },
+  rowPressed: { opacity: 0.85 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: colors.border },
   tile: {
     width: 36,

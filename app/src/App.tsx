@@ -2,9 +2,11 @@ import { StatusBar } from 'expo-status-bar';
 import { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { AuthProvider, useAuth } from './hooks/use-auth';
+import { GuidesProvider } from './hooks/use-guides';
 import { createAuthService, type AuthService } from './lib/auth-service';
 import { readConfig } from './lib/config';
 import { createGoogleProvider } from './lib/google-auth';
+import type { GuideStorage } from './lib/guides';
 import { createResourcesApi, type ResourcesApi } from './lib/resources-api';
 import { createSessionApi } from './lib/session-api';
 import { secureSessionStorage } from './lib/session-storage';
@@ -30,7 +32,7 @@ function createDefaultResourcesApi(): ResourcesApi {
 
 // Un solo `Screen` por ruta (docs/003, Decisión R2 D6): lo pone el navegador o esta raíz, nunca
 // las pantallas reutilizadas.
-function Root({ api }: { api: ResourcesApi }) {
+function Root({ api, guideStorage }: { api: ResourcesApi; guideStorage?: GuideStorage }) {
   const { status, user } = useAuth();
 
   if (status === 'initializing') {
@@ -45,7 +47,10 @@ function Root({ api }: { api: ResourcesApi }) {
   // Sin disponibilidad temporal la sesión se conserva: se muestra la pantalla principal con reintento.
   // `key` por usuario: otro usuario monta un navegador nuevo, sin rastro del anterior.
   return status === 'authenticated' || status === 'unavailable' ? (
-    <MainNavigator key={user?.id ?? 'none'} api={api} />
+    // Las guías se leen por usuario; cerrar sesión desmonta el proveedor pero no borra la preferencia.
+    <GuidesProvider userId={user?.id ?? null} storage={guideStorage}>
+      <MainNavigator key={user?.id ?? 'none'} api={api} />
+    </GuidesProvider>
   ) : (
     <Screen scroll={false} padded={false}>
       <LoginScreen />
@@ -57,9 +62,11 @@ function Root({ api }: { api: ResourcesApi }) {
 export default function App({
   service,
   resourcesApi,
+  guideStorage,
 }: {
   service?: AuthService;
   resourcesApi?: ResourcesApi;
+  guideStorage?: GuideStorage;
 }) {
   const resolved = useMemo(() => service ?? createDefaultService(), [service]);
   const api = useMemo(() => resourcesApi ?? createDefaultResourcesApi(), [resourcesApi]);
@@ -68,7 +75,7 @@ export default function App({
     <>
       {resolved ? (
         <AuthProvider service={resolved}>
-          <Root api={api} />
+          <Root api={api} guideStorage={guideStorage} />
         </AuthProvider>
       ) : (
         <Screen scroll={false} padded={false}>
