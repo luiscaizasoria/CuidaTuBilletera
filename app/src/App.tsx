@@ -11,6 +11,7 @@ import { secureSessionStorage } from './lib/session-storage';
 import ConfigMissingScreen from './screens/ConfigMissingScreen';
 import LoginScreen from './screens/LoginScreen';
 import MainNavigator from './screens/MainNavigator';
+import { Screen } from './screens/ui';
 
 function createDefaultService(): AuthService | null {
   const config = readConfig();
@@ -58,14 +59,17 @@ export default function App({
 
   return (
     <>
-      {resolved ? (
-        <AuthProvider service={resolved}>
-          <Root api={api} />
-        </AuthProvider>
-      ) : (
-        <ConfigMissingScreen />
-      )}
-      <StatusBar style="auto" />
+      {/* R2 debe retirar este envoltorio al migrar cada pantalla a Screen (evita relleno duplicado). */}
+      <Screen scroll={false} padded={false} keyboardAvoiding={false} statusBar="bg">
+        {resolved ? (
+          <AuthProvider service={resolved}>
+            <Root api={api} />
+          </AuthProvider>
+        ) : (
+          <ConfigMissingScreen />
+        )}
+      </Screen>
+      <StatusBar style="dark" />
     </>
   );
 }
