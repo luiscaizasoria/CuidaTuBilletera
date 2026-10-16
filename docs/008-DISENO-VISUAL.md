@@ -1,6 +1,6 @@
 # 008 - Diseño visual del rediseño de CuidaTuBilletera
 
-Estado: PROPUESTA para aprobación del usuario, **iteración 3**. La apariencia de la iteración 2 fue **rechazada** («la pantalla inicial sigue dominada por el verde; aunque cambiaste tokens, visualmente no refleja la imagen de referencia; quiero una app más alegre, colorida y atractiva»). Esta versión rehace la composición, no solo los tokens (sección 16). Autor: `mobile-visual-designer`. Complementa docs/007-DISENO-UX.md (navegación, flujos, textos, §3.6 color por módulo y §5.2 Mis cuentas) y no lo contradice. No se modificó nada en `/app` ni en `/api`, ni `app.json`, ni los assets activos, ni se instaló nada.
+Estado: **iteración 3 APROBADA por el usuario con el diseño completo (paso 347, docs/003 Decisión R0 D6)**. La apariencia de la iteración 2 fue **rechazada** («la pantalla inicial sigue dominada por el verde; aunque cambiaste tokens, visualmente no refleja la imagen de referencia; quiero una app más alegre, colorida y atractiva»). Esta versión rehace la composición, no solo los tokens (sección 16). Autor: `mobile-visual-designer`. Complementa docs/007-DISENO-UX.md (navegación, flujos, textos, §3.6 color por módulo y §5.2 Mis cuentas) y no lo contradice. No se modificó nada en `/app` ni en `/api`, ni `app.json`, ni los assets activos, ni se instaló nada.
 
 Recursos reales de esta propuesta (generados y verificados):
 
@@ -32,7 +32,7 @@ Reglas fijas:
 
 ## 2. Paleta
 
-**Estado: PENDIENTE DE APROBACIÓN (iteración 3).** Historial: paleta de la iteración 1 (fondo `#F4F9F8`, acentos azul/violeta) **rechazada**; paleta de la iteración 2 (esmeralda `#0D6152` en bienvenida a sangre, barra de contexto `brand100` verde, mosaicos pastel con melocotón en Movimientos) **rechazada por segunda vez** por dominancia del verde. Todos los valores se verifican en la sección 3 con `node docs/design/contrast.js --check` y coinciden con el `:root` del prototipo (comprobado por script: 47 valores, 0 diferencias).
+**Estado: APROBADA (iteración 3, paso 347, docs/003 Decisión R0 D6).** Historial: paleta de la iteración 1 (fondo `#F4F9F8`, acentos azul/violeta) **rechazada**; paleta de la iteración 2 (esmeralda `#0D6152` en bienvenida a sangre, barra de contexto `brand100` verde, mosaicos pastel con melocotón en Movimientos) **rechazada por segunda vez** por dominancia del verde. Todos los valores se verifican en la sección 3 con `node docs/design/contrast.js --check` y coinciden con el `:root` del prototipo (comprobado por script: 47 valores, 0 diferencias).
 
 ### 2.1 Marca (verde azulado del ícono) - uso restringido
 
@@ -371,7 +371,7 @@ Sin librerías, con `useNativeDriver: true`:
 
 ## 11. Tokens (bloque TypeScript propuesto)
 
-Para un futuro `app/src/theme/tokens.ts` (**no se crea ahora**; lo implementa `mobile-engineer` tras aprobar la paleta, decisión 15.0). Valores idénticos a `docs/design/contrast.js` y al `:root` del prototipo.
+Para un futuro `app/src/theme/tokens.ts` (se vuelca en la fase R1 de docs/009; lo implementa `mobile-engineer`; docs/003 Decisión R0 D8). Valores idénticos a `docs/design/contrast.js` y al `:root` del prototipo.
 
 ```ts
 export const colors = {
@@ -456,7 +456,7 @@ export const elevation = { card: 1, raised: 4 } as const;
 export const sizes = {
   touchMin: 48, tabHeight: 62, contextBar: 56, contextBarCompact: 36, fab: 56, primaryTall: 52,
   accountCardMin: 88, accountCardMinWide: 92, accountIcon: 52, avatar: 40,
-  // PROPUESTA (paso 346, docs/007 §10; valores del prototipo): tabMinWidth 48, tabPadX 2, tabPillPadX 10, chipSm 36, chipHitSlop 6, segmentOption 48, categoryOptionMin 56, calendarCell 52
+  // APROBADOS como valores iniciales (docs/003 Decisión R0 D8; valores del prototipo, docs/007 §10): tabMinWidth 48, tabPillPadX 10, chipSmHeight 36, chipHitSlop 6, segmentOption 48, categoryOptionMin 56, calendarCellHeight 52. El relleno horizontal de la pestaña (2 dp, §6.8) no tiene token propio por ahora
   tabMinWidth: 48, tabPillPadX: 10, chipSmHeight: 36, chipHitSlop: 6, segmentOption: 48, categoryOptionMin: 56, calendarCellHeight: 52,
   headerPig: 72, headerPigWide: 96, headerPigLargeFont: 48, pigZoom: 1.4, balanceCardMin: 132, balanceCardPig: 104,
 } as const;
@@ -598,7 +598,7 @@ Pantallas (flujos y textos aprobados sin cambios): Bienvenida, Mis cuentas (enca
 
 | # | Decisión | Propuesta |
 | --- | --- | --- |
-| 15.0 | **Paleta y composición.** Iteración 1 **RECHAZADA**; iteración 2 **RECHAZADA (segunda vez)** por dominancia del verde. Nueva propuesta: secciones 1, 2, 6 y 11 (fondos casi blancos con manchas, verde solo en acción primaria/FAB/tarjeta de saldo, color por módulo, cuentas de colores) | **PENDIENTE DE APROBACIÓN** |
+| 15.0 | **Paleta y composición.** Iteración 1 **RECHAZADA**; iteración 2 **RECHAZADA (segunda vez)** por dominancia del verde. Iteración 3 **APROBADA con el diseño (paso 347, docs/003 Decisión R0 D6)**: secciones 1, 2, 6 y 11 (fondos casi blancos con manchas, verde solo en acción primaria/FAB/tarjeta de saldo, color por módulo, cuentas de colores) | **APROBADA** (paso 347, docs/003 Decisión R0 D6) |
 | 15.1 | Fuente de marca (dependencia `expo-font`) | No: solo fuentes del sistema |
 | 15.2 | Íconos de categorías, cuentas y pestañas: emoji, PNG propios, `@expo/vector-icons` o `react-native-svg` | Emoji ahora (alcancía PNG para ahorro); revisar con una build nueva |
 | 15.3 | Dona en la app (exige `react-native-svg`) o barras apiladas | Barras apiladas hasta aprobar svg |
@@ -609,10 +609,10 @@ Pantallas (flujos y textos aprobados sin cambios): Bienvenida, Mis cuentas (enca
 | 15.8 | Rojo de gasto también como «peligro» | Sí |
 | 15.9 | `catFill` frente a glifo oscuro sobre el color crudo | `catFill` |
 | 15.10 | Alcancía en la tarjeta de saldo | Sí; oculta con fuente grande o pantalla estrecha |
-| 15.11 | Tonos por módulo (2.3): ámbar `#FFEDA6`/`#5C4000`, azul `#DCEBFF`/`#174C86` (+ `#2563C9`), violeta `#ECE4FF`/`#4E2DA3`, pizarra `#E3E8EF`/`#334155`, Cuenta `#D3EBF0`/`#0B4A46` | Aprobar; si en la prueba se confunden con ingreso/gasto, el módulo usa su tono solo en la píldora (3.2) |
-| 15.12 | Paleta de 6 tonos de cuentas (2.4), sin menta ni coral | Aprobar (depende de 14.18 y 14.19 de docs/007) |
-| 15.13 | Bienvenida clara con la alcancía en lugar del panel verde a sangre del póster | Sí (es la queja principal del usuario) |
-| 15.14 | Barra de contexto blanca neutra (antes `brand100` verde) | Sí (docs/007 §3.6: la barra no se tiñe) |
+| 15.11 | Tonos por módulo (2.3): ámbar `#FFEDA6`/`#5C4000`, azul `#DCEBFF`/`#174C86` (+ `#2563C9`), violeta `#ECE4FF`/`#4E2DA3`, pizarra `#E3E8EF`/`#334155`, Cuenta `#D3EBF0`/`#0B4A46` | Aprobar; si en la prueba se confunden con ingreso/gasto, el módulo usa su tono solo en la píldora (3.2) **APROBADA (paso 347)** |
+| 15.12 | Paleta de 6 tonos de cuentas (2.4), sin menta ni coral | Aprobar (depende de 14.18 y 14.19 de docs/007) **APROBADA (paso 347); el ícono de cuenta (14.19) sigue abierto** |
+| 15.13 | Bienvenida clara con la alcancía en lugar del panel verde a sangre del póster | Sí (es la queja principal del usuario) **APROBADA (paso 347)** |
+| 15.14 | Barra de contexto blanca neutra (antes `brand100` verde) | Sí (docs/007 §3.6: la barra no se tiñe) **APROBADA (paso 347)** |
 
 ## 16. Comparación visual iteración 2 → 3
 

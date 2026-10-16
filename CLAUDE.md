@@ -61,6 +61,13 @@ Estado y plan de las fases:
 
 - docs/004-ROADMAP-PROYECTO.md
 
+Diseño del rediseño UX/UI y su validación:
+
+- docs/007-DISENO-UX.md
+- docs/008-DISENO-VISUAL.md
+- docs/009-PLAN-IMPLEMENTACION-REDISENO.md
+- docs/010-MATRIZ-PRUEBAS-UX.md
+
 Los documentos anteriores son fuentes de verdad del proyecto según su responsabilidad.
 
 ---

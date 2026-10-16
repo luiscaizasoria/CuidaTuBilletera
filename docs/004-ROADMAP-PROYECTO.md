@@ -334,3 +334,17 @@ Alcance de la validación:
 - **No validado en dispositivo real**: pantalla de Reportes, hoja de compartir, apertura del CSV (BOM y acentos en Excel) y del PDF en un visor real, rendimiento con 2000 filas, comportamiento de `FileProvider` y renovación de sesión durante la exportación.
 
 Pendientes: instalar el APK de Development y probar Fase 5 en un dispositivo; crear una identidad de prueba aislada para validar en DEV los reportes autenticados, CSV y PDF y medir la CPU del Worker con 2000 filas (plan Free, 10 ms); `tsconfig.json` de la raíz sigue sin rastrear y queda fuera del commit; el Pull Request y la integración a `main` no se han hecho.
+
+# Rediseño UX/UI (R0 a R6)
+
+Línea de trabajo transversal, no es una fase numerada de docs/001 §11. Plan en docs/009-PLAN-IMPLEMENTACION-REDISENO.md, diseño en docs/007 y docs/008, matriz de validación en docs/010. Decisiones en docs/003 («Rediseño UX/UI — Decisión R0»). Rama: `feat/rediseno-ux-ui`. Línea base de pruebas: app 990 y API 979 (cierre de Fase 5).
+
+[x] R0 - Documentación (docs/001 §7, docs/003 «Decisión R0», docs/004). Evidencia: revisión de `architect` (coherencia), `mobile-ux-designer` (navegación), `mobile-visual-designer` (identidad) y `mobile-ux-qa` (trazabilidad) con correcciones aplicadas; solo documentación, sin cambios en `app/` ni `api/`. Commits locales sin push.
+[ ] R1 - Tokens y base (`theme/tokens.ts`, `Screen`, botones de 48 dp).
+[ ] R2 - Navegación: Mis cuentas, Detalle con barra inferior, Más, barra de contexto.
+[ ] R3 - Nuevo movimiento (orden aprobado).
+[ ] R4 - Historial, Calendario, Reportes y Categorías con el nuevo sistema visual.
+[ ] R5 - Guías contextuales y estados vacíos.
+[ ] R6 - Ícono, splash y nombre (requiere nueva development build y autorización expresa).
+
+Pendiente transversal: validación en Android real (niveles A y D de docs/010) y decisiones abiertas listadas en docs/003 (Decisión R0, «Pendientes»). No se toca la API, D1, sesiones ni dependencias nativas salvo decisión posterior.
