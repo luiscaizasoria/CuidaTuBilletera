@@ -2,7 +2,7 @@
 
 Matriz reutilizable con la que `mobile-ux-qa` valida cualquier cambio visible de la interfaz móvil (política de CLAUDE.md, «Coordinación y delegación»). Se aplica al rediseño (docs/007, docs/008 y docs/009) y a las fases siguientes. Los criterios detallados de cada pantalla están en docs/007 §11.2 (criterios 1 a 31, trazados en §9) y los tokens y contrastes en docs/008.
 
-Estado actual: **R2 validada por código y pruebas Jest (nivel A y T) y sin dispositivo**; el resultado está en el §11. **R3 revisada por código y Jest (nivel A y T), sin dispositivo: primera revisión RECHAZADA; revalidada tras las correcciones: APROBADA CON OBSERVACIONES (sin defectos altos ni críticos abiertos; cierre condicionado a nivel D)**; el resultado está en el §12 y la revalidación en el §12.8. **R4 revisada por código y Jest (nivel A y T), sin dispositivo: APROBADA CON OBSERVACIONES (sin defectos altos ni críticos; defectos R4-01 a R4-03 cerrados tras D6, §13.8; cierre condicionado a nivel D)**; el resultado está en el §13. Las demás fases (R5 y R6) no están ejecutadas. Ninguna fila está validada en dispositivo Android real (nivel D) ni con TalkBack.
+Estado actual: **R2 validada por código y pruebas Jest (nivel A y T) y sin dispositivo**; el resultado está en el §11. **R3 revisada por código y Jest (nivel A y T), sin dispositivo: primera revisión RECHAZADA; revalidada tras las correcciones: APROBADA CON OBSERVACIONES (sin defectos altos ni críticos abiertos; cierre condicionado a nivel D)**; el resultado está en el §12 y la revalidación en el §12.8. **R4 revisada por código y Jest (nivel A y T), sin dispositivo: APROBADA CON OBSERVACIONES (sin defectos altos ni críticos; defectos R4-01 a R4-03 cerrados tras D6, §13.8; cierre condicionado a nivel D)**; el resultado está en el §13. Las demás fases (R5 y R6) no están ejecutadas. Ninguna fila está validada en dispositivo Android real (nivel D) ni con TalkBack. **R5 revisada por código y Jest (nivel A y T), sin dispositivo: APROBADA CON OBSERVACIONES (§14). La preparación y el procedimiento de la validación en Android están en los §15 y §16 y la verificación funcional previa en el §17; ningún caso se ha ejecutado en un teléfono.**
 
 ## 1. Niveles de evidencia
 
@@ -758,3 +758,379 @@ Ilustraciones: en `app/assets/illustrations/` solo hay `vacio-movimientos.png`, 
 ### 14.8 Pendientes (no demostrados) y motivo
 
 Todo el nivel D por falta de emulador, dispositivo y TalkBack: J21 a J26 (persistencia tras cerrar desde recientes, guía y FAB, barra de pestañas y barra del sistema, teclado abierto en Nuevo movimiento, TalkBack, fuente 130, 175 y 200 %, 360 y 412 dp, dos cuentas de Google). Tampoco se hizo el nivel R (comparación con `docs/design/capturas/` y con el prototipo), no se tomaron capturas de la app y no se comprobó el empaquetado de los PNG con Metro ni la fuente de los emojis (💡, 🐷, 🏷️) en Android. Mientras tanto ninguna de estas filas puede darse por validada en dispositivo. Pendiente de otros agentes: `qa-engineer` repite typecheck, lint y regresión; la alcancía de Mis cuentas sigue obligatoria antes del cierre del rediseño (R6).
+
+## 15. Preparación técnica de la validación Android
+
+Fecha: 2026-10-16. Rama `feat/rediseno-ux-ui`, HEAD `a64e746` (R5). Solo lectura e inspección: no se inició Metro, no se instaló nada, no se generó APK ni EAS Build, no se tocó `app/` ni `api/` y no se leyó ningún `.env` real (de `app/.env.example` solo se comprobó el nombre de las variables). Este apartado prepara la validación de los niveles D y R pendientes en §14.8; no valida nada por sí mismo.
+
+### A. Compatibilidad de la development build existente con el código actual
+
+Build de referencia (docs/004, Fase 5): EAS build `375e4dc0-2e61-4fb8-b411-9e06a9a93456`, perfil `development`, Android, distribución interna, SDK 57, 15/10/2026 20:05-20:14 (hora local), keystore remoto existente. EAS empaqueta el árbol de trabajo; la base fue `bc75b03` y el manifiesto de la app en esa build es el que quedó confirmado en `0e0b5f8` (PR #15, integrado ese mismo día). Es el último commit que modificó `app/package.json` y `app/app.json`.
+
+Evidencia de comandos:
+
+| Comando | Resultado |
+| --- | --- |
+| `git log -- app/package.json app/app.json app/eas.json` | Último cambio: `0e0b5f8` (Fase 5). R1 a R5 (`107a495`, `94e37e0`, `281bc86`, `3c5630c`, `a64e746`) no aparecen. |
+| `git diff --stat 0e0b5f8 HEAD -- app/package.json app/app.json app/eas.json package.json package-lock.json app/index.ts` | Vacío: ningún cambio en dependencias, plugins, configuración Expo, EAS, lockfile ni punto de entrada. |
+| `git diff --name-only 0e0b5f8 HEAD -- app` filtrando `.ts`/`.tsx` | Solo 3 archivos no TypeScript: `app/assets/illustrations/vacio-filtros.png`, `vacio-movimientos.png`, `vacio-reportes.png`. |
+| Imports nuevos en `app/src` desde `0e0b5f8` | Solo `react-native` (API del núcleo: `AccessibilityInfo`, `Alert`, `Animated`, `BackHandler`, `Dimensions`, `Platform`, `StatusBar`, `useWindowDimensions`, etc.) y `expo-secure-store`/`expo-status-bar`/`@react-native-google-signin/google-signin`, que ya estaban. No hay módulos nuevos. |
+| Versiones instaladas (`node_modules`) | `expo 57.0.27`, `react-native 0.86.3`, `expo-dev-client 57.0.20`: coinciden con `app/package.json` (`~57.0.27`, `0.86.3`, `~57.0.20`). |
+
+Módulos nativos y plugins vigentes (idénticos a los de la build):
+
+- Plugins de `app.json`: `expo-status-bar`, `expo-secure-store`, `expo-sharing`. Paquete Android `com.cuidatubilletera.app`, `userInterfaceStyle: light`, `owner: luiscaizasoria`, `extra.eas.projectId` presente.
+- Dependencias de `app/package.json`: `@react-native-google-signin/google-signin ^16.1.5`, `expo ~57.0.27`, `expo-dev-client ~57.0.20`, `expo-file-system ~57.0.7`, `expo-secure-store ~57.0.4`, `expo-sharing ~57.0.23`, `expo-status-bar ~57.0.1`, `react 19.2.3`, `react-native 0.86.3`.
+
+Conclusión: R1 a R5 son solo JavaScript/TypeScript y assets. La development build existente es compatible y no hace falta una nueva. Limitaciones de esta conclusión: (1) no se puede inspeccionar el APK instalado en el teléfono desde el contenedor; se asume que el teléfono tiene instalado el APK de la build `375e4dc0` (docs/004 lo deja como «instalar el APK de Development»; si nunca se instaló o se instaló una build anterior de Fase 3 o 4, `expo-sharing` no estará y la exportación fallará con mensaje, sin afectar al resto del rediseño). (2) La coincidencia de versiones se comprobó contra `node_modules` y `package.json`, no contra el binario.
+
+Cambios que llegan por Metro sin recompilar: todo `app/src/**` (tokens, componentes base, navegación, formularios, pantallas, guías) y los PNG de `app/assets/illustrations/` cargados con `require` (Metro los empaqueta; docs/003 3.x D6). Cambios que NO llegarían por Metro y por eso siguen fuera de R1 a R5: ícono, splash y nombre (R6, requiere nueva build y autorización expresa) y cualquier plugin o módulo nativo.
+
+### B. Comandos exactos
+
+Estado del entorno comprobado:
+
+- `which adb`: no existe en el contenedor. `npm ls @expo/ngrok`: no instalado (`(empty)`), por lo que `--tunnel` pediría instalarlo (Expo lo ofrece al ejecutar; no se debe aceptar sin autorización, es una dependencia).
+- `devcontainer.json` reenvía `8787` (Wrangler) y `8081` (Metro), ambos `onAutoForward: silent`. El reenvío de VS Code escucha en `localhost` del anfitrión, no en la IP LAN.
+- IP del contenedor `172.17.0.2` (red interna Docker, inalcanzable desde el teléfono).
+- docs/005 declara que el contenedor está «instalado y validado», pero que Expo Go contra Metro, tanto desde Windows como desde el contenedor, sigue NO verificado, y recomienda ejecutar Metro en Windows. La variable que fija el host que anuncia Metro es `REACT_NATIVE_PACKAGER_HOSTNAME`.
+
+Con la información disponible la LAN directa desde el contenedor probablemente NO funciona (IP interna y reenvío solo a `localhost`). Opciones ordenadas:
+
+| # | Opción | Pros | Contras |
+| --- | --- | --- | --- |
+| 1 | USB + `adb reverse` con `adb` de Windows (platform-tools) y Metro en el contenedor (reenviado a `localhost:8081` del anfitrión por VS Code) | Sin túnel, sin dependencias nuevas, independiente de Wi-Fi y firewall; el teléfono ve `localhost:8081` | Requiere platform-tools en Windows, depuración USB activa y cable; además `adb screencap`/`logcat` quedan disponibles |
+| 2 | LAN con Metro en Windows (fuera del contenedor), según docs/005 | Es la opción documentada como inicial | Requiere `npm` y `node_modules` de Windows (el repo usa volúmenes Linux en el contenedor, así que habría que instalar dependencias en Windows: es una acción que no se hizo ni se autoriza aquí); firewall de Windows y misma red |
+| 3 | LAN desde el contenedor con `REACT_NATIVE_PACKAGER_HOSTNAME=<IP LAN de Windows>` | Sin instalar nada | Requiere publicar el 8081 hacia la red (no solo `localhost`) y regla de firewall; no probado |
+| 4 | `--tunnel` | Funciona con cualquier red | Necesita `@expo/ngrok` (dependencia no instalada, requiere autorización), más lento, expone el bundle por un túnel público |
+
+Recomendación: opción 1 (USB + `adb reverse`), por no depender de la red ni de dependencias. Si el usuario prefiere no usar cable, la opción 3 y, en último caso, la 4 con autorización expresa.
+
+Comandos (a ejecutar por el usuario o con su autorización; no se ejecutaron):
+
+```
+# En el contenedor, carpeta de la app. Puerto 8081, modo development build:
+cd /workspaces/ControlGastos/app && npx expo start --dev-client
+
+# Variantes
+npx expo start --dev-client --localhost                      # solo localhost: pareja de «adb reverse»
+npx expo start --dev-client --lan                            # IP del contenedor (172.17.0.2): normalmente inútil para el teléfono
+REACT_NATIVE_PACKAGER_HOSTNAME=<IP-LAN-de-Windows> npx expo start --dev-client --lan   # opción 3
+npx expo start --dev-client --tunnel                         # opción 4: exige @expo/ngrok (autorización)
+npx expo start --dev-client --clear                          # primer arranque tras muchos cambios, limpia la caché de Metro
+
+# En Windows (PowerShell), con el teléfono por USB y depuración USB activa:
+adb devices
+adb reverse tcp:8081 tcp:8081
+```
+
+Notas: `npx expo start` sin `--dev-client` abre Expo Go en lugar del dev client y no sirve (la app usa Google Sign-In nativo). El script `npm start` de `app/package.json` ejecuta `expo start` sin esa bandera: usar `npx` con `--dev-client`. Las variables `EXPO_PUBLIC_*` se leen al arrancar Metro: tras cambiarlas reiniciar con `--clear`.
+
+### C. Pasos breves en el teléfono
+
+1. Confirmar que está instalada la development build «CuidaTuBilletera» (paquete `com.cuidatubilletera.app`) de la build `375e4dc0`. No instalar otra.
+2. Con el servidor activo y la ruta elegida en §B, abrir la app. En la pantalla del dev client: elegir el servidor detectado, o «Enter URL manually» y escribir `http://localhost:8081` (opción 1) o `http://<IP-LAN>:8081` (opciones 2 y 3). Con `--tunnel`, la URL `https://...exp.direct` que muestra Metro. El QR de la terminal también se puede leer desde la cámara o desde el propio dev client.
+3. Esperar el primer empaquetado (puede tardar). Si aparece «Configuración incompleta», ver §E.
+4. Iniciar sesión con la cuenta de prueba, recorrer los casos de §4 y los pendientes J21 a J26 de §14.8, y registrar cada resultado con la plantilla de §10.
+5. Para recargar JS: menú del dev client (agitar el teléfono o `adb shell input keyevent 82`) -> Reload; en la terminal de Metro, tecla `r`.
+
+### D. Registro de evidencias
+
+- Capturas: botones del teléfono (encendido + bajar volumen) o, con adb, `adb exec-out screencap -p > nombre.png` (en PowerShell usar `adb shell screencap -p /sdcard/x.png` seguido de `adb pull`, porque la redirección de PowerShell altera el binario).
+- Grabación: `adb shell screenrecord --time-limit 60 /sdcard/x.mp4` y `adb pull /sdcard/x.mp4`; o la grabadora de pantalla del teléfono. Máximo 180 s por archivo.
+- Logs: `adb logcat -c` antes del caso y luego `adb logcat ReactNativeJS:V AndroidRuntime:E *:S > caso.log` (los errores JS del dev client aparecen con la etiqueta `ReactNativeJS`; los cierres inesperados, con `AndroidRuntime`). Revisar el archivo antes de guardarlo: no debe contener tokens, correos ni importes personales (la app no registra tokens, pero un error de red puede incluir texto de respuesta).
+- Errores del dev client: pantalla roja o amarilla (copiar el mensaje y la pila visibles), menú del dev client (agitar) -> «Open JS debugger» o «Show element inspector», y la terminal de Metro, que imprime los `console.*` y los errores de empaquetado. Fotografiar o capturar el aviso, no pegar contenido con datos.
+- Ubicación: no existe hoy una carpeta de evidencias ignorada. `docs/design/capturas/` es la referencia de diseño versionada y no debe usarse. `.gitignore` ignora `.expo/`, `dist/`, `coverage/`, `*.log`, `.env*` y credenciales, pero no capturas ni vídeos. Propuesta: guardar fuera del repositorio (por ejemplo en una carpeta del anfitrión Windows, como `C:\evidencias-cuidatubilletera\R5\`) o, si se quiere dentro del árbol, crear `evidencias-local/` y excluirla con `.git/info/exclude` (regla local que no modifica `.gitignore`). Nombre sugerido: `<caso>_<pantalla>_<AAAAMMDD-HHMM>.png`, con el id de la matriz (J21, etc.). Solo se versiona el resumen en este documento (§10), nunca capturas con importes, correos o nombres reales; si hay que adjuntarlas, usar datos ficticios de una cuenta de prueba.
+
+### E. Riesgos, bloqueos y lo que no se pudo verificar sin teléfono
+
+Configuración de la API de DEV (sin valores):
+
+- Variables: `EXPO_PUBLIC_API_URL` (URL base de la API, sin barra final) y `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` (ID de cliente OAuth tipo Web de Google). Se leen en `app/src/lib/config.ts` con la forma literal `process.env.EXPO_PUBLIC_*`; Metro las incrusta al empaquetar.
+- Dónde definirlas: en `app/.env` (ignorado por git; plantilla `app/.env.example`, que solo contiene marcadores) antes de arrancar Metro, o exportadas en el entorno del proceso. Ese archivo ya existe en el árbol de trabajo; no se abrió y se desconoce si su contenido apunta a DEV. El usuario debe comprobar que la URL sea la del Worker `controlgastos-api-dev` (docs/004) y no otra. Las variables del entorno `development` de EAS no aplican al ejecutar Metro localmente.
+- Si faltan: `readConfig` devuelve `null` y se muestra `ConfigMissingScreen` («Configuración incompleta», menciona ambas variables y `app/.env.example`); la app no intenta autenticar. Si el valor existe pero es erróneo (URL equivocada), aparecerán errores de red o de login, no esta pantalla.
+- La API de DEV debe tener desplegadas las rutas de Fase 5: según docs/004 se desplegó el 15/10/2026 (versión `1a73a98a-...`). R1 a R5 no cambian `api/`.
+
+Riesgos y bloqueos:
+
+1. La development build no apunta por defecto a un Metro fijo: el dev client pide el servidor al abrirse; no hay URL grabada en `app.json`. Si hay un servidor guardado de una sesión anterior (por ejemplo una IP LAN antigua), puede aparecer en la lista y fallar: elegir o escribir la URL correcta.
+2. Red: ver §B. El mayor riesgo práctico es que la ruta elegida no funcione por Docker/WSL2/firewall (ninguna combinación está verificada, docs/005). Sin `adb` en el contenedor, `adb reverse` y las capturas por adb deben hacerse desde Windows.
+3. Google Sign-In: el login depende de que el cliente OAuth Android tenga la SHA-1 del keystore remoto de EAS (`26:E4:D0:9D:...:73:F4`, docs/003, huella pública) y de la cuenta Google. Si el keystore de EAS se regenera, la SHA-1 cambia y falla con `DEVELOPER_ERROR` (código 10). La build `375e4dc0` reutilizó el keystore existente, así que debería seguir vigente. Si la pantalla de consentimiento está en modo «Prueba», solo entran las cuentas añadidas como usuarios de prueba: confirmar en Google Cloud (no verificable desde aquí).
+4. Cuentas de prueba: docs/004 registra que no existe una identidad de prueba aislada; el D1 DEV tiene 1 usuario, 0 cuentas, 0 categorías y 0 movimientos. Cualquier prueba crea datos reales en DEV bajo la cuenta que inicie sesión. Usar una cuenta de Google de prueba, no la personal si hay datos propios, y no cargar datos reales (importes, nombres de comercios). Para J21 a J26 el usuario deberá crear cuentas y movimientos ficticios; el estado vacío ilustrado (R5) solo se ve con la cuenta sin movimientos.
+5. DEV frente a producción: no existe D1 ni Worker de producción (docs/004), así que el riesgo de tocar datos de producción es nulo mientras la URL sea la de DEV. La sesión del APK previo (JWT v2) se restaura por SecureStore: puede haber una sesión antigua en el teléfono; cerrar sesión antes de la ronda para partir de cero.
+6. Zona horaria: el calendario y las fechas dependen de la fecha del dispositivo; confirmar que el teléfono está en la zona horaria esperada (Ecuador, UTC-5, a juzgar por la hora local de las builds) y la fecha automática, o los casos de cambio de día y de mes darán resultados engañosos.
+7. Expiración: una development build interna no caduca como las builds de Expo Go ligadas a un SDK, pero el APK es un artefacto de EAS con enlace temporal: si hace falta reinstalarlo, descargarlo de la página de la build (docs/004) y no generar otro.
+8. Primer empaquetado lento y reinicios: cambios grandes (R1 a R5 suman unos 20 000 líneas en el diff) pueden requerir `--clear`. Si tras recargar se ve código viejo, reiniciar Metro con `--clear`.
+9. Tamaño de la ilustración: los PNG se cargan con `require` (docs/003 3.x D6); nunca se comprobó su empaquetado ni la fuente de los emojis (💡, 🐷, 🏷️) en Android (§14.8). Es lo primero que debe mirarse en el teléfono. Si faltan, aparecería un error de Metro «Unable to resolve» (empaquetado) o un recuadro vacío/cuadrado (fuente), no un fallo de la build.
+10. Compartir/exportar: depende de `expo-sharing` presente en la build `375e4dc0`; no probado en dispositivo (docs/004).
+
+No se pudo verificar sin teléfono ni sin ejecutar Metro: que el APK instalado sea el de la build `375e4dc0`; que Metro arranque en este contenedor y que el teléfono lo alcance por cualquiera de las rutas; que `app/.env` apunte a DEV; que el login con Google funcione hoy (SHA-1, usuarios de prueba); el empaquetado de los PNG y la fuente de emojis; el comportamiento de teclado, safe areas, barra del sistema, TalkBack, escala de fuente y anchos de 360 y 412 dp; y la comparación visual con `docs/design/capturas/` (nivel R). Nada de esto se debe dar por validado hasta contar con evidencia de dispositivo.
+
+## 16. Procedimiento de validación Android (matriz priorizada)
+
+**Esta sección es un procedimiento. Ningún caso se ha ejecutado en Android.** No hay teléfono conectado al entorno; todas las casillas de resultado y de observaciones están vacías a propósito y solo las rellena quien ejecute la prueba en un dispositivo real. Nada de lo que sigue se debe leer como evidencia de nivel D. Un caso solo pasa a «OK» con la evidencia indicada (captura, vídeo o logcat) archivada según el §15.D; sin evidencia queda «PENDIENTE». Este procedimiento cubre R2 a R5 (HEAD `a64e746`); R6 (alcancía, ícono, splash) queda fuera.
+
+### 16.0 Precondiciones y reglas de ejecución
+
+1. Preparación técnica según el §15: development build `375e4dc0` ya instalada, Metro en el contenedor con `npx expo start --dev-client` y `adb reverse tcp:8081 tcp:8081` desde Windows (opción 1), `app/.env` apuntando a la API de DEV (lo confirma el usuario; no se abre aquí), zona horaria y fecha automáticas del teléfono.
+2. Datos: el D1 DEV tiene 1 usuario, 0 cuentas, 0 categorías y 0 movimientos (docs/003 y docs/004). Cada prueba crea datos en DEV. Usar solo una cuenta de Google de prueba y datos ficticios (nombres como «Prueba Efectivo»; ningún importe ni comercio real). Los pasos siguen un orden que reutiliza lo creado antes: no saltar pasos sin anotarlo.
+3. Se necesitan dos cuentas de Google de prueba (A y B) para el V30. Las dos deben estar autorizadas como usuarios de prueba en Google Cloud (§15.E-3).
+4. Ancho de pantalla: anotar siempre el ancho real en dp (Ajustes > Opciones de desarrollador > «Ancho mínimo», o el menú del dev client). Si el teléfono no mide 360 ni 412 dp, se puede acercar con Ajustes > Pantalla > «Tamaño de pantalla» o el «Ancho mínimo»; si no se logra, el criterio dependiente queda abierto y se declara el ancho probado. Nunca se informa 360/412 si no se midió.
+5. Variantes del sistema: gestos (V24) y tres botones (V25) se prueban con el mismo recorrido corto; el resto del recorrido se hace en gestos con fuente 100 %, salvo V27 y V28.
+6. Capturas con la nomenclatura del §6 (`<pantalla>-<ancho>.png`, variante en la carpeta `dispositivo/<variante>/`) y el nombre sugerido del §15.D `<caso>_<pantalla>_<AAAAMMDD-HHMM>.png`. Fuera del repositorio o en una carpeta excluida con `.git/info/exclude`. No usar `docs/design/capturas/`.
+7. Antes de cada caso con logcat: `adb logcat -c`; al terminar, `adb logcat ReactNativeJS:V AndroidRuntime:E *:S > <caso>.log`. Revisar que no contenga tokens ni correos antes de guardarlo.
+8. Cualquier fallo se registra con la plantilla del §16.3. Los defectos críticos y altos bloquean el cierre, el PR y el build (§7).
+9. Lo que la app no debe mostrar nunca: «$0.00» por un fallo, «Sesión iniciada», «Egreso» en pantalla.
+
+### 16.1 Recorrido ordenado (30 pasos)
+
+Prioridad: **P0** bloqueante (dato financiero, pérdida de datos, contenido inalcanzable, sesión o aislamiento; si falla, R2 a R5 no se cierran), **P1** necesario para cerrar los criterios D pendientes, **P2** complementario (el criterio ya tiene respaldo fuerte en nivel A; se ejecuta si hay tiempo).
+
+| Paso | Prio | Qué se recorre |
+| --- | --- | --- |
+| V01 | P0 | Arranque del dev client y login con Google |
+| V02 | P0 | Mis cuentas vacío con guía y estado vacío ilustrado |
+| V03 | P0 | Crear cuenta con saldo vacío y guía |
+| V04 | P0 | Saldo inicial y «saldo en contra» |
+| V05 | P0 | Montos rechazados (1.000, 1e5 y otros) y pegado |
+| V06 | P2 | Nombre largo de 60 caracteres y pantalla de 360 dp en Mis cuentas |
+| V07 | P0 | Selección y cambio de cuenta, total y Atrás básico |
+| V08 | P0 | Registrar un gasto (orden de campos, un solo registro, saldo) |
+| V09 | P0 | Registrar un ingreso |
+| V10 | P2 | Validaciones del formulario |
+| V11 | P0 | Formulario con el teclado abierto |
+| V12 | P0 | Descarte de cambios (Atrás, ✕, Cancelar) |
+| V13 | P1 | Selector de fecha |
+| V14 | P0 | Calendario: celdas medidas a 360 y 412 dp |
+| V15 | P1 | Calendario: selección de día y «+ Anotar en este día» |
+| V16 | P1 | Historial y filtros |
+| V17 | P1 | Reportes: totales, barras, Gráfico/Tabla |
+| V18 | P1 | Reportes: barras en escala de grises |
+| V19 | P1 | Exportación CSV real |
+| V20 | P1 | Exportación PDF real |
+| V21 | P1 | Categorías (⋮, color, eliminar y archivar) |
+| V22 | P1 | Guías: descartar y persistencia tras cerrar la app |
+| V23 | P2 | «Ver ayudas otra vez» |
+| V24 | P0 | Safe areas con navegación por gestos |
+| V25 | P0 | Safe areas con tres botones |
+| V26 | P0 | Botón Atrás de Android en todas las pantallas |
+| V27 | P1 | Fuente ampliada al 130 % |
+| V28 | P1 | Fuente ampliada al 175 % y al 200 % |
+| V29 | P1 | TalkBack (etiquetas, errores, foco al descartar una guía) |
+| V30 | P0 | Cierre de sesión y segundo usuario de Google |
+
+### 16.2 Tabla priorizada de casos
+
+Leyenda de criterios: «R2-n» = criterio n de docs/007 §11.2 (§9 y §11.2 de este documento); «G21» = §12.2; «R4-n» = criterio n de docs/007 §5.11 I (§13.2); «J-n» = criterio n de docs/007 §5.12.J (§14.2); «AND-nn» = §4. Severidad «si falla»: C crítica, A alta, M media, B baja. El resultado se marca solo en el teléfono: OK, FALLA o N/A (con motivo). Todas las casillas están **sin marcar**.
+
+#### P0 (bloqueantes)
+
+| ID | Paso | Qué hacer exactamente | Resultado esperado | Criterio que cierra | Evidencia a capturar | Sev. si falla | Resultado | Obs. |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| V01 | Login | Cerrar sesión si hay una antigua (SecureStore conserva la anterior). Abrir el dev client, elegir el servidor Metro. Si sale «Configuración incompleta», anotarlo y detener. Pulsar «Ingresar con Google» y elegir la cuenta A | Pantalla de bienvenida con «Ingresar con Google» y «Inicia sesión para continuar.»; sin barra de estado superpuesta. Tras elegir la cuenta, llega a **Mis cuentas** (encabezado «Mis cuentas») sin ningún aviso «Sesión iniciada». Un fallo de login muestra un error comprensible en español, no un código | R2-3; SAFE de Bienvenida (§3); R2-1 (parcial) | `bienvenida-<ancho>.png`, `mis-cuentas-<ancho>.png`; logcat si hay error (`DEVELOPER_ERROR` = SHA-1) | A | [ ] | [ ] |
+| V02 | Mis cuentas vacío | Con la cuenta A recién creada (0 cuentas) observar Mis cuentas sin tocar nada. Comprobar el emoji 🐷 y la ilustración | Guía «Bienvenido. Empieza creando una cuenta: puede ser tu efectivo, tu banco o tu tarjeta.» con [Entendido] y «Cerrar ayuda». Debajo, «Todavía no tienes cuentas», «Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta.» y el botón [Crear mi primera cuenta]. Sin «Total en tus cuentas». Avatar de 48 dp que abre la hoja de perfil. El emoji se ve (no un recuadro) y ningún error de Metro «Unable to resolve» | J-7, J-17, J-22 (parcial); R2-3, R2-28; riesgo §15.E-9 (emojis y PNG) | `mis-cuentas-<ancho>.png` en 360 y 412 (o ancho real); captura de la hoja de perfil | M (emoji o ilustración rota); A si falta la acción para crear | [ ] | [ ] |
+| V03 | Crear cuenta | Pulsar [Crear mi primera cuenta]. Observar el formulario. Escribir «Prueba Efectivo» y dejar el saldo vacío. Pulsar [Crear cuenta] | Título «Nueva cuenta»; etiqueta «Saldo inicial (opcional)» y la ayuda «Es el dinero que ya tienes hoy en esta cuenta. Déjalo vacío si empiezas en 0.»; guía «El saldo inicial es lo que ya tienes hoy. Si no estás seguro, déjalo vacío.». El botón pasa a «Creando…» y no admite doble toque. Se crea una sola cuenta con saldo $0.00 (anotar a qué pantalla navega) y la guía de cuentas vacías no vuelve | R2-23 (parcial); G16; J-7, J-11; AND-03 (parcial) | `crear-cuenta-<ancho>.png`; captura de la cuenta creada con su saldo; contar las tarjetas en Mis cuentas | A si se crea más de una cuenta (doble registro); M si falta una ayuda | [ ] | [ ] |
+| V04 | Saldo inicial y saldo en contra | Crear «Prueba Banco» con saldo 100.50. Crear «Prueba Deuda» marcando «Es un saldo en contra (debo dinero)» con saldo 25 | Banco muestra $100.50 en su tarjeta y en la barra de contexto. Con la casilla marcada el campo muestra el prefijo «-$» (el teclado nunca escribe «-») y la tarjeta de Deuda muestra −$25.00 con signo y en rojo (`expenseText`), no «$25.00». Con importe 0 o vacío y la casilla marcada se guarda 0, no un negativo | G16; R2-21 (parcial, saldo negativo); R2-17 (saldo nunca inventado) | Captura de ambos formularios y de Mis cuentas con las tres tarjetas | C si el signo o el importe son incorrectos | [ ] | [ ] |
+| V05 | Montos rechazados | En el saldo inicial de Crear cuenta y luego en el Monto de un movimiento escribir, uno por uno: «1.000», «1,234», «1e5», «12.345», «0.123». Después pegar «1,234.56» (copiado de una nota) y escribir «1000» y «12,50» | «1.000», «1,234», «12.345» y «1,234.56»: «Escribe el monto sin separador de miles, por ejemplo 1000 o 12.50.». «1e5»: «Escribe solo números, por ejemplo 12.50.». «0.123»: «Usa como máximo 2 decimales, por ejemplo 12.50.». Ninguno llama a la API (no se crea nada, no cambia el saldo). «1000» y «12,50» se aceptan y el importe guardado coincide con el visible. El pegado no se recorta sin aviso (la longitud máxima es 24) | G3, G4 (R3-07 cerrado en A); residual §12.9 (pegado con `maxLength` 24 en Android); R2-17 | Captura de cada mensaje; captura del pegado antes y después; cuenta o movimiento de «1000» guardado | C si un monto ambiguo se guarda con otro importe; A si el mensaje es incomprensible | [ ] | [ ] |
+| V07 | Selección y cambio de cuenta | Con tres cuentas (Efectivo, Banco, Deuda) ver «Total en tus cuentas». Tocar «Prueba Banco». Ver la barra de contexto y las 5 pestañas. Abrir el selector de la barra y elegir «Prueba Efectivo». Volver con Atrás hasta Mis cuentas | Total = suma de las activas (con Banco 100.50, Efectivo 0.00 y Deuda −25.00: $75.50) y el texto «suma de 3 cuentas activas» en la etiqueta. Cada tarjeta es un único botón («{nombre}, saldo actual {saldo}. Abrir cuenta»). Al abrir: barra con nombre y saldo de Banco, pestañas Cuenta, Movimientos, Calendario, Reportes, Más. Cambiar de cuenta conserva la pestaña, cambia nombre y saldo y no muestra datos de la cuenta anterior. Atrás: pestaña → Cuenta → Mis cuentas | R2-2, R2-24, R2-28, R2-29, R2-4 (D); AND-11 | `detalle-<ancho>.png`; captura del selector; captura de Mis cuentas con el Total | C si se muestra o se actúa sobre la cuenta equivocada; A si el saldo de la barra es de otra cuenta | [ ] | [ ] |
+| V08 | Registrar gasto | En «Prueba Banco» pulsar el FAB «+». Revisar el orden: Tipo, Categoría, Monto, Fecha, Detalle, [Guardar gasto]. Si no hay categorías de gasto (DEV las tenía en 0), debe verse «No tienes categorías de gasto activas. Crea una en Más > Categorías.» con [Ir a Categorías]: crear «Alimentación» (V21 parcial) y volver con «‹ Volver». Elegir Gasto, Alimentación, monto 12.50, fecha «Hoy», sin detalle. Pulsar [Guardar gasto] dos veces seguidas muy rápido | El orden es el indicado y el teclado no se abre solo al entrar. Se registra **un solo** gasto. Aviso «Gasto de $12.50 guardado en Alimentación». El formulario se cierra, la barra de contexto muestra el saldo nuevo (100.50 − 12.50 = $88.00) y el movimiento aparece en la semana de la pestaña Cuenta con signo y color de gasto | R2-5 y R2-6 (formulario); R2-16; G1, G2, G9, G10, G18; AND-13 (parcial) | Captura del formulario vacío, del aviso y de la pestaña Cuenta con el saldo nuevo; conteo de movimientos en Historial | C si se registra dos veces o el saldo es incorrecto; A si falta el aviso o la barra no se actualiza | [ ] | [ ] |
+| V09 | Registrar ingreso | FAB «+», elegir Ingreso, crear la categoría «Sueldo» si falta, monto 50, fecha «Ayer». Guardar | Aviso «Ingreso de $50.00 guardado en Sueldo»; saldo $138.00; el movimiento aparece como ingreso (+, color de ingreso, no solo por color: lleva signo y etiqueta). Con fecha «Ayer» aparece en «Ayer» del Historial | R2-5; R2-16; G1, G8; INF | Captura del aviso, del saldo y del Historial | C si el signo o el importe es incorrecto | [ ] | [ ] |
+| V11 | Teclado abierto | Abrir Nuevo movimiento y tocar Monto (teclado numérico `decimal-pad`). Repetir con Detalle y con Nombre/Saldo en Crear cuenta. Con el teclado abierto, comprobar que el botón de guardar y el campo activo se ven o se alcanzan con scroll. Cerrar el teclado. Repetir con gestos y con tres botones | El campo activo y [Guardar gasto]/[Crear cuenta] quedan visibles sobre el teclado (el pie es fijo); la barra de contexto pasa a compacta; no hay hueco blanco ni franja de fondo bajo el pie y el margen inferior no se cuenta dos veces (UXQA-R3-04). Al cerrar el teclado el diseño vuelve a su estado sin huecos. El Monto no recibe foco al abrir | G21; R2-23; AND-03, AND-04; J-22 (guía no empuja el monto); R4-45 (formulario de Categorías, ver V21) | Captura con teclado abierto (gestos y tres botones) en `dispositivo/teclado/` y captura con teclado cerrado | A si Guardar queda tapado por el teclado o la barra; C si es inalcanzable | [ ] | [ ] |
+| V12 | Descarte de cambios | (a) Nuevo movimiento sin tocar nada: Atrás, luego ✕, luego Cancelar. (b) Escribir un monto y repetir Atrás hardware, ✕ y Cancelar. En el diálogo tocar [Seguir editando], luego volver a salir y tocar [Descartar]. (c) Tocar fuera del diálogo. (d) Repetir en Crear cuenta con un nombre escrito | (a) Salen sin diálogo. (b) Aparece «¿Descartar este movimiento?» / «Lo que escribiste se perderá.» con [Seguir editando] y [Descartar]; Seguir editando conserva lo escrito; Descartar vuelve a la pantalla de origen sin guardar. (c) Cerrar el diálogo equivale a Seguir editando. (d) «¿Descartar esta cuenta?» / «Lo que escribiste se perderá.». Con el guardado en curso («Guardando…»/«Creando…») Atrás no abre diálogo y se ignora. En Editar: «¿Descartar los cambios?» / «Los cambios que hiciste no se guardarán.» | G11, G12, G13, G10; R2-4 (D); AND-05 | Captura del diálogo; vídeo corto de Atrás con y sin cambios | A si Atrás pierde datos sin aviso (§7) | [ ] | [ ] |
+| V14 | Calendario: celdas | Abrir la pestaña Calendario. Medir el ancho real del teléfono en dp. Capturar a 360 dp (o lo más cercano) y a 412 dp. Con seis semanas en el mes mostrado, comprobar el alto total y el desplazamiento. Si el ancho es ≥ 400 dp, comprobar que el margen es de 20 dp | A 360 dp la celda mide 44,29 × 52 dp (≥ 44) y a 412 dp 50,57 × 52 dp (≥ 48), con 3 dp entre celdas y sin solapes. Las cifras de ingreso y gasto con signo no se cortan; el día elegido y «hoy» se distinguen sin depender solo del color. Todo el contenido llega hasta encima del FAB y de la barra de pestañas | R4-41; R4-15 (D); R2-1; AND-08, AND-09 | `calendario-360.png`, `calendario-412.png` (o el ancho real) y la medición en dp (captura de Opciones de desarrollador) | A si las celdas se solapan o no se pueden tocar; M si hay recorte leve | [ ] | [ ] |
+| V24 | Safe areas: gestos | Con navegación por gestos recorrer una pantalla por módulo: Login, Mis cuentas, Crear cuenta, Detalle (con FAB), Nuevo movimiento, Movimientos, Calendario, Reportes, Más, Categorías. Abrir cada hoja y modal: perfil, selector de cuenta, selector de fecha, hoja «⋮» y un diálogo. Desplazar hasta el último elemento de cada lista | Ninguna pantalla queda bajo la barra de estado (reloj y batería) ni bajo la barra de gestos. La barra de contexto y el título se ven completos. Pestañas, FAB, [Guardar] y los botones al pie no quedan bajo la línea de gestos. Las hojas y modales respetan los bordes (se prueba el `Modal` con edge-to-edge). El último elemento de cada lista es alcanzable sin quedar tapado por el FAB | R2-1; AND-01, AND-02, AND-06, AND-09; R4-44, R4-47; J-22 | Una captura por pantalla y por modal en `dispositivo/gestos/` | C si hay contenido inalcanzable bajo una barra del sistema | [ ] | [ ] |
+| V25 | Safe areas: tres botones | Cambiar a navegación con tres botones (Ajustes > Sistema > Gestos). Repetir el recorrido de V24 con las mismas pantallas, hojas y modales | Igual que V24 con la barra del sistema más alta: pestañas, FAB y botones no quedan bajo los tres botones; el margen no se cuenta dos veces; las hojas llegan hasta el borde correcto. El gesto inferior no activa pestañas | R2-1; AND-02, AND-07; R4-44, R4-47; G21 (tres botones) | Capturas en `dispositivo/tres-botones/` de las mismas pantallas | C si hay contenido inalcanzable; A si se solapa un botón de acción | [ ] | [ ] |
+| V26 | Botón Atrás | Con gestos y luego con tres botones, ejecutar Atrás en: Mis cuentas (raíz); pestañas Movimientos/Calendario/Reportes/Más; Categorías (desde Más y desde el formulario con «Ir a Categorías»); Nuevo movimiento; Reportes → Historial filtrado (tocar un total de Reportes) → Atrás; hoja de perfil, selector y diálogo | Mis cuentas: cierra la app (nunca vuelve a Login). Pestañas: vuelven a Cuenta y desde Cuenta a Mis cuentas. Categorías desde Más → Más; desde el formulario, «‹ Volver» y Atrás llevan a la pestaña de origen. Reportes → Historial filtrado → Atrás vuelve a Reportes con el mismo modo y período. Las hojas se cierran sin salir de la pantalla. Un gesto Atrás equivale al botón | R2-4 (D), AND-05, AND-06; R4-39 (D) | Vídeo corto del recorrido de Atrás | A si Atrás sale a una pantalla distinta de la tabla de docs/007 §3.4 o pierde datos | [ ] | [ ] |
+| V30 | Cierre de sesión y segundo usuario | Con la cuenta A tener cuentas, movimientos y guías descartadas. Avatar → [Cerrar sesión]. Iniciar sesión con la cuenta B. Ver Mis cuentas, descartar la guía y cerrar sesión. Volver a la cuenta A | Cerrar sesión no pide confirmación y lleva al login. La cuenta B ve Mis cuentas vacío con la guía «Bienvenido. Empieza creando…» (las guías son por usuario) y **ningún dato de A** (cuentas, saldos, exportaciones). Al volver a A, sus guías descartadas siguen descartadas y sus datos están intactos; las de B no se mezclan | R2-12; AND-12; J-15, J-16, J-26 | Capturas del login tras cerrar, de Mis cuentas de B y de A al regresar | C si B ve datos de A; M si las guías se mezclan | [ ] | [ ] |
+
+#### P1 (cierran criterios D)
+
+| ID | Paso | Qué hacer exactamente | Resultado esperado | Criterio que cierra | Evidencia a capturar | Sev. si falla | Resultado | Obs. |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| V13 | Selector de fecha | En Nuevo movimiento tocar «Otra fecha…»; recorrer meses con las flechas; elegir un día. Reabrir y cerrar con Atrás, con «Cerrar» y tocando el velo. Repetir con gestos y tres botones | La hoja muestra el mes, las flechas «Mes anterior/siguiente» (48 dp), hoy marcado y los días a 48 dp. Elegir un día cierra la hoja y el botón muestra la fecha elegida («Otra fecha, {fecha}»). Atrás, «Cerrar» y el velo no cambian la fecha. La hoja no queda bajo la barra del sistema | G8; R4-44; AND-06, AND-07 | Capturas de la hoja en gestos y tres botones | A si queda bajo la barra o no se puede cerrar; M si la fecha cambia sin elegirla | [ ] | [ ] |
+| V15 | Calendario: día | Tocar un día con movimientos y uno sin movimientos. Pulsar «+ Anotar en este día». Cambiar de mes con las flechas (TalkBack apagado) | Día con movimientos: detalle con los importes con signo. Día sin movimientos: «Este día no tiene movimientos registrados.». Mes vacío: «No hay movimientos en este mes.». «+ Anotar en este día» abre el formulario con esa fecha ya elegida y un descarte sin cambios no pregunta. Las flechas cambian de mes y respetan los límites; la guía «Los días con movimientos muestran sus importes. Toca un día para ver el detalle.» se descarta al tocar un día con movimientos | R4-16 a R4-21 (D complementario); R4-42 (sin TalkBack); J-8 | Capturas del día elegido, del día vacío y del formulario prefijado | A si el formulario abre con otra fecha; M si el detalle no coincide | [ ] | [ ] |
+| V16 | Historial y filtros | Abrir Movimientos. Ver los movimientos de V08 y V09. Abrir «Filtros»: tipo, categoría y rango con el selector de fecha (elegir «Hasta» anterior a «Desde»). Ver los chips activos, quitar uno, «Limpiar filtros». Con un filtro sin resultados ver el vacío. Con el teclado no se usa campo de texto. Desplazar hasta el final | Lista agrupada por día («Hoy», «Ayer»), contador de movimientos, «Filtros (N)» con el panel plegable. Rango invertido: error visible sin consulta. Sin resultados: «Ningún movimiento coincide con estos filtros.» con [Limpiar filtros] y la ilustración del embudo. Chips «{categoría} ✕» con «Quitar filtro». Con pocos movimientos no aparece «Cargar más». El último movimiento queda sobre el FAB. Los chips pequeños se pueden tocar sin errar | R4-3 a R4-13 (D complementario); R4-47, R4-48; AND-09; J-17 | Capturas del panel, de los chips, del vacío filtrado y del final de la lista | M si un filtro devuelve datos incorrectos; A si inalcanzable bajo el FAB | [ ] | [ ] |
+| V17 | Reportes | Abrir Reportes (mes actual). Comparar «Ingresos», «Gastos» y «Balance» con los movimientos creados (50.00, 12.50, balance 37.50). Cambiar a Año y a Rango (con el selector). Tocar la tarjeta Gastos. Alternar Gráfico/Tabla, cambiar de período y comprobar que la vista se conserva. Con un período vacío ver el vacío | Los totales coinciden exactamente con los movimientos (balance $37.50). Resumen accesible por mes. Barras por categoría con nombre, importe y porcentaje en texto. Tocar una tarjeta abre Movimientos filtrado. Período vacío: «Sin movimientos en este período. Prueba con otro mes.» con la ilustración de barras. La vista Tabla se conserva al cambiar de período. Nunca se ve «$0.00» por un fallo | R4-23 a R4-29 (D complementario); R4-27; J-17 | Capturas de Mes, Año, Rango, Tabla y vacío | C si un total no coincide; M si no se conserva la vista | [ ] | [ ] |
+| V18 | Reportes: escala de grises | Activar escala de grises (Ajustes > Accesibilidad > Corrección de color > Escala de grises, o Opciones de desarrollador > «Simular espacio de color» > Acromatopsia). Abrir Reportes con al menos dos categorías de gasto. Capturar. Desactivarlo | Las barras de categoría se distinguen por longitud, por el nombre y por el porcentaje en texto, no solo por color. Ingresos/Gastos/Balance se entienden sin color (signo y etiqueta). Las pestañas activas y los chips seleccionados siguen identificables | R4-48 (barras en escala de grises); R2-10 (información no solo por color); R2-31 (estado en escala de grises) | Captura de Reportes y de Detalle en escala de grises | M si una información depende solo del color | [ ] | [ ] |
+| V19 | Exportar CSV | En Reportes, con movimientos, tocar «Exportar CSV». Esperar la hoja de compartir y guardar o enviar el archivo a un destino de prueba. Abrir el CSV | Durante la exportación el botón dice «Exportando…» y no admite un segundo toque. Se abre la hoja de compartir de Android (la app tiene `expo-sharing`). El CSV se abre y sus cifras coinciden con Reportes. Sin movimientos no se ofrece exportar. Un error se muestra en español con la opción de reintentar | R4-46; R4-28; AND-13 | Captura de «Exportando…», de la hoja de compartir y del archivo abierto (con datos ficticios) | A si la exportación falla sin mensaje comprensible o se cuelga; M si cifras distintas | [ ] | [ ] |
+| V20 | Exportar PDF | Igual que V19 con «Exportar PDF» | Igual que V19 con un PDF legible, con las mismas cifras del período y sin cortes de texto | R4-46; R4-28 | Captura de la hoja de compartir y del PDF abierto | A / M como V19 | [ ] | [ ] |
+| V21 | Categorías | Abrir Más > Categorías. Pulsar «+ Nueva categoría»; con el teclado abierto escribir un nombre y elegir cada uno de los 7 colores (ver «✓» y «Color: Rojo»). Guardar. En una categoría con movimientos (Alimentación) abrir «⋮» (Acciones de Alimentación) y elegir Eliminar. En una sin movimientos, Eliminar. Archivar y Desarchivar | Segmentado Gastos/Ingresos sin «Egresos». Formulario con vista previa y [Guardar] visible con el teclado; los 7 colores son tocables (76×72 dp) y el nombre del color se lee completo. Hoja «⋮»: Editar, Archivar/Desarchivar y Eliminar (separado, destructivo). Eliminar con movimientos: «Esta categoría tiene movimientos, por eso no se puede eliminar. Puedes archivarla: no aparecerá al anotar movimientos nuevos, pero tu historial se conserva.» con [Archivar «Alimentación»]. Sin movimientos se elimina. Descartar el formulario con texto pide «¿Descartar esta categoría?». Guía «Las categorías ordenan tus gastos e ingresos. Puedes cambiarles el nombre y el color.» | R4-31 a R4-38 (D complementario); R4-45; R4-43 (selector de color); R4-48 (chips `sm`); G18 | Capturas del formulario con teclado, del selector de color, de la hoja «⋮» y del aviso de categoría en uso | A si se elimina una categoría con movimientos o se pierde el historial; M si el teclado tapa Guardar | [ ] | [ ] |
+| V22 | Guías y persistencia | En V02 y V03 tocar [Entendido] en las guías. Cambiar de cuenta y de pestaña: no reaparecen. Cerrar la app **desde recientes** (deslizar fuera) y abrirla de nuevo con el mismo usuario. Comprobar que la guía no tapa el FAB, las pestañas ni la barra, y que no empuja el monto con el teclado abierto | Las guías descartadas no vuelven tras cerrar la app desde recientes ni al cambiar de cuenta o pestaña. Nunca hay dos guías a la vez. La guía va dentro del contenido: no tapa el FAB, las pestañas ni la barra del sistema; con el teclado abierto en Nuevo movimiento no empuja el campo de Monto fuera de la vista. [Entendido] y «Cerrar ayuda» miden 48 dp | J-21, J-22, J-12; J-10 (48 dp) | Capturas antes y después del reinicio; captura con teclado y guía | M si reaparece una guía descartada; A si tapa un control | [ ] | [ ] |
+| V27 | Fuente 130 % | Ajustes > Pantalla > Tamaño de fuente al 130 % (o el valor más cercano; anotar la escala). Recorrer Login, Mis cuentas, Crear cuenta, Detalle, Nuevo movimiento, Calendario, Reportes, Categorías y las guías | Textos legibles sin cortes; las pestañas conservan sus etiquetas («Movimientos» completa); los montos no se truncan; la barra de contexto y los botones siguen siendo de al menos 48 dp; nada se superpone. El Calendario sigue usable | R4-43; AND-10; R2-10 | Capturas por pantalla en `dispositivo/fuente-130/` | M si hay texto cortado; A si un botón de acción queda inalcanzable | [ ] | [ ] |
+| V28 | Fuente 175 % y 200 % | Poner la fuente en su máximo (anotar la escala real, 175 % o 200 %) y repetir el recorrido de V27 con foco en: barra de contexto, Mis cuentas con nombre largo, Nuevo movimiento (nombres de categoría), selector de color, Reportes, Calendario, vacíos y guías | Barra de contexto en dos filas; en los vacíos y guías sin ilustración (texto y acción visibles); tabla de Reportes apilada; exportación en columna; nombres de categoría y de color sin salirse de su caja (un nombre de color largo no se parte letra por letra); [Guardar] sigue siendo alcanzable. Los montos completos | R2-11; R4-43; J-18, J-24; AND-10 | Capturas en `dispositivo/fuente-200/` (y fuente-175 si aplica) | M si hay truncado; A si se pierde una acción o un monto | [ ] | [ ] |
+| V29 | TalkBack | Activar TalkBack. Recorrer Mis cuentas (tarjeta), la barra de contexto, las pestañas, Nuevo movimiento (campos y errores: guardar vacío), Editar un movimiento (valores de solo lectura), el calendario (celdas y resumen) y las filas del Historial. En una pantalla con guía, activar [Entendido] y observar dónde queda el foco | Cada elemento tiene rol y etiqueta comprensibles: tarjeta «{nombre}, saldo actual {saldo}. Abrir cuenta»; pestañas con rol de pestaña y estado; la barra de contexto es texto (no encabezado) con nombre, saldo y «archivada» si aplica; «Tipo: Gasto» y «Categoría: {nombre}» en Editar; los errores se anuncian una vez por intento y el foco va al campo con error; celdas del calendario y resumen con su etiqueta; las ilustraciones y emojis decorativos no se leen. **Al descartar una guía, el foco debe quedar en el encabezado de la pantalla** (UXQA-R5-01); si TalkBack salta al inicio o a un elemento arbitrario, el defecto sube de baja a media | R2-22; J-23; R4-42; R2-10; UXQA-R5-01; R3 (etiquetas) | Vídeo con audio o captura con la transcripción de lo leído; nota del foco tras descartar la guía | M (UXQA-R5-01 confirmado) o A si no se puede completar un formulario con TalkBack | [ ] | [ ] |
+
+#### P2 (complementarios)
+
+| ID | Paso | Qué hacer exactamente | Resultado esperado | Criterio que cierra | Evidencia a capturar | Sev. si falla | Resultado | Obs. |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| V06 | Nombre largo y 360 dp | Crear una cuenta con un nombre de 60 caracteres y saldo negativo grande. Verlo en Mis cuentas y en la barra de contexto a 360 dp (o el ancho real). Comprobar que dos tarjetas caben sin desplazar en 360 × 640 | Elipsis a una línea en la tarjeta y en la barra, con el nombre completo en la etiqueta accesible; el saldo negativo conserva signo y color y no se superpone al nombre. Con 2 cuentas, ambas visibles sin desplazar a 360 × 640 | R2-21; R2-27 (D); R2-26 (parcial: alcancía ausente); AND-08, AND-10 | `mis-cuentas-360.png` y `detalle-360.png` | M si hay solape; B si es solo estético | [ ] | [ ] |
+| V10 | Validaciones | En Nuevo movimiento tocar [Guardar gasto] sin categoría; con categoría y monto vacío; con «0» | Sin categoría: «Elige una categoría.»; monto vacío o 0: «Ingresa un monto mayor a cero, por ejemplo 12.50.»; foco en el campo con error; el error desaparece al editar; ninguna llamada a la API. En Crear cuenta con nombre vacío: «Escribe un nombre.» | G5, G6, G7; R2-5 | Captura de cada error | M si el mensaje es incomprensible | [ ] | [ ] |
+| V23 | «Ver ayudas otra vez» | Más > AYUDA > «Ver ayudas otra vez». Volver a Mis cuentas, a la pestaña Cuenta y a Categorías. Cerrar la app desde recientes y reabrir | Aviso «Listo. Verás las ayudas otra vez.»; las guías vuelven a aparecer según su condición sin recargar la app y sin confirmación previa; tras reiniciar siguen disponibles. La fila mide al menos 48 dp. Con el almacenamiento sin respuesta: «No pudimos restablecer las ayudas. Inténtalo de nuevo.» (solo si se logra provocar) | J-13, J-14 (D complementario), J-21 | Capturas del aviso y de una guía reaparecida | B (texto) o M (no restablece) | [ ] | [ ] |
+
+### 16.3 Plantilla para registrar un defecto Android
+
+Un defecto por bloque. Se guarda en la conversación del encargo o en este documento si el usuario lo pide; las capturas y los logs quedan fuera del repositorio.
+
+```
+UXQA-AND-<nn> · <pantalla> · caso <V.. / AND-nn> · severidad <crítica | alta | media | baja>
+Dispositivo: <marca y modelo> · Android <versión y parche> · ancho real <dp> × alto <dp>
+Pantalla: tamaño de fuente <%> · navegación <gestos | tres botones> · TalkBack <sí | no> · escala de grises <sí | no>
+Build: development build 375e4dc0 · commit del código servido por Metro <hash> · fecha y hora <AAAA-MM-DD HH:MM>
+Pasos para reproducir:
+  1.
+  2.
+Esperado (texto exacto y referencia a docs/007, docs/008 o este §16):
+Obtenido:
+Frecuencia: <siempre | a veces | una vez>
+Evidencia: <ruta de la captura o vídeo> · <logcat ReactNativeJS/AndroidRuntime sin datos personales, o «no aplica»>
+Criterio de docs/010 afectado: <R2-n | G21 | R4-n | J-n | AND-nn>
+Regresión de un criterio ya aprobado en nivel A: <sí, cuál | no>
+```
+
+Reglas: la numeración `UXQA-AND-nn` es independiente de `UXQA-R2/R3/R4/R5-nn`; un defecto crítico o alto bloquea el cierre y la publicación (§7) hasta su corrección y nueva validación; un defecto que contradiga el diseño aprobado se devuelve a `mobile-ux-designer` o `mobile-visual-designer` a través de quien coordina, no al implementador.
+
+### 16.4 Criterios de nivel D que cierra cada caso y cuáles seguirán abiertos
+
+Los criterios solo se cierran si el caso correspondiente pasa **con su evidencia**; un caso a medias deja el criterio abierto.
+
+| Criterio de nivel D | Casos que lo cierran (todos deben pasar) |
+| --- | --- |
+| R2-1 Safe areas (gestos y tres botones) | V24, V25 (AND-01, AND-02, AND-06, AND-07) |
+| R2-4 / AND-05 Atrás en dispositivo | V07, V12, V26 |
+| R2-10 48 dp, roles, no solo color (parte D) | V18, V27, V29 (las medidas de 48 dp, por inspección visual o la herramienta de accesibilidad del sistema) |
+| R2-11 Fuente 200 % en Detalle | V28 |
+| R2-22 TalkBack de la barra | V29 |
+| R2-23 / G21 Teclado abierto con Guardar visible | V11 (gestos y tres botones), V25 |
+| R2-27 Todo visible en 360 × 640 y AND-08 | V06 (solo si el ancho real o el ajustado es 360 dp) |
+| R4-41 Celdas medidas a 360 y 412 dp | V14 |
+| R4-42 TalkBack en calendario, resumen y filas | V29 |
+| R4-43 Fuente 130 y 200 % sin truncar | V27, V28 |
+| R4-44 `DatePickerSheet` con gestos y tres botones | V13, V24, V25 |
+| R4-45 Hoja «⋮» y formulario con teclado | V21, V11 |
+| R4-46 Exportar CSV y PDF reales | V19, V20 |
+| R4-47 Scroll largo sin quedar bajo el FAB ni la barra | V14, V16, V24, V25 (AND-09) |
+| R4-48 Chips `sm` y barras en escala de grises | V16, V18, V21 |
+| J-21 Persistencia tras cerrar desde recientes | V22 (y V23) |
+| J-22 Guía sin tapar controles ni empujar el monto | V22, V11, V24 |
+| J-23 TalkBack en las guías (orden, foco, ilustraciones) | V29 (UXQA-R5-01) |
+| J-24 Fuente 130, 175 y 200 % en vacíos y guías | V27, V28 |
+| J-25 Anchos 360 y 412 dp | V14, V06, V02 (solo si se miden ambos anchos) |
+| J-26 Dos cuentas de Google | V30 |
+| AND-12 Sesión cerrada (D) y aislamiento | V30 |
+
+**Seguirán abiertos aunque todo el procedimiento pase:**
+
+1. **Nivel R (comparación con `docs/design/capturas/` y el prototipo)**: criterios 14, 25, 26, 29, 30 y 31 de R2, la fidelidad visual de las pantallas (DIS) y las columnas «R» de la matriz §3. Las capturas del teléfono se pueden contrastar a ojo con las aprobadas, pero eso no es un render ni lo sustituye; la comparación la registra `mobile-ux-qa` aparte. Las ilustraciones y los emojis ya se miran en V02, pero el empaquetado y la fuente no son «fidelidad».
+2. **R2-25 y R2-26 (alcancía de Mis cuentas, UXQA-R2-01)**: la alcancía no está implementada (R6). Ningún caso lo puede cerrar; queda abierto hasta R6.
+3. **R2-27 y AND-08 a 360 × 640** y **J-25** si el teléfono no admite 360 dp ni se logró ajustar; **R4-41 a 412 dp** si el teléfono no mide 412 dp. Se cierran solo en los anchos medidos.
+4. **Diversidad de dispositivos**: un solo teléfono y una sola versión de Android no demuestran el comportamiento en otras marcas, fabricantes de teclado, versiones de Android, gestos predictivos distintos ni fuentes del sistema alternativas. El cierre se declara «validado en {modelo, Android {versión}}».
+5. **No cubiertos por este recorrido** (huecos declarados, sin caso): archivar y desarchivar una cuenta y el modo de solo consulta con el aviso de cuenta archivada (R2-8, R2-19, R2-20, solo A hoy); renombrar cuenta desde Más (R2-18); red caída o lenta con «Reintentar» y el texto «No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.» (AND-13 en D; ver §16.5); selector de cuenta con cuentas archivadas; editar y anular un movimiento; «Cargar más» del Historial (requiere más movimientos que el tamaño de página); año/rango de Reportes con muchos datos; sesión expirada.
+6. **Aspectos de UXQA abiertos fuera de D**: UXQA-R2-02 a R2-05, observaciones documentales de §12.6, §13.4 y §14.7 y la fidelidad del arranque de Bienvenida (no rediseñada), que no cierran con pruebas de dispositivo.
+7. **R6** (ícono, splash, nombre de la app, alcancía) y modo oscuro (no aplica con `userInterfaceStyle: light`).
+
+Cierre de fase: aunque V01 a V30 pasen, R2 a R5 solo pueden declararse «cerradas en dispositivo» con la salvedad de los puntos 1 a 5 y con `qa-engineer` repitiendo la validación técnica; la decisión de cierre la toma quien coordina junto con el usuario.
+
+### 16.5 Extensiones opcionales (si hay tiempo, sin contar entre los 30 pasos)
+
+- **AND-13 (red)**: con modo avión, abrir Mis cuentas (debe verse el error con «Reintentar» y nunca «$0.00»); con modo avión justo antes de pulsar [Guardar gasto] debe verse «No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.», sin cerrar el formulario ni perder lo escrito. Antes de reintentar, revisar el Historial para no duplicar.
+- **Archivar cuenta**: Más > «Archivar esta cuenta» debe pedir «Archivar cuenta» / «¿Archivar «{nombre}»? Dejará de aparecer en tu lista y no podrás anotarle movimientos. Podrás desarchivarla cuando quieras.» con [Cancelar] y [Archivar]; luego vuelve a Mis cuentas con Archivadas desplegada.
+
+## 17. Verificación funcional previa a Android
+
+Fecha: 2026-10-16. Rama `feat/rediseno-ux-ui`, HEAD `a64e746` (R5). Verificación hecha por `qa-engineer` solo con Jest, TypeScript, ESLint y lectura de código. **No se ejecutó nada en Android, ni en emulador, ni con Metro, ni contra la API real.** Ningún caso de §16 pasa a «OK» por este apartado: sigue exigiendo su evidencia de nivel D. Aquí solo se dice qué comportamiento ya está respaldado por pruebas automáticas (nivel A) y qué queda por comprobar en el teléfono. No se modificó `app/` ni `api/` y no se abrió ningún `.env`.
+
+### 17.1 Verificación base
+
+| Comando | Resultado |
+| --- | --- |
+| `cd app && npx tsc --noEmit` | Sin errores (código de salida 0) |
+| `npx eslint app/src` (raíz) | Sin errores ni avisos (código de salida 0) |
+| `npx prettier --check app/src docs` | Todos los archivos con el estilo correcto |
+| `cd app && npx jest --ci --maxWorkers=2` | 42 suites, 1550 pruebas, todas pasan |
+
+Nota de ejecución: Jest se debe lanzar desde `app/` (su configuración vive en `app/package.json`). Lanzado desde la raíz falla las 67 suites con «Cannot use import statement outside a module», al no aplicar la configuración de Jest de `app/`. No es un defecto del código.
+
+### 17.2 Casos P0 y su respaldo automatizado
+
+Todas las pruebas de la columna 2 se ejecutaron por archivo y filtro de nombre (`-t`) y pasaron. ✔ significa que la prueba pasa y cubre la lógica descrita; **no** significa que el caso esté validado en dispositivo.
+
+| Caso | Pruebas Jest que cubren el comportamiento | Resultado | Lo que NO cubren (sigue en D) |
+| --- | --- | --- | --- |
+| V01 | `App.test.tsx`: sin configuración, sin sesión guardada muestra el login, login exitoso lleva a la pantalla principal, cancelar no muestra error, mensaje comprensible si Google falla, carga sin doble pulsación | ✔ | Google Sign-In real, SHA-1 (`DEVELOPER_ERROR`), barra de estado del dispositivo |
+| V02 | `screens/guides.test.tsx` «Mis cuentas» (guía + vacío, Entendido la descarta y no vuelve, círculo con emoji, botón de 52 dp); `AccountsScreen.test.tsx` vacío sin archivadas y avatar que abre la hoja | ✔ | Que el emoji 🐷 y los PNG se vean y empaqueten en Android (Metro) |
+| V03 | `NewAccountScreen.test.tsx` (estructura y ayuda, saldo vacío equivale a 0, «Creando…» y una sola llamada, éxito sin diálogo); `MainNavigator.test.tsx` «Crear cuenta: entra al Detalle…»; `guides.test.tsx` (`cuenta-crear` siempre visible y guardar marca `cuentas-vacio`) | ✔ | Doble toque con el dedo real |
+| V04 | `NewAccountScreen.test.tsx` bloque G16 (casilla de 48 dp, prefijo «-$», saldo en contra sin importe o con 0 no envía negativo); `AccountsScreen.test.tsx` tarjetas con signo; `account-ui.test.tsx` (color `expenseText`) | ✔ | Aspecto real y contraste. Ver discrepancia D-1 |
+| V05 | `money.test.ts` (117 pruebas); `NewAccountScreen.test.tsx` bloque R3 D8; `TransactionFormScreen.test.tsx` bloque R3 D8 y montos (`1.000`, `1,234`, `1,234.56`, `12.345` → miles; `1e5` → solo números; `0.123` → decimales; `12,50` y `1000` aceptados) | ✔ | Pegado con `maxLength` 24 en el teclado Android (residual §12.9) |
+| V07 | `AccountsScreen.test.tsx` (Total de 2 o más activas con negativos, etiqueta accesible, tocar tarjeta abre la cuenta); `MainNavigator.test.tsx` (cinco pestañas, Atrás pestaña → Cuenta → Mis cuentas, selector rápido conserva pestaña y no mezcla datos) | ✔ | Toque real del selector y de la barra |
+| V08 | `TransactionFormScreen.test.tsx` G1 (orden), G2 (sin foco), G9 (doble toque = una llamada), G18 (sin categorías, [Ir a Categorías]), UXQA-R3-02 (aviso), «crea un gasto»; `MainNavigator.test.tsx` (aviso en el Snackbar, relectura única del saldo, [Ir a Categorías] y Atrás) | ✔ | Teclado que no se abre solo en el dispositivo; saldo contra la API real |
+| V09 | `TransactionFormScreen.test.tsx` «crea un ingreso», UXQA-R3-02 ingreso («Ingreso de $100.00 guardado en Sueldo»), G8 (Hoy/Ayer); `HistoryScreen.test.tsx` agrupa por Hoy y Ayer | ✔ | Recorrido completo hasta el Historial con datos reales |
+| V11 | `TransactionFormScreen.test.tsx` G2 y G17 (pie fuera del `ScrollView`, objetivos de 48 dp); `MainNavigator.test.tsx` UXQA-R3-04 (un solo margen inferior); `ui.test.tsx` (51 pruebas, incluye el margen inferior de `Screen`) | ✔ parcial | **Hueco**: el teclado real y su altura no se pueden simular; solo se prueba la estructura (pie fijo, un solo margen) |
+| V12 | `TransactionFormScreen.test.tsx` G10 a G14 y «Seguir editando»; `MainNavigator.test.tsx` «R3 confirmación de descarte con Atrás» (15 pruebas); `NewAccountScreen.test.tsx` G11, G12, G14 | ✔ | Botón Atrás físico y gesto reales, toque fuera del diálogo |
+| V14 | `CalendarScreen.test.tsx` bloques R4 (celda de 52 dp; ≥ 44 dp a 360 y ≥ 48 dp a 412; siete columnas y 3 dp de separación; margen responsive) | ✔ | Medida real en dp, recortes, desplazamiento y FAB sobre el contenido |
+| V24 | `theme/useSystemInsets.test.ts` (6 pruebas de `computeInsets`); `ui.test.tsx` «reserva el margen inferior del sistema» | ✔ parcial | **Hueco principal**: no hay prueba de `Modal`/hojas con edge-to-edge ni de la barra de gestos real |
+| V25 | Las mismas que V24 | ✔ parcial | **Hueco**: tres botones solo se comprueba en dispositivo |
+| V26 | `MainNavigator.test.tsx` (29 pruebas con «Atrás»: raíz sin interceptar, pestañas, Categorías, formulario, Reportes → Historial filtrado conserva modo y período, ignorado mientras guarda) | ✔ | Botón y gesto de Atrás de Android real; cierre efectivo de la app en la raíz |
+| V30 | `App.guides.test.tsx` (cerrar sesión conserva la preferencia); `guides.test.tsx` «cambio de usuario» y «Navegador»; `hooks/use-guides.test.tsx` «cambio de usuario»; `MainNavigator.test.tsx` (sin rastro de la sesión anterior; limpia los archivos exportados); `App.test.tsx` cerrar sesión regresa al login; `AccountsScreen.test.tsx` cerrar sesión sin confirmación | ✔ | Aislamiento de datos entre usuarios en la API real (lo garantiza `api/`, no se ejecutó aquí); dos cuentas de Google |
+
+Resumen: 15 de 15 casos P0 tienen respaldo automatizado de la lógica; ninguno sustituye al nivel D. Los casos con respaldo solo parcial son V11, V24 y V25.
+
+### 17.3 Textos exactos: §16 contra el código
+
+Se buscaron en `app/src` (código de producción) los textos que §16 espera. Coinciden literalmente:
+
+- V01: «Ingresar con Google», «Inicia sesión para continuar.», «Configuración incompleta». No existe ningún «Sesión iniciada».
+- V02: «Bienvenido. Empieza creando una cuenta: puede ser tu efectivo, tu banco o tu tarjeta.», «Todavía no tienes cuentas», «Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta.», «Crear mi primera cuenta», «Cerrar ayuda», «Entendido».
+- V03: «Saldo inicial (opcional)», «El saldo inicial es lo que ya tienes hoy. Si no estás seguro, déjalo vacío.», «Creando…».
+- V04: «Es un saldo en contra (debo dinero)».
+- V05: «Escribe el monto sin separador de miles, por ejemplo 1000 o 12.50.», «Escribe solo números, por ejemplo 12.50.», «Usa como máximo 2 decimales, por ejemplo 12.50.».
+- V07: etiqueta «{nombre}, saldo actual {saldo}. Abrir cuenta» y «Total en tus cuentas, {total}, suma de {n} cuentas activas».
+- V08: «Gasto de $12.50 guardado en Alimentación» (plantilla `{Gasto|Ingreso} de {importe} guardado en {categoría}`), «No tienes categorías de gasto activas. Crea una en Más > Categorías.» (plantilla con gasto/ingreso), [Ir a Categorías]. V09: «Ingreso de $50.00 guardado en Sueldo» sale de la misma plantilla.
+- V12: «¿Descartar este movimiento?», «¿Descartar esta cuenta?», «Lo que escribiste se perderá.», «¿Descartar los cambios?», «Los cambios que hiciste no se guardarán.», [Seguir editando], [Descartar].
+- V23 (fuera de P0): «Listo. Verás las ayudas otra vez.» coincide (`HELP_RESET_DONE`, comprobada por `guides.test.tsx`).
+
+Discrepancias texto o formato esperado contra real (a corregir en §16 o a tener en cuenta al comparar, no son defectos de la app):
+
+| Id | §16 dice | El código hace | Efecto |
+| --- | --- | --- | --- |
+| D-1 | V04: la tarjeta de Deuda muestra «−$25.00» (signo menos tipográfico U+2212) | `formatCents` antepone el guion ASCII: «-$25.00» (lo comprueban `money.test.ts` y `AccountsScreen.test.tsx` con «-$25.50») | Si se busca el carácter «−» en una captura parecerá un fallo. El signo existe y el rojo `expenseText` también |
+| D-2 | V04: la tarjeta de Banco muestra «$100.50» | Correcto. Pero los importes no llevan separador de miles («$1234.56», no «$1,234.56»), decisión de `formatCents` | Sin efecto en los datos de prueba (todos menores de 1000); a tenerlo presente si se prueba un importe mayor |
+| D-3 | V03: la ayuda es «Es el dinero que ya tienes hoy en esta cuenta. Déjalo vacío si empiezas en 0.» | El texto real continúa: «… Después no se puede cambiar; lo demás lo registras con movimientos.» | §16 cita el principio; no es un fallo, solo no se debe exigir coincidencia de la frase completa |
+| D-4 | V07: «suma de 3 cuentas activas» en la etiqueta | Correcto en la etiqueta accesible. El texto visible es «Suma de los saldos de N cuentas» | Verificar el texto visible con la cadena distinta; no hay Total con menos de 2 cuentas activas |
+
+### 17.4 V03: qué hace la app al crear una cuenta (hecho verificado en el código)
+
+Tras pulsar [Crear cuenta] con éxito, la app **no vuelve a Mis cuentas**. `MainNavigator` (`onCreated`) reemplaza «Nueva cuenta» por el **Detalle de la cuenta recién creada, en la pestaña «Cuenta»**, y muestra el aviso «Cuenta creada. Ya puedes anotar movimientos.». Con una cuenta sin movimientos, la pestaña Cuenta muestra el estado vacío «Tu cuenta está lista.» (con la ilustración). La prueba `MainNavigator.test.tsx` «Crear cuenta: entra al Detalle con el aviso y “Tu cuenta está lista”; Atrás vuelve a Mis cuentas» lo respalda: desde ahí Atrás lleva directamente a Mis cuentas (no pasa por «Nueva cuenta»).
+
+Consecuencias para ejecutar §16:
+
+- La anotación pendiente de V03 («anotar a qué pantalla navega») queda así: **navega al Detalle de la cuenta nueva (pestaña Cuenta), con aviso**; el criterio «contar las tarjetas en Mis cuentas» exige pulsar Atrás primero.
+- Para V04 (crear «Prueba Banco» y «Prueba Deuda») hay que volver con Atrás a Mis cuentas y pulsar «+ Nueva cuenta» (en la lista con cuentas ya no existe [Crear mi primera cuenta]). El orden con la primera cuenta no exige ningún paso extra.
+- La guía `cuentas-vacio` queda descartada al guardar la primera cuenta (por eso «no vuelve»). La guía `cuentas-lista` solo aparece con 2 o más cuentas activas.
+
+### 17.5 Configuración de runtime
+
+Leído `app/src/lib/config.ts`, `config.test.ts`, `App.tsx` y `ConfigMissingScreen.tsx` (sin abrir `.env`):
+
+- `readConfig()` lee `EXPO_PUBLIC_API_URL` y `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` con la forma literal de Expo. Recorta espacios y quita barras finales de la URL.
+- Variable **ausente, vacía o solo espacios** → devuelve `null` → `App.tsx` muestra `ConfigMissingScreen`: «Configuración incompleta. Faltan EXPO_PUBLIC_API_URL o EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID. Revisa app/.env.example.». Respaldado por `config.test.ts` (4 casos de ausencia) y por `App.test.tsx` «sin configuración pública…».
+- **No hay ninguna validación de formato.** Una URL mal formada (sin esquema, con un error tipográfico) o con `http://` se acepta tal cual; el error aparecería después, al primer `fetch`, como fallo de red en español. No existe en la app una comprobación de HTTPS, ni de que la URL sea la de DEV (la app no distingue DEV de PRODUCCIÓN). El ID de cliente tampoco se valida. Un Android de release bloquea el tráfico `http` por defecto; el dev client suele permitirlo, así que **una URL `http://` o la de producción no será rechazada por la app**.
+- Las variables `EXPO_PUBLIC_*` se incrustan al empaquetar el JS: tras cambiar `app/.env` hay que reiniciar Metro (conviene `--clear`). No hace falta nueva build.
+- Hueco: ninguna prueba cubre una URL no HTTPS o mal formada (comportamiento actual, no un defecto de R1 a R5). Si se quiere endurecer, es un cambio funcional fuera de este alcance: consultar a `architect`.
+
+### 17.6 Estado del árbol de trabajo
+
+`git status --short`: solo `M docs/010-MATRIZ-PRUEBAS-UX.md` y `?? tsconfig.json` (archivo de la raíz sin seguimiento: `{"extends": "expo/tsconfig.base"}`, no pertenece a ninguna tarea del rediseño; decidir si se ignora o se elimina antes del PR). `api/`, `package.json`, `package-lock.json` y `app/app.json` sin cambios.
+
+### 17.7 Lista de verificaciones del usuario antes de salir al teléfono
+
+1. `app/.env` apunta a la API de **DEV** (no a PRODUCCIÓN) y es `https://`; la app no lo comprueba. Si se cambió, reiniciar Metro con `--clear`.
+2. `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` es el cliente OAuth tipo Web, el mismo que `GOOGLE_WEB_CLIENT_ID` de la API DEV.
+3. SHA-1 del keystore de EAS (build `375e4dc0`) registrada en el cliente OAuth Android de Google Cloud con el paquete `com.cuidatubilletera.app`. Si falta: `DEVELOPER_ERROR` en logcat.
+4. Dos cuentas de Google de prueba (A y B) añadidas como usuarios de prueba en la pantalla de consentimiento (necesarias para V30).
+5. APK de la development build `375e4dc0` instalado en el teléfono (no una anterior sin `expo-sharing`) y compatible: R1 a R5 no cambian dependencias nativas.
+6. Depuración USB activa y `adb devices` lista el teléfono; `adb reverse tcp:8081 tcp:8081` hecho desde Windows (según §15) y Metro con `npx expo start --dev-client` en el contenedor.
+7. La API DEV responde y D1 DEV tiene 1 usuario, 0 cuentas, 0 categorías y 0 movimientos, como supone §16.0.
+8. Sesión antigua cerrada en el teléfono (SecureStore conserva la anterior) y fecha, hora y zona horaria automáticas.
+9. Medir el ancho real en dp (Opciones de desarrollador > «Ancho mínimo») y anotar navegación por gestos o tres botones; carpeta de evidencias del §15.D creada.
+10. Datos ficticios solamente (nombres «Prueba …») y recordar que D-1 a D-4 de §17.3 no son defectos al comparar textos.
