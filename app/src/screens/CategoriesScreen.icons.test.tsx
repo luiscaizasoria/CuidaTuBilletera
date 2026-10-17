@@ -3,10 +3,9 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react-n
 import { Alert, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { CATEGORY_ICON_OPTIONS } from '../lib/category-appearance';
 import { account, category, fakeResourcesApi, pageOf } from '../resources-test-utils';
-import { mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
-import { colors } from '../theme/tokens';
+import { chooseIcon, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import CategoriesScreen from './CategoriesScreen';
-import { iconColumns } from './category-form';
+import { iconColumns } from './icon-picker-sheet';
 
 relaxTimeoutsForColdCache();
 
@@ -41,9 +40,8 @@ const openEdit = async (name: string) => {
   await fireEvent.press(await screen.findByRole('button', { name: `Acciones de ${name}` }));
   await fireEvent.press(screen.getByRole('button', { name: `Editar ${name}` }));
 };
-const iconRadios = () => screen.getAllByRole('radio', { name: /^Ícono / });
-const pickIcon = (name: string) =>
-  fireEvent.press(screen.getByRole('radio', { name: `Ícono ${name}` }));
+const pickIcon = (name: string) => chooseIcon(name, screen);
+const iconRow = () => screen.getByRole('button', { name: /^Ícono .*, cambiar$/ });
 
 beforeEach(() => {
   mockWindow(360, 1);
@@ -51,53 +49,41 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-describe('selector de ícono: estructura (R51-13)', () => {
-  it('«Ícono» con un radiogroup de 30 radios «Ícono {nombre}» y ninguno seleccionado al crear', async () => {
+describe('selector de ícono: fila y hoja (R51-13, R5.1b)', () => {
+  it('el formulario muestra una sola fila «Ícono» y ninguna rejilla; sin elegir al crear', async () => {
     await renderScreen();
     await openCreate();
     expect(screen.getByText('Ícono')).toBeTruthy();
-    const group = screen.getByTestId('icon-grid');
-    expect(group.props.accessibilityRole).toBe('radiogroup');
-    expect(group.props.accessibilityLabel).toBe('Ícono');
-    const radios = iconRadios();
-    expect(radios).toHaveLength(30);
-    expect(radios.map((r) => r.props.accessibilityLabel)).toEqual(
-      CATEGORY_ICON_OPTIONS.map((o) => `Ícono ${o.name}`),
-    );
-    expect(radios.filter((r) => r.props.accessibilityState.selected)).toHaveLength(0);
+    expect(screen.queryByTestId('icon-grid')).toBeNull();
+    expect(screen.queryAllByRole('radio', { name: /^Ícono / })).toHaveLength(0);
+    expect(iconRow().props.accessibilityLabel).toBe('Ícono predeterminado, cambiar');
     expect(screen.getByText('Ícono: sin elegir (se usa la etiqueta)')).toBeTruthy();
-    for (const radio of radios) expect(flat(radio).minHeight).toBeGreaterThanOrEqual(48);
+    expect(flat(iconRow()).minHeight).toBeGreaterThanOrEqual(48);
   });
 
-  it('elegir uno lo marca solo a él, con borde de 3 dp del color de texto y marca ✓ oculta', async () => {
+  it('elegir uno actualiza la fila y la vista previa; elegir otro lo reemplaza', async () => {
     await renderScreen();
     await openCreate();
     await pickIcon('Café');
-    const selected = iconRadios().filter((r) => r.props.accessibilityState.selected);
-    expect(selected).toHaveLength(1);
-    expect(selected[0]!.props.accessibilityLabel).toBe('Ícono Café');
-    expect(flat(selected[0]!)).toMatchObject({ borderWidth: 3, borderColor: colors.text });
-    const check = within(selected[0]!).getByText('✓', { includeHiddenElements: true });
-    expect(check.parent!.props.importantForAccessibility).toBe('no');
+    expect(iconRow().props.accessibilityLabel).toBe('Ícono Café, cambiar');
     expect(screen.getByText('Ícono: Café')).toBeTruthy();
-    // Cambiar de ícono mueve la selección.
     await pickIcon('Auto');
-    expect(iconRadios().filter((r) => r.props.accessibilityState.selected)).toHaveLength(1);
     expect(screen.getByText('Ícono: Auto')).toBeTruthy();
+    expect(screen.queryByText('Ícono: Café')).toBeNull();
   });
 
   it.each([
-    [320, 1, 4],
+    [320, 1, 5],
     [360, 1, 5],
     [412, 1, 6],
     [360, 2, 4],
-  ])('columnas a %s dp con fuente %s = %s', async (width, fontScale, expected) => {
+  ])('columnas de la hoja a %s dp con fuente %s = %s', async (width, fontScale, expected) => {
     mockWindow(width, fontScale);
     await renderScreen();
     await openCreate();
-    const margin = width >= 400 ? 20 : 16;
-    const cell = flat(iconRadios()[0]!).width as number;
-    const available = width - 2 * margin - 32;
+    await fireEvent.press(iconRow());
+    const cell = flat(screen.getAllByRole('radio', { name: /^Ícono / })[0]!).width as number;
+    const available = width - 48;
     expect(iconColumns(available, fontScale)).toBe(expected);
     expect(cell).toBe(Math.floor((available - 8 * (expected - 1)) / expected));
   });
@@ -157,16 +143,20 @@ describe('editar (R51-15, R51-16, R51-17)', () => {
   it('R51-15: un ícono del catálogo llega preseleccionado', async () => {
     await renderScreen();
     await openEdit('Comida');
-    const selected = iconRadios().filter((r) => r.props.accessibilityState.selected);
-    expect(selected.map((r) => r.props.accessibilityLabel)).toEqual(['Ícono Comida']);
+    expect(iconRow().props.accessibilityLabel).toBe('Ícono Comida, cambiar');
     expect(screen.getByText('Ícono: Comida')).toBeTruthy();
+    await fireEvent.press(iconRow());
+    const selected = screen
+      .getAllByRole('radio', { name: /^Ícono / })
+      .filter((r) => r.props.accessibilityState.selected);
+    expect(selected.map((r) => r.props.accessibilityLabel)).toEqual(['Ícono Comida']);
   });
 
   it('R51-15: un slug fuera del catálogo queda sin selección, vista previa 🏷️ y sin envío', async () => {
     const api = makeApi();
     await renderScreen(api);
     await openEdit('Antigua');
-    expect(iconRadios().filter((r) => r.props.accessibilityState.selected)).toHaveLength(0);
+    expect(iconRow().props.accessibilityLabel).toBe('Ícono predeterminado, cambiar');
     expect(screen.getByText('Ícono: sin elegir (se usa la etiqueta)')).toBeTruthy();
     const previews = screen.getAllByTestId('category-icon', { includeHiddenElements: true });
     expect(within(previews[0]!).getByText('🏷️', { includeHiddenElements: true })).toBeTruthy();
@@ -196,11 +186,17 @@ describe('editar (R51-15, R51-16, R51-17)', () => {
     expect(api.updateCategory.mock.calls[0]![2]).toEqual({ icono: 'coffee' });
   });
 
-  it('R51-16: tocar el mismo ícono actual no lo envía (PATCH vacío como hoy)', async () => {
+  it('R51-16: el ícono actual no se puede «usar» otra vez (PATCH vacío como hoy)', async () => {
     const api = makeApi();
     await renderScreen(api);
     await openEdit('Comida');
-    await pickIcon('Comida');
+    await fireEvent.press(iconRow());
+    expect(
+      screen.getByRole('button', { name: 'Usar este ícono' }).props.accessibilityState.disabled,
+    ).toBe(true);
+    await fireEvent.press(
+      within(screen.getByTestId('icon-picker-footer')).getByRole('button', { name: 'Cancelar' }),
+    );
     await fireEvent.press(screen.getByRole('button', { name: 'Guardar' }));
     await act(async () => undefined);
     expect(api.updateCategory.mock.calls[0]![2]).toEqual({});

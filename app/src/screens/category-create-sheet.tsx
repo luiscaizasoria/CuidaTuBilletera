@@ -71,7 +71,7 @@ function OpenCategorySheet({
 }: SheetProps) {
   const { authorizedCall } = useAuth();
   const { dismiss } = useGuides();
-  const { width, height } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
@@ -274,7 +274,6 @@ function OpenCategorySheet({
           nameError={nameError}
           showDescription={false}
           hideTypeControl
-          availableWidth={width - 48}
         />
         {nameError ? (
           <Text accessibilityRole="alert" style={styles.error}>

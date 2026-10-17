@@ -4,7 +4,7 @@ import { AccessibilityInfo, Alert, BackHandler, StyleSheet, TextInput } from 're
 import { ApiRequestError } from '../lib/resources-api';
 import { APPEARANCE_SAVE_ERROR } from '../lib/resources-messages';
 import { account, fakeResourcesApi } from '../resources-test-utils';
-import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
+import { chooseIcon, controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import NewAccountScreen, {
   BALANCE_TOO_BIG_ERROR,
   NEGATIVE_BALANCE_LABEL,
@@ -435,7 +435,10 @@ describe('NewAccountScreen', () => {
 });
 
 describe('NewAccountScreen: apariencia (docs/007 §5.14, CTA-01..13)', () => {
-  const pick = (name: string) => fireEvent.press(screen.getByRole('radio', { name }));
+  const pick = (name: string) =>
+    name.startsWith('Ícono ') && name !== 'Ícono predeterminado'
+      ? chooseIcon(name.slice('Ícono '.length), screen)
+      : fireEvent.press(screen.getByRole('radio', { name }));
   const create = async (name = 'Banco') => {
     await type('Nombre de la cuenta', name);
     await fireEvent.press(screen.getByText('Crear cuenta'));

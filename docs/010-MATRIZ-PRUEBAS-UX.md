@@ -369,7 +369,7 @@ Colores literales: `grep` de `#hex`/`rgb(` en `TransactionFormScreen.tsx`, `NewA
 | Pie fuera del `ScrollView` | OK | Prueba G17 por `testID`; pie con borde, sombra y margen inferior. Problema de margen doble: UXQA-R3-04 |
 | «Ir a Categorías» desde el formulario | **Clasificado: navegación de reemplazo con etiqueta engañosa (media)** | `replaceTopWithCategories` sustituye la ruta del formulario por `categories`; Atrás vuelve a la pestaña de origen (prueba: queda en «Cuenta»), pero la pantalla se titula «‹ Más» / «Volver a Más». Se descarta el formulario (con confirmación si hay cambios). UXQA-R3-03 |
 | Omisión declarada: aviso de éxito | **FALLA (media)** | `onDone` solo retira la ruta y relee el saldo; no hay `setSnack` en la salida del formulario (`MainNavigator.tsx`). UXQA-R3-02 |
-| Omisión declarada: respuesta perdida | **FALLA (alta)** | Un error de red al crear muestra «No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.»; no existe «No pudimos confirmar si se guardó...». UXQA-R3-01 |
+| Omisión declarada: respuesta perdida | **FALLA (alta) — histórico, cerrado: ver §12.8** | Un error de red al crear muestra «No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.»; no existe «No pudimos confirmar si se guardó...». UXQA-R3-01 |
 | Omisión declarada: estado fuera de rango | Sin defecto | Ver «Selector de fecha» |
 
 ### 12.4 Sondeo de `sanitizeAmountInput` (nivel A, scratchpad, 36 entradas; límite de 9 enteros)
@@ -380,7 +380,7 @@ Coinciden con docs/007 §C y G3: «a1b2.3,45» -> «12.34»; «abc» -> ''; «.5
 
 | ID | Pantalla | Caso | Severidad | Pasos | Esperado | Obtenido | Evidencia / archivo |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| UXQA-R3-01 | Nuevo movimiento | ACC, EST (doble registro) | **Alta (bloquea)** | Con la API sin clave de idempotencia, crear un movimiento y que la conexión se corte después de que el servidor lo grabó (o expire la respuesta); la app muestra el error de red y conserva los datos | docs/007 §5.5 «Doble envío»: «el texto de error de red debe invitar a revisar el historial antes de reintentar: No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.»; docs/007 §5.5.1 A punto 13 lo lista como trabajo de R3; docs/010 §7: «doble registro posible» es alta | El mensaje es «No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.», que invita a reintentar y puede duplicar el gasto. Ninguna prueba cubre el texto de respuesta perdida | `app/src/lib/resources-messages.ts` (caso `network`); `app/src/screens/TransactionFormScreen.tsx` (`mutation.error`); `TransactionFormScreen.test.tsx` «error de red no cierra el formulario» afirma el mensaje genérico. Nivel A (código y Jest). Para `mobile-engineer`: texto específico en la creación (y en cualquier fallo en que el servidor pudo recibir la solicitud), con prueba. Cierre posible también con aceptación expresa del usuario |
+| UXQA-R3-01 | Nuevo movimiento | ACC, EST (doble registro) | **Alta (bloqueaba) — cerrado: ver §12.8** | Con la API sin clave de idempotencia, crear un movimiento y que la conexión se corte después de que el servidor lo grabó (o expire la respuesta); la app muestra el error de red y conserva los datos | docs/007 §5.5 «Doble envío»: «el texto de error de red debe invitar a revisar el historial antes de reintentar: No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.»; docs/007 §5.5.1 A punto 13 lo lista como trabajo de R3; docs/010 §7: «doble registro posible» es alta | El mensaje es «No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.», que invita a reintentar y puede duplicar el gasto. Ninguna prueba cubre el texto de respuesta perdida | `app/src/lib/resources-messages.ts` (caso `network`); `app/src/screens/TransactionFormScreen.tsx` (`mutation.error`); `TransactionFormScreen.test.tsx` «error de red no cierra el formulario» afirma el mensaje genérico. Nivel A (código y Jest). Para `mobile-engineer`: texto específico en la creación (y en cualquier fallo en que el servidor pudo recibir la solicitud), con prueba. Cierre posible también con aceptación expresa del usuario |
 | UXQA-R3-02 | Nuevo / Editar movimiento | EST (éxito), ACC | Media | Guardar un gasto de $12.50 en Alimentación | docs/007 §5.5 «Confirmación» y §5.5.1 A punto 12: aviso breve no bloqueante «Gasto de $12.50 guardado en Alimentación» (3 s); docs/007 línea 1008 asigna `MainNavigator` | El formulario se cierra y el saldo cambia, sin aviso de éxito. La omisión está declarada, no aprobada | `app/src/screens/MainNavigator.tsx` (`onDone` del formulario); el `Snackbar` existe y se usa en otros flujos. Nivel A. Implementar o aceptar expresamente y registrar en docs/003 |
 | UXQA-R3-03 | Nuevo movimiento -> Categorías | NAV, DIS | Media | Abrir Nuevo movimiento desde Calendario o Cuenta en una cuenta sin categorías del tipo; tocar [Ir a Categorías]; tocar «‹ Más» o Atrás | docs/007 §3.4 (Categorías -> Más) y la etiqueta de la propia pantalla: «‹ Más» / «Volver a Más» deben llevar a Más | Vuelve a la pestaña de origen (Cuenta, Movimientos o Calendario), no a Más; la etiqueta miente. Además el formulario se descarta y hay que volver a abrirlo tras crear la categoría | `app/src/screens/MainNavigator.tsx` (`replaceTopWithCategories`, rama `categories`); `MainNavigator.test.tsx` «[Ir a Categorías]...» afirma `Cuenta`. Opciones para quien coordina: etiqueta neutra según el origen (p. ej. «‹ Volver») o dejar la pestaña en Más al reemplazar. Si se cambia el comportamiento, lo decide `mobile-ux-designer` |
 | UXQA-R3-04 | Nuevo / Editar movimiento | SAFE, DIS | Media | Abrir el formulario con barra del sistema inferior (gestos o tres botones) | docs/007 §5.5.1 E y docs/008 §6.13 punto 6: pie fijo con margen inferior del sistema una sola vez | `Screen scroll={false}` sin `bottomBar` añade `screen-bottom-inset` (altura = `insets.bottom`) y además el pie suma `12 + insets.bottom` de relleno: el margen inferior se cuenta dos veces (24 a 48 dp de más con el respaldo de 48 dp), con una franja de `bg` bajo el pie blanco. Con el teclado abierto y `adjustResize`, `useSystemInsets` calcula `screenH - windowH - top` y podría tomar la altura del teclado como margen (dos veces): riesgo no verificable aquí | `app/src/screens/TransactionFormScreen.tsx` (pie, `paddingBottom: 12 + insets.bottom`); `app/src/screens/ui.tsx` (`Screen`, `bottomSpacer`); `app/src/screens/MainNavigator.tsx` (rama `newTx`/`editTx`); `app/src/theme/useSystemInsets.ts`. Nivel A (código). Confirmar en dispositivo (G21); corregir pasando `bottomBar` o quitando el relleno inferior del pie |
@@ -1286,6 +1286,86 @@ Nivel A salvo indicación; D = dispositivo.
 | CTA-12 | Ambas | Guardar con `busy` | Opciones y botones inertes; un solo envío | A |
 | CTA-13 | Ambas | Falla de red o 5xx al guardar | Editar: «No pudimos guardar los cambios. Revisa tu conexión e inténtalo de nuevo.». Crear: se mantiene el aviso de respuesta perdida (docs/007 §5.14.I). En ambas, selección conservada y Guardar reactivado. Un 400 por apariencia oculta el bloque (la API no admite esos campos) y muestra el texto anterior | A |
 | CTA-14 | Ambas | Teclado abierto, tocar una opción | Selecciona sin perder el texto; Guardar alcanzable; nada bajo la barra del sistema | D |
-| CTA-15 | Ambas | Fuente 200 %, 320 y 360 dp | Zonas ≥ 48 dp, nombres de color a 2 líneas sin recorte, 4 y 5 columnas de ícono | D |
-| CTA-16 | Ambas | TalkBack | Lee «Ícono Billetera, botón de opción, seleccionado»; el foco no salta al cambiar | D |
+| CTA-15 | Ambas | Fuente 200 %, 320 y 360 dp | Zonas ≥ 48 dp y nombres de color a 2 líneas sin recorte. El selector de ícono ya no es una rejilla en línea: es la fila «Ícono» + hoja «Elegir ícono» (ver ICO-01 a ICO-12). Estado: pendiente en dispositivo | D |
+| CTA-16 | Ambas | TalkBack | La fila se lee «Ícono {nombre}, cambiar, botón»; en la hoja, cada celda «Ícono Billetera, botón de opción, seleccionado»; el foco no salta al cambiar (ver ICO-05 a ICO-07). Estado: pendiente en dispositivo | D |
 | CTA-17 | Lista/Detalle | Guardar con color e ícono | `AccountCard`, Detalle y barra de contexto los reflejan | A |
+
+## 20. Casos futuros propuestos: avisos de versión y multidioma (no existen en la matriz vigente)
+
+Propuestos el 2026-10-17 por `mobile-ux-designer` para las etapas futuras F-A y F-B (docs/003 «Decisión F-A / F-B», docs/004 «Capacidades futuras»). **No están aprobados, no están implementados y no cuentan para ningún cierre.** Los IDs son provisionales y se confirman cuando el usuario apruebe cada etapa.
+
+| ID | Caso | Qué se verificaría |
+| --- | --- | --- |
+| CTA-F-01 | Estado ok | Sin aviso, espacio reservado ni parpadeo. |
+| CTA-F-02 | update_available en Mis cuentas | Tarjeta con [Actualizar] y [Ahora no]; no modal; 48 dp. |
+| CTA-F-03 | Descartar aviso opcional | Desaparece, no reaparece en la sesión, datos intactos. |
+| CTA-F-04 | Opcional con formulario abierto | No se muestra durante la captura; sí al volver a la lista. |
+| CTA-F-05 | update_required con movimiento a medio capturar | Sin bloqueo; datos conservados; el bloqueo aparece al terminar o descartar. |
+| CTA-F-06 | Guardado rechazado por versión no soportada | Se conservan los datos y se ofrece actualizar. |
+| CTA-F-07 | Bloqueante: Atrás | No abre pantallas de datos; cierra la app o el aviso permanece. |
+| CTA-F-08 | Bloqueo sin conexión tras update_required previo | El bloqueo se mantiene y se informa si Actualizar falla. |
+| CTA-F-09 | Tienda no disponible | Mensaje claro con [Reintentar] y opción de cerrar la app. |
+| CTA-F-10 | Error del servicio de versión | Se trata como ok; no se bloquea a nadie. |
+| CTA-F-11 | TalkBack en el aviso | Foco inicial en el título del bloqueante; el opcional se anuncia en modo polite. |
+| CTA-F-12 | 360x640 con fuente al 200 % | El opcional no tapa el saldo; el bloqueante se desplaza y sus acciones se alcanzan. |
+| CTA-F-13 | Opcional y exportación en curso | No interrumpe la exportación; sin doble aviso. |
+| CTA-F-14 | Tono y textos | Español cotidiano, sin tecnicismos ni urgencia falsa. |
+| CTA-F-15 | Sin dark patterns | [Ahora no] igual de visible que [Actualizar]; sin contadores ni presión. |
+| CTA-F-16 | Idioma: ubicación y valor por defecto | Fila «Idioma» en Más; «Automático» por defecto; opciones en su propio idioma. |
+| CTA-F-17 | Cambio inmediato de idioma | Sin reinicio ni cierre de sesión; conserva cuenta, pestaña, filtros, mes y período. |
+| CTA-F-18 | Cambio de idioma con borrador | El formulario conserva lo escrito. |
+| CTA-F-19 | Automático ante cambio del idioma del teléfono | Se aplica de inmediato o al siguiente arranque, con aviso. |
+| CTA-F-20 | Fechas y meses por idioma | Presentación correcta; la fecha enviada sigue siendo AAAA-MM-DD. |
+| CTA-F-21 | Montos por idioma | Siempre 2 decimales y separador inequívoco; misma cifra en centavos. |
+| CTA-F-22 | Entrada de monto ambigua | «1.250» o «1,250» se aclara, no se adivina (coherente con R3 D8). |
+| CTA-F-23 | Plurales | «1 cuenta» y «2 cuentas» correctos en cada idioma. |
+| CTA-F-24 | Errores por código | Cada código conocido muestra su texto traducido; uno desconocido, el genérico traducido. |
+| CTA-F-25 | Pseudo-localización +30–40 % | Sin textos cortados ni superpuestos en las pantallas principales. |
+| CTA-F-26 | Pseudo-localización en 360x640 con fuente al 200 % | Barra inferior con 5 etiquetas, botones de 48 dp, saldos sin truncar. |
+| CTA-F-27 | TalkBack en el idioma elegido | Etiquetas, pistas, anuncios, importes y fechas en el idioma de la app. |
+| CTA-F-28 | Datos del usuario | Nombres de cuentas y categorías, notas y descripciones no se traducen ni se alteran. |
+| CTA-F-29 | Exportación | CSV estable e independiente del idioma; PDF según decisión aprobada. |
+| CTA-F-30 | Idioma desconocido | Quien no entiende el idioma actual puede volver a la fila «Idioma». |
+
+### Verificación puntual de UXQA-R3-01 (2026-10-17, lectura de código en HEAD b7e82fa)
+
+Estado: **cerrado, no reintroducido** (consistente con §12.8). Tras un fallo incierto al crear un movimiento (red, timeout, 5xx, 429 o error desconocido) el formulario muestra «No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.» (`resources-messages.ts`, `isUncertainWriteFailure`; `TransactionFormScreen.tsx`). No hay reintento automático de `POST /transactions` (solo el reintento del 401 con token renovado); un cerrojo síncrono (`use-loader.ts`) y el botón deshabilitado evitan el doble toque. Persiste el riesgo aceptado de duplicado por reintento manual sin revisar (docs/003): no hay idempotencia en la API. **Verificado solo en código y pruebas Jest; no observado en dispositivo.** Pendiente de nivel D: modo avión justo tras pulsar Guardar, anuncio de TalkBack y que el aviso no quede tras el teclado; después abrir Movimientos y comprobar si el gasto llegó.
+
+## 21. Casos de R5.1b: selector de ícono en hoja «Elegir ícono» (docs/007 §5.15 A, docs/008 §6.17)
+
+Creados por `mobile-ux-qa` el 2026-10-17. Nivel: A = automática (mock, Jest), D = dispositivo Android real. **Todos los casos están «pendiente en dispositivo»**; la columna Nivel indica si además hay prueba automática (A+D) o solo se puede comprobar en el teléfono (D). Respaldo automático: `app/src/screens/icon-picker-sheet.test.tsx`, `app/src/lib/icon-catalog.test.ts`.
+
+| ID | Caso | Procedimiento | Esperado | Nivel | Estado |
+| --- | --- | --- | --- | --- | --- |
+| ICO-01 | Hoja a 360 × 640 dp | Abrir «Elegir ícono» con insets inferiores 0, 24 y 48 dp | «Cancelar» y «Usar este ícono» siempre visibles; al menos 2 filas de celdas; sin recortes del buscador ni de los chips | A+D | pendiente en dispositivo |
+| ICO-02 | Hoja a 412 × 915 dp | Igual que ICO-01 | Hoja alta (75 %), rejilla amplia, pie visible | A+D | pendiente en dispositivo |
+| ICO-03 | Teclado y modo compacto | Tocar «Buscar ícono» a 360 × 640 | La hoja pasa a casi pantalla completa; buscador y pie alcanzables; el pie no queda bajo el teclado; «Intro» cierra el teclado | A+D | pendiente en dispositivo |
+| ICO-04 | Atrás en hoja sobre hoja | Abrir «Elegir ícono» desde «+ Crear categoría» y pulsar Atrás (gesto y tres botones) | Cierra solo la hoja de ícono, sin guardar; la hoja de categoría conserva lo escrito; un segundo Atrás actúa según la hoja de categoría | A+D | pendiente en dispositivo |
+| ICO-05 | TalkBack: foco inicial | Abrir la hoja con TalkBack | El foco cae en el título «Elegir ícono» | A (llamada) + D | pendiente en dispositivo |
+| ICO-06 | TalkBack: anuncio de grupo | Elegir un chip de grupo | Anuncia «{grupo}, N íconos»; los chips se leen «Grupo {nombre}, botón de opción, seleccionado» | A (llamada) + D | pendiente en dispositivo |
+| ICO-07 | TalkBack: foco devuelto | Cerrar la hoja con Usar, Cancelar, ✕ y Atrás | El foco vuelve a la fila «Ícono» del formulario | A (llamada) + D | pendiente en dispositivo |
+| ICO-08 | Fuente 200 % | Abrir la hoja a 360 × 640 con fuente máxima | Botones apilados, ambos visibles; cuerpo desplazable si hace falta; celdas ≥ 48 dp en 4 columnas; sin texto recortado | A+D | pendiente en dispositivo |
+| ICO-09 | Render de los 249 emojis | Recorrer todos los grupos de cuentas y categorías | Ningún cuadro vacío («tofu»); tamaño uniforme a 24 sp | D | pendiente en dispositivo |
+| ICO-10 | Lista de vigilancia docs/008 §6.17.4 | Ver 🛁 🚽 🍦 💿 ⌛ 🍼 🍞 🧥 💍 🔦 ☔ 📓 📒 sobre limón, lavanda y rosa | Reconocibles a 24 sp sin etiqueta; si fallan, sustituir el emoji (la clave no cambia) | D | pendiente en dispositivo |
+| ICO-11 | Cuentas antiguas y categorías existentes | Editar una cuenta con ícono antiguo o sin ícono, y una categoría existente | La hoja abre en el grupo del ícono actual y se desplaza hasta él; sin ícono muestra «predeterminado»; «Usar este ícono» inactivo hasta cambiar | A+D | pendiente en dispositivo |
+| ICO-12 | Borrador y doble toque | Elegir, Cancelar/✕/fondo/Atrás; elegir y pulsar «Usar este ícono» dos veces | Cancelar descarta; el formulario cambia solo con Usar; un único `onChange` | A | pendiente en dispositivo (confirmación visual) |
+| ICO-13 | Búsqueda | Buscar un término con y sin resultados | Sin chips al buscar; vacío «No encontramos íconos con «…»…» y «Borrar búsqueda»; ✕ borra | A | pendiente en dispositivo |
+| ICO-14 | Foco visible | Navegar con teclado externo o TalkBack por celdas y chips | Aro de 2 dp `colors.text` interior; no sustituye el borde de 3 dp de la selección | A (estilo) + D | pendiente en dispositivo |
+| ICO-15 | Teclado abierto en pantalla pequeña con fuente grande | 360 × 640, fuente 200 %, teclado abierto, hoja compacta | Cálculo de `qa`: el cuerpo desplazable puede quedar sin altura y el pie recortarse; comprobar que el pie sigue alcanzable | D | pendiente en dispositivo |
+
+### 21.1 Casos INM-01 a INM-10: modo inmersivo (docs/007 §5.15 B) — propuesta, no aprobada
+
+Estos casos **no están aprobados, no cuentan para ningún cierre** y no deben ejecutarse hasta que el usuario apruebe el modo inmersivo. Todos: «propuesta, no aprobada».
+
+| ID | Caso | Qué se verificaría | Estado |
+| --- | --- | --- | --- |
+| INM-01 | Abrir la app con modo inmersivo activo, 3 botones y gestos | Contenido a pantalla completa; ningún título ni botón bajo el recorte o el gesto | propuesta, no aprobada |
+| INM-02 | Deslizar desde el borde inferior | Aparecen las barras; la app no ejecuta ninguna acción propia; se ocultan solas | propuesta, no aprobada |
+| INM-03 | Atrás con hoja abierta, teclado abierto y formulario sucio | Mismo orden que sin inmersivo; sin cierre accidental de la app | propuesta, no aprobada |
+| INM-04 | Abrir teclado en formulario | Campo y «Guardar» visibles; barras del sistema no ocultas mientras escribes | propuesta, no aprobada |
+| INM-05 | Hoja «Elegir ícono» con barras ocultas y reveladas | Pie y «Usar este ícono» tocables, nunca bajo la barra | propuesta, no aprobada |
+| INM-06 | TalkBack activado | Barras visibles; todos los controles alcanzables; al desactivar TalkBack vuelve el modo | propuesta, no aprobada |
+| INM-07 | Atrás en raíz y volver desde segundo plano | Sale de la app; al volver, las barras vuelven a ocultarse | propuesta, no aprobada |
+| INM-08 | Barra de pestañas con y sin barras reveladas | No se solapa con las barras; objetivos ≥ 48 dp; sin salto brusco del contenido | propuesta, no aprobada |
+| INM-09 | Notch/recorte y giro de pantalla | Encabezados fuera del recorte; sin margen arbitrario por modelo | propuesta, no aprobada |
+| INM-10 | Ajuste para desactivar el modo | Efecto inmediato; persiste tras reiniciar | propuesta, no aprobada |

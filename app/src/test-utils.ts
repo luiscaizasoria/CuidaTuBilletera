@@ -22,12 +22,12 @@ export function relaxTimeoutsForColdCache() {
   require('@testing-library/react-native').configure({ asyncUtilTimeout: 5000 });
 }
 
-export function mockWindow(width = 411, fontScale = 1) {
+export function mockWindow(width = 411, fontScale = 1, height = 800) {
   // `import *` crea una copia del módulo con la interoperabilidad de Babel: se espía el original.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
     width,
-    height: 800,
+    height,
     scale: 2.6,
     fontScale,
   });
@@ -225,3 +225,20 @@ export const fail = (kind: AuthError['kind'], status?: number, code?: string) =>
   jest.fn(async () => {
     throw new AuthError(kind, status, code);
   });
+
+// Elige un ícono con la hoja «Elegir ícono» (R5.1b): abre la fila «Ícono», busca por nombre, marca la
+// celda y confirma con «Usar este ícono». `root` limita las consultas (p. ej. a una hoja abierta).
+export async function chooseIcon(
+  name: string,
+  root: {
+    getByRole: (role: 'button' | 'radio', options: { name: string | RegExp }) => unknown;
+    getByLabelText: (label: string) => unknown;
+  },
+) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { fireEvent } = require('@testing-library/react-native');
+  await fireEvent.press(root.getByRole('button', { name: /^Ícono .*, cambiar$/ }));
+  await fireEvent.changeText(root.getByLabelText('Buscar ícono'), name);
+  await fireEvent.press(root.getByRole('radio', { name: `Ícono ${name}` }));
+  await fireEvent.press(root.getByRole('button', { name: 'Usar este ícono' }));
+}

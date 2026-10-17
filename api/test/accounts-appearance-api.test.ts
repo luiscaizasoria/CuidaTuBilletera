@@ -126,7 +126,12 @@ describe('POST /accounts con apariencia', () => {
     ['hex', { color: '#FFFFFF' }],
     ['número', { color: 5 }],
     ['booleano', { icono: true }],
-    ['ícono desconocido', { icono: 'rocket' }],
+    ['ícono desconocido', { icono: 'inventado' }],
+    ['ícono exclusivo de categoría tag', { icono: 'tag' }],
+    ['ícono exclusivo de categoría ellipsis', { icono: 'ellipsis' }],
+    ['ícono exclusivo de categoría plus-circle', { icono: 'plus-circle' }],
+    ['ícono nuevo en mayúsculas', { icono: 'PIZZA' }],
+    ['ícono de más de 20 caracteres', { icono: 'a'.repeat(21) }],
     ['ícono en mayúsculas', { icono: 'Wallet' }],
     ['ícono vacío', { icono: '' }],
     ['ícono número', { icono: 1 }],
@@ -141,6 +146,83 @@ describe('POST /accounts con apariencia', () => {
       if (typeof value === 'string' && value.length > 0) expect(text).not.toContain(value);
     }
     expect((await json(await call('GET', '/accounts', token))).total).toBe(0);
+  });
+});
+
+describe('íconos ampliados (R5.1)', () => {
+  const OLD_ICONS = [
+    'wallet',
+    'card',
+    'bank',
+    'piggy-bank',
+    'cash',
+    'trending-up',
+    'briefcase',
+    'home',
+    'plane',
+    'gift',
+    'shopping-bag',
+    'money-bag',
+  ];
+
+  it('las 12 claves antiguas siguen aceptadas en POST y PATCH', async () => {
+    const account = await create();
+    for (const [i, icono] of OLD_ICONS.entries()) {
+      expect(ACCOUNT_ICONS).toContain(icono);
+      const response = await patch(account.id, { icono });
+      expect(response.status).toBe(200);
+      expect((await json(response)).account.icono).toBe(icono);
+      // El máximo de cuentas por usuario es 10: POST se prueba con las 9 primeras claves.
+      if (i < 9) expect((await create({ nombre: `C ${icono}`, icono })).icono).toBe(icono);
+    }
+  });
+
+  it('las 246 claves se aceptan en PATCH y se leen en el listado', async () => {
+    expect(ACCOUNT_ICONS).toHaveLength(246);
+    const account = await create();
+    for (const icono of ACCOUNT_ICONS) {
+      const response = await patch(account.id, { icono });
+      expect(response.status).toBe(200);
+      expect((await json(response)).account.icono).toBe(icono);
+    }
+    const list = await json(await call('GET', '/accounts', token));
+    expect(list.items[0].icono).toBe(ACCOUNT_ICONS[ACCOUNT_ICONS.length - 1]);
+  }, 120_000);
+
+  it.each(['tag', 'ellipsis', 'plus-circle', 'inventado', 'Pizza', 'a'.repeat(21)])(
+    'PATCH rechaza con 400 la clave %s y no modifica la cuenta',
+    async (icono) => {
+      const account = await create({ nombre: 'A', icono: 'pizza' });
+      const response = await patch(account.id, { icono });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual(ERR400);
+      expect(await rowOf(db, 'accounts', account.id)).toMatchObject({ icono: 'pizza' });
+    },
+  );
+
+  it('un usuario no puede fijar un ícono nuevo en la cuenta de otro', async () => {
+    const other = await userWithToken(db, 'otro@example.com');
+    const foreign = await insertAccount(db, other.id, { nombre: 'Ajena' });
+    const before = await rowOf(db, 'accounts', foreign);
+    const response = await patch(foreign, { icono: 'pizza' });
+    expect(response.status).toBe(404);
+    expect(await rowOf(db, 'accounts', foreign)).toEqual(before);
+  });
+
+  it('las categorías aceptan, guardan y leen claves nuevas del catálogo', async () => {
+    const account = await create();
+    for (const icono of ['pizza', 'shower', 'microscope']) {
+      const response = await call('POST', `/accounts/${account.id}/categories`, token, {
+        nombre: `Cat ${icono}`,
+        tipo: 'egreso',
+        icono,
+      });
+      expect(response.status).toBe(201);
+      expect((await json(response)).category.icono).toBe(icono);
+    }
+    const list = await json(await call('GET', `/accounts/${account.id}/categories`, token));
+    const icons = list.items.map((c: Json) => c.icono);
+    expect(icons).toEqual(expect.arrayContaining(['pizza', 'shower', 'microscope']));
   });
 });
 

@@ -113,3 +113,12 @@ Paso 342 (agente `mobile-ux-qa`, política de interfaz móvil y matriz docs/010)
 - Brecha UXQA-D2-02 de `audit.js` (recorte vertical aceptado como accesible): corregida (el recorte vertical ahora es bloqueante) y verificada reintroduciendo el defecto en una copia.
 - Condiciones para R0: la validación de Android real (niveles A y D de docs/010: safe areas, teclado, Atrás con gestos y tres botones, fuente 130 % y 200 %, TalkBack, emojis y fuente Nunito reales) sigue PENDIENTE y se ejecutará con el teléfono del usuario; las mediciones de texto deben repetirse allí. Los valores de `sizes` de docs/008 §11 quedaron aprobados como valores iniciales en el paso 347 (docs/003, Decisión R0 D8); se vuelcan a tokens en R1 y se ajustan tras la medición en Android real.
 - Herramientas: `docs/design/{render,audit,verify}.js` con Chromium fuera del repo (docs/010 §8); sin script de instalación versionado.
+
+## 10. R5.1 - Ampliación de íconos y estudio de navegación inmersiva (paso 362, 2026-10-17)
+
+- Implementado en local: `icon-catalog.ts` (249 entradas), `icon-picker-sheet.tsx` (fila «Ícono» y hoja «Elegir ícono», con `iconSheetLayout` para repartir alturas), enum de cuentas de la API ampliado a 246 claves y pruebas (docs/003 D13).
+- Orden de despliegue: pruebas de la API, Worker DEV (autorización expresa), luego app. Sin migración.
+- Navegación inmersiva (docs/003 D14): no implementada. Si se aprueba requiere, en este orden: cambio de docs/001, `react-native-safe-area-context` (insets), `expo-navigation-bar`, cambio de `app.json` y nueva Development Build; pruebas INM-01 a INM-10 (docs/010 §21.1) en gestos y tres botones.
+- Safe areas: `useSystemInsets` seguiría siendo el único origen aplicado solo por `Screen`, `MainNavigator`, `Sheet` y `Snackbar`; sin márgenes por modelo.
+- La prueba inmersiva se propone para R6 (requiere aprobación, cambio de docs/001, dependencias nativas y nueva Development Build).
+- Las etapas futuras F-A y F-B se conservan sin cambios.

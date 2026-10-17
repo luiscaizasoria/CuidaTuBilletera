@@ -1,6 +1,7 @@
 // Apariencia de la cuenta: color e ícono (docs/003 D12, docs/007 §5.14, docs/008 §6.16).
 // Puro y sin dependencias de React. La API es la autoridad del catálogo (enum en Zod): la app solo
 // guarda y envía claves. Una clave desconocida se dibuja como el predeterminado.
+import { iconsForScope } from './icon-catalog';
 import { ApiRequestError, hasAppearanceKeys, type AccountPatch } from './resources-api';
 
 export interface AccountColorOption {
@@ -28,21 +29,11 @@ export interface AccountIconOption {
   glyph: string;
 }
 
-// ✈️ y 🛍️ llevan el selector de variación U+FE0F, igual que el catálogo de categorías.
-export const ACCOUNT_ICON_OPTIONS: readonly AccountIconOption[] = [
-  { key: 'wallet', label: 'Billetera', glyph: '👛' },
-  { key: 'card', label: 'Tarjeta', glyph: '💳' },
-  { key: 'bank', label: 'Banco', glyph: '🏦' },
-  { key: 'piggy-bank', label: 'Alcancía', glyph: '🐷' },
-  { key: 'cash', label: 'Efectivo', glyph: '💵' },
-  { key: 'trending-up', label: 'Inversiones', glyph: '📈' },
-  { key: 'briefcase', label: 'Trabajo', glyph: '💼' },
-  { key: 'home', label: 'Hogar', glyph: '🏠' },
-  { key: 'plane', label: 'Viajes', glyph: '✈️' },
-  { key: 'gift', label: 'Regalos', glyph: '🎁' },
-  { key: 'shopping-bag', label: 'Compras', glyph: '🛍️' },
-  { key: 'money-bag', label: 'Ahorros', glyph: '💰' },
-];
+// Íconos de cuenta: derivados del catálogo único (icon-catalog.ts), sin los exclusivos de categorías.
+// Las 12 claves originales conservan clave, emoji y nombre.
+export const ACCOUNT_ICON_OPTIONS: readonly AccountIconOption[] = iconsForScope('account').map(
+  (entry) => ({ key: entry.key, label: entry.name, glyph: entry.glyph }),
+);
 
 // Opción del catálogo o null (null, vacío o clave desconocida = predeterminado).
 export function accountColorOption(key: string | null | undefined): AccountColorOption | null {

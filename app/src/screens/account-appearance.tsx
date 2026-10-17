@@ -1,27 +1,23 @@
 // Apariencia de la cuenta en Crear y Editar cuenta (docs/007 §5.14, docs/008 §6.16): vista previa,
 // selector de color y selector de ícono, cada uno con la opción «Predeterminado» (valor null).
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   ACCOUNT_COLOR_OPTIONS,
-  ACCOUNT_ICON_OPTIONS,
   accountColorOption,
   accountIconOption,
   type AppearanceDraft,
 } from '../lib/account-appearance';
 import { accountColors, accountIcon } from '../lib/accounts';
-import { colors, radii, screenMargin, sizes, typography } from '../theme/tokens';
-import { IconPicker, type IconPickerOption } from './category-form';
+import { iconsForScope } from '../lib/icon-catalog';
+import { colors, radii, sizes, typography } from '../theme/tokens';
+import { IconField } from './icon-picker-sheet';
 
 export const COLOR_ASSIGNED_ON_CREATE = 'El color se asigna al crear la cuenta';
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
 
-const ICON_PICKER_OPTIONS: readonly IconPickerOption[] = ACCOUNT_ICON_OPTIONS.map((option) => ({
-  key: option.key,
-  name: option.label,
-  glyph: option.glyph,
-}));
+const ACCOUNT_ENTRIES = iconsForScope('account');
 
 // Estado de foco (teclado externo o TalkBack): contorno de 2 dp en la opción enfocada.
 function useFocus() {
@@ -165,27 +161,22 @@ function Swatch({
   );
 }
 
-// Bloque «Apariencia» completo. `accountId` null en Crear (sin id aún); `inset` = relleno horizontal
-// del contenedor además del margen de pantalla, para calcular el ancho útil de la rejilla.
+// Bloque «Apariencia» completo. `accountId` null en Crear (sin id aún). El ícono se elige en la hoja
+// «Elegir ícono» (fila `IconField`); «Predeterminado» (null) sigue siendo un chip aparte.
 export function AppearancePicker({
   nombre,
   draft,
   onChange,
   busy,
   accountId,
-  inset = 0,
 }: {
   nombre: string;
   draft: AppearanceDraft;
   onChange: (patch: Partial<AppearanceDraft>) => void;
   busy: boolean;
   accountId: string | null;
-  inset?: number;
 }) {
-  const { width } = useWindowDimensions();
-  const availableWidth = width - 2 * screenMargin(width) - 2 * inset;
   const colorName = accountColorOption(draft.color)?.label;
-  const iconName = accountIconOption(draft.icono)?.label;
   return (
     <View testID="appearance-block">
       <Text accessibilityRole="header" style={styles.title}>
@@ -229,9 +220,6 @@ export function AppearancePicker({
       </View>
 
       <Text style={styles.label}>Ícono</Text>
-      <Text style={styles.summary}>
-        {iconName ? `Ícono: ${iconName}` : 'Ícono: predeterminado'}
-      </Text>
       <View style={styles.chipRow}>
         <DefaultChip
           label="Predeterminado"
@@ -241,13 +229,12 @@ export function AppearancePicker({
           onPress={() => onChange({ icono: null })}
         />
       </View>
-      <IconPicker
+      <IconField
         value={draft.icono}
+        entries={ACCOUNT_ENTRIES}
         onChange={(key) => onChange({ icono: key })}
         disabled={busy}
-        availableWidth={availableWidth}
-        options={ICON_PICKER_OPTIONS}
-        groupLabel="Ícono de la cuenta"
+        tile={accountColorOption(draft.color)?.tile}
       />
     </View>
   );

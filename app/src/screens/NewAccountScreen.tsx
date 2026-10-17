@@ -207,7 +207,6 @@ export default function NewAccountScreen({
             onChange={(patch) => setAppearance((current) => ({ ...current, ...patch }))}
             busy={busy}
             accountId={null}
-            inset={APPEARANCE_CARD_PADDING}
           />
         </Card>
       ) : null}

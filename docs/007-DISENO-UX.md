@@ -1528,6 +1528,102 @@ Parte de decisiones de arquitectura YA APROBADAS (color = clave de `accountPalet
 1. ¿Editar (inline en Más) debe tener aviso de descarte? Hoy no lo tiene para el nombre.
 2. Con lista vacía no se puede elegir apariencia al crear la primera cuenta (se puede editar después). ¿Se acepta?
 
+### 5.15 R5.1b: selector de íconos ampliado, propuesta de navegación inmersiva y safe areas (especificación; PROPUESTA salvo lo marcado)
+
+Origen: decisión del architect (catálogo de ~150 a 250 emojis, Unicode 11 o anterior, sin ZWJ, en 17 grupos; las claves ASCII actuales no se renombran; el emoji y el grupo viven solo en la app). Este apartado NO rediseña pantallas: amplía el selector de §5.13.D y §5.14.E y deja preparada, sin implementar, la propuesta de modo inmersivo. Estado: EXISTENTE = código de HEAD b7e82fa (`IconPicker` en `category-form.tsx`, rejilla sin scroll propio y sin grupos; `AppearancePicker` en `account-appearance.tsx`; `Sheet` con `tall`/`compact` en `sheets.tsx`; `Screen` en `ui.tsx`; `useSystemInsets`).
+
+#### A. Selector de íconos ampliado
+
+**Problema.** Con ~200 celdas de 48 dp la rejilla actual (5 columnas a 360 dp) mediría unas 40 filas: inaceptable dentro del formulario y ruinosa con TalkBack. Se separa «ver y cambiar el ícono» de «buscarlo».
+
+**A.1 En el formulario (cuenta y categoría).** El bloque «Ícono» deja de pintar la rejilla completa y muestra una sola fila de 56 dp, tocable (rol `button`): glifo actual en mosaico de 40 dp, texto «Ícono: {nombre}» (o «Ícono: predeterminado») y la acción «Cambiar». Etiqueta accesible «Ícono {nombre}, cambiar». En cuentas se conserva el chip «Predeterminado» (valor `null`) junto a la fila. Vista previa, resumen y guard de descarte no cambian. Se evalúa mantener la rejilla de 12 de cuentas en línea (cabe en 3 filas): decisión abierta P1.
+
+**A.2 Hoja «Elegir ícono»** (modal, `Sheet` con `tall`; EXISTENTE la variante). Contenido de arriba abajo:
+1. Título «Elegir ícono» (`header`) y botón «✕» de 48 dp (cierra sin aplicar).
+2. Buscador (`TextInput`, 48 dp, `placeholder` «Buscar ícono», `returnKeyType="search"`, `autoCorrect` apagado, botón «Borrar búsqueda» de 48 dp cuando hay texto). Es opcional: nunca se exige.
+3. Chips de grupo en una fila de scroll horizontal (17 chips de 48 dp de alto, ancho de contenido, separación 8 dp; rol `radio` dentro de `radiogroup` «Grupos de íconos»; chip seleccionado con borde 3 dp, fondo `brand100` y «✓», como `DefaultChip`). Al abrir, la fila se desplaza para dejar visible el chip activo. Se oculta mientras hay búsqueda.
+4. Rejilla del grupo activo (10 a 20 celdas; mismas medidas de §5.14.E: celda ≥ 48 × 48 dp, cuadro 40 dp, glifo 22 dp, separación 8 dp, 4 a 6 columnas), con desplazamiento vertical propio y `keyboardShouldPersistTaps="handled"`. Con tamaño de fuente grande el scroll vertical sigue siendo corto (un solo grupo). Bajo la rejilla, el nombre del ícono marcado: «Seleccionado: {nombre}» (`small`, región `polite`), para no depender del glifo ni del color.
+5. Pie fijo: botón primario «Usar este ícono» (48 dp; deshabilitado si no hay marca nueva) y «Cancelar» (texto, 48 dp).
+
+**A.3 Grupo inicial y selección visible.** Grupo inicial = grupo del ícono actual. Sin ícono (`null`) o clave desconocida: primer grupo del catálogo («Dinero y ahorro»). El ícono actual llega marcado y, si está en el grupo, visible sin desplazar la rejilla. El orden de los grupos es el de la lista del architect y el de las celdas, el del catálogo (estable, sin orden por uso).
+
+**A.4 Borrador local y cancelación.** La hoja trabaja con una copia: tocar una celda solo la marca (el formulario NO cambia ni se ensucia). «Usar este ícono» aplica la clave, cierra y devuelve el foco a la fila «Ícono». «Cancelar», «✕», toque en el fondo, Atrás de Android y el gesto de Atrás cierran sin aplicar ni pedir confirmación (no hay nada que perder). Con el teclado abierto, el primer Atrás cierra el teclado y el segundo la hoja. Doble toque en «Usar este ícono»: se ignora el segundo (cierre inmediato).
+
+**A.5 Búsqueda por nombre en español.** Se activa con 1 o más caracteres; compara sin mayúsculas ni tildes (`normalize('NFD')`) contra el nombre y palabras clave en español del catálogo («banco», «tarjeta», «super», «gasolina»). Con texto, se buscan todos los grupos y se muestran los resultados en una sola rejilla (máximo todo el catálogo; sin grupos). Cada resultado conserva su etiqueta «Ícono {nombre}». Estado «sin resultados»: texto «No encontramos íconos con «{texto}». Prueba con otra palabra o elige un grupo.» y botón «Borrar búsqueda»; anunciado como cambio de región `polite`. Al borrar el texto vuelve el grupo que estaba activo. La búsqueda no distingue singular/plural por reglas: las palabras clave del catálogo incluyen las formas comunes (decisión del contenido del catálogo, no de este documento).
+
+**A.6 Teclado y hoja.** Abre sin teclado (no se enfoca el buscador solo, para no tapar la rejilla). Al enfocar el buscador la hoja pasa a `compact` (EXISTENTE: `height - top - 8`) y la rejilla sigue visible sobre el teclado; el pie fijo queda sobre el teclado y no debajo. El pie suma `insets.bottom` (EXISTENTE en `Sheet`). Tocar una celda con el teclado abierto marca sin cerrarlo. Al girar o cambiar la fuente se conserva texto, grupo y marca.
+
+**A.7 Accesibilidad (español).**
+| Elemento | Rol | Etiqueta | Estado |
+| --- | --- | --- | --- |
+| Fila del formulario | `button` | «Ícono {nombre}, cambiar» | - |
+| Hoja | modal (`accessibilityViewIsModal`) | «Elegir ícono» | - |
+| Buscador | campo de texto | «Buscar ícono» | - |
+| Grupos | `radiogroup` «Grupos de íconos»; cada chip `radio` | «Grupo Transporte» | `selected` |
+| Celda | `radio` dentro de `radiogroup` «Íconos del grupo {grupo}» (o «Resultados de la búsqueda») | «Ícono {nombre}» | `selected` |
+| Usar este ícono | `button` | «Usar este ícono» | `disabled` |
+- Glifos y «✓» decorativos (`importantForAccessibility="no"`). TalkBack: al abrir, el foco va al título; al aplicar o cancelar, vuelve a la fila «Ícono» que abrió la hoja; al cambiar de grupo, el foco queda en el chip y se anuncia el nuevo grupo y la cantidad («Transporte, 14 íconos»). La fila de chips horizontal es alcanzable por exploración lineal (cada chip enfocable); no hay gestos obligatorios. Foco visible de 2 dp en chips y celdas (como `useFocus`). Nombres únicos dentro del catálogo (sin dos celdas con la misma etiqueta).
+
+**A.8 ¿Compartido entre cuentas y categorías?** SÍ: un único componente de presentación (`IconPickerSheet` + fila `IconField`), con los datos inyectados (`options` con `key`, `name`, `glyph`, `group`, `keywords`, y `groupLabel`). Cada consumidor aporta su catálogo; el componente no conoce cuentas ni categorías. Evita dos mantenimientos de accesibilidad y búsqueda. El catálogo compartido o separado es decisión del architect (P2).
+
+**A.9 Criterios de aceptación (verificables)**
+1. El formulario no muestra más de una fila de ícono; abrir la hoja no cambia el borrador del formulario hasta «Usar este ícono».
+2. Al abrir con ícono actual, el grupo activo es el suyo y la celda está marcada y visible; sin ícono, grupo «Dinero y ahorro».
+3. Localizar cualquier ícono requiere como máximo: cambiar de grupo (1 toque) + un desplazamiento vertical corto, o escribir una palabra.
+4. Todas las celdas y chips miden ≥ 48 × 48 dp con fuente al 200 %.
+5. Cancelar, «✕», fondo, Atrás y gesto de Atrás cierran sin cambiar el ícono ni activar el aviso de descarte.
+6. La búsqueda ignora tildes y mayúsculas; «sin resultados» muestra el texto de A.5 y «Borrar búsqueda» restablece el grupo.
+7. Con teclado abierto la rejilla y el pie son visibles y tocables; Atrás cierra primero el teclado.
+8. Roles, etiquetas y estados de A.7; TalkBack lee «Ícono {nombre}, seleccionado» y devuelve el foco a la fila al cerrar.
+9. Claves existentes (12 de cuenta, 30 de categoría) siguen mostrándose con su glifo y se preseleccionan; clave desconocida = predeterminado.
+10. Sin doble envío del formulario por tocar «Usar este ícono» dos veces.
+
+**A.10 Archivos que tocaría (PROPUESTA; implementa `mobile-engineer`).** `app/src/screens/category-form.tsx` (sustituir la rejilla por `IconField`), `app/src/screens/account-appearance.tsx`, un nuevo `app/src/screens/icon-picker-sheet.tsx`, `app/src/screens/sheets.tsx` (solo si `Sheet tall` necesita pie fijo; hoy existe), `app/src/lib/category-appearance.ts` y `app/src/lib/account-appearance.ts` (campos `group` y `keywords`, y función de búsqueda sin tildes) y sus pruebas.
+
+#### B. Navegación inmersiva (propuesta preparada; NO aprobada; NO implementar)
+
+Estado: opción A vigente (docs/001 §7, docs/003 R0 D7); B no recomendada (§9). Si el usuario la aprobara, requiere antes `architect`, autorización de dependencia nativa (`expo-navigation-bar`) y nueva Development Build. Comportamiento deseado:
+1. **Revelado.** Las barras del sistema permanecen ocultas con comportamiento «transitorio»: un gesto desde el borde las muestra unos segundos y vuelven a ocultarse solas. La app nunca imita ese gesto con elementos propios en el borde inferior: la barra de pestañas propia no se dibuja pegada al borde; conserva su zona segura (C).
+2. **Atrás.** El botón y el gesto de Atrás conservan EXACTAMENTE el orden vigente (cerrar teclado, cerrar hoja o aviso, volver en la pila, volver a Cuentas). El gesto de Atrás desde el borde NO debe confundirse con el revelado: el primer deslizamiento muestra las barras y el siguiente actúa. Se verifica en gestos y en tres botones.
+3. **Teclado.** Abrir el teclado muestra siempre la barra de estado y la inferior del sistema que Android decida; la app no las vuelve a ocultar mientras el teclado esté abierto y las oculta de nuevo al cerrarlo.
+4. **Hojas y diálogos.** Los modales (`Modal`, `Sheet`) heredan el estado de las barras; el pie de la hoja suma el inset inferior real (no 0) aunque la barra esté oculta, para no quedar bajo el gesto de revelado.
+5. **TalkBack.** Con TalkBack activo el modo inmersivo se desactiva (barras siempre visibles), porque ocultar controles del sistema perjudica la exploración y el gesto de revelado compite con los gestos de TalkBack. Se detecta con `AccessibilityInfo.isScreenReaderEnabled` y se reevalúa al cambiar.
+6. **Salida de la app.** Atrás en la pantalla raíz sale de la app (comportamiento actual); no hay confirmación. Al volver desde segundo plano las barras se vuelven a ocultar. Cerrar sesión o error de sesión no cambia el modo.
+7. **Ajustes del usuario.** Debe poder desactivarse (propuesta: valor por defecto «barras visibles»). Sin ajuste, no se aprueba (decisión abierta P3).
+
+Casos de prueba de experiencia propuestos para docs/010 (texto; IDs a asignar por `mobile-ux-qa`):
+| ID | Caso | Resultado esperado |
+| --- | --- | --- |
+| INM-01 | Abrir la app con modo inmersivo activo, 3 botones y gestos | Contenido a pantalla completa; ningún título ni botón bajo el recorte o el gesto |
+| INM-02 | Deslizar desde el borde inferior | Aparecen las barras; la app no ejecuta ninguna acción propia; se ocultan solas |
+| INM-03 | Atrás con hoja abierta, teclado abierto y formulario sucio | Mismo orden que sin inmersivo; sin cierre accidental de la app |
+| INM-04 | Abrir teclado en formulario | Campo y «Guardar» visibles; barras del sistema no ocultas mientras escribes |
+| INM-05 | Hoja «Elegir ícono» con barras ocultas y reveladas | Pie y «Usar este ícono» tocables, nunca bajo la barra |
+| INM-06 | TalkBack activado | Barras visibles; todos los controles alcanzables; al desactivar TalkBack vuelve el modo |
+| INM-07 | Atrás en raíz y volver desde segundo plano | Sale de la app; al volver, las barras vuelven a ocultarse |
+| INM-08 | Barra de pestañas con y sin barras reveladas | No se solapa con las barras; objetivos ≥ 48 dp; sin salto brusco del contenido |
+| INM-09 | Notch/recorte y giro de pantalla | Encabezados fuera del recorte; sin margen arbitrario por modelo |
+| INM-10 | Ajuste para desactivar el modo | Efecto inmediato; persiste tras reiniciar |
+
+#### C. Estrategia de safe areas (con y sin barra oculta)
+
+Principio: ninguna pantalla conoce el modelo de teléfono ni suma «márgenes mágicos». Toda medida de sistema pasa por UN solo origen (`useSystemInsets`) y la consumen solo cuatro contenedores; el resto de componentes usa relleno relativo (`screenMargin`).
+1. **Origen único.** `useSystemInsets` entrega `top` y `bottom` (EXISTENTE; con respaldos 32 y 48 dp). La opción preferida a medio plazo es sustituir el cálculo por `react-native-safe-area-context` (BLOQUEADO hasta autorizar la dependencia nativa, docs/003 D11.7): ofrece recorte, gestos y barra oculta reales. Con inmersivo, SIN esa librería no es fiable (el cálculo por diferencia de alturas da 0 y los respaldos serían arbitrarios): por eso la inmersiva depende de esa librería (se suma al P3).
+2. **Quién aplica qué (cuatro contenedores).** `Screen` (`ui.tsx`): `top` arriba (relleno con el color del encabezado), `bottom` abajo si no hay barra de pestañas; `MainNavigator`: barra de pestañas con alto `sizes.tabHeight + bottom`; `Sheet`: `paddingBottom = 24 + bottom` y altura máxima basada en `top`; `Snackbar`: `bottom + offset + 8`. Encabezados, formularios y listas NO suman insets; solo se apoyan en el relleno del contenedor.
+3. **Barra de pestañas.** Mide una vez (`tabsHeight`, EXISTENTE) y expone el espacio al contenido (`bottomBar`): `Screen` no añade `bottom` si hay barra de pestañas, evitando doble relleno. Con barra del sistema oculta el `bottom` baja a 0 o al valor del gesto, y la barra de pestañas se reajusta sin salto porque el relleno sale del mismo valor.
+4. **Formularios y teclado.** `Screen` con `ScrollView` y `keyboardShouldPersistTaps="handled"`; con el teclado abierto el relleno inferior del sistema no se suma (el teclado ya lo cubre), para no dejar un hueco bajo «Guardar». Se aplica `keyboardAvoiding` (EXISTENTE). El pie del formulario mantiene `margen + bottom` solo con el teclado cerrado.
+5. **Hojas.** Con barra oculta la hoja no sube a `height - top - 8` más allá del recorte: usa `top`; el pie lleva `bottom`, que con el gesto de revelado nunca es 0 si hay zona de gestos. `statusBarTranslucent` (EXISTENTE) mantiene el scrim bajo la barra de estado.
+6. **Encabezados.** El relleno superior pinta el color del encabezado (EXISTENTE `screen-top-inset`), de modo que no hay franja. Un título jamás se mide contra `StatusBar.currentHeight` por sí mismo.
+7. **Sin ramas por teléfono.** Prohibido condicionar por marca, modelo o versión para ajustar píxeles. Si un dispositivo falla, se corrige el origen único o se documenta la limitación.
+8. **Validación.** En Android real con gestos, tres botones, recorte, giro y teclado; matriz de docs/010 más INM-01 a INM-10 si se aprueba la inmersiva.
+
+#### D. Preguntas abiertas (R5.1b)
+- P1. ¿Los 12 íconos de cuenta se quedan en línea (rejilla corta) o también usan la hoja? Recomendación: usar la hoja si el catálogo de cuentas crece.
+- P2. ¿Catálogo único compartido por cuentas y categorías (con grupos) o catálogos separados? Lo decide el architect.
+- P3. ¿Se aprueba abrir el estudio de navegación inmersiva (implica `react-native-safe-area-context`, `expo-navigation-bar`, nueva build y ajuste de usuario)? Recomendación: no.
+- P4. ¿«Usar este ícono» (aplicar al confirmar) o aplicar al tocar la celda? Se propone confirmar, para cumplir «cancelar sin guardar».
+- P5. ¿Se aceptan las palabras clave en español como parte del catálogo (contenido que debe revisarse con el usuario)?
+
 ## 6. Mis cuentas: renombrar, archivar y «solicitar eliminación»
 
 Hechos de contrato (verificados): no existe `DELETE /accounts`; `PATCH /accounts/:id` admite solo `nombre` y `archivada`; docs/001 §5: «Las cuentas se archivan, no se eliminan físicamente» y CLAUDE.md: «La información histórica no se elimina, se archiva».

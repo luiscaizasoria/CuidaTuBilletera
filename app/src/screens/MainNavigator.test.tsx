@@ -14,7 +14,12 @@ import {
   pageOf,
   transaction,
 } from '../resources-test-utils';
-import { controlledPromise, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
+import {
+  chooseIcon,
+  controlledPromise,
+  mockWindow,
+  relaxTimeoutsForColdCache,
+} from '../test-utils';
 import MainNavigator from './MainNavigator';
 
 relaxTimeoutsForColdCache();
@@ -1030,7 +1035,7 @@ describe('MainNavigator: apariencia de cuenta (docs/003 D12, CTA-01..03 y CTA-17
     await openEfectivo();
     await goTab('Más');
     await fireEvent.press(screen.getByRole('button', { name: 'Datos de cuenta' }));
-    await fireEvent.press(screen.getByRole('radio', { name: 'Ícono Viajes' }));
+    await chooseIcon('Viajes', screen);
     await fireEvent.press(screen.getByRole('radio', { name: 'Color limón' }));
     await fireEvent.press(screen.getByText('Guardar cambios'));
     expect(await screen.findByText('Cuenta actualizada')).toBeTruthy();

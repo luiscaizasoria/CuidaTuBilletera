@@ -5,7 +5,7 @@ import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type ResourcesApi } from '../lib/resources-api';
 import { APPEARANCE_SAVE_ERROR } from '../lib/resources-messages';
 import { account, fakeResourcesApi } from '../resources-test-utils';
-import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
+import { chooseIcon, controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import MoreScreen from './MoreScreen';
 
 relaxTimeoutsForColdCache();
@@ -220,7 +220,10 @@ describe('MoreScreen: apariencia en Datos de cuenta (docs/007 §5.14, CTA-01..13
       />,
     );
   const openEditor = () => fireEvent.press(screen.getByRole('button', { name: 'Datos de cuenta' }));
-  const pick = (name: string) => fireEvent.press(screen.getByRole('radio', { name }));
+  const pick = (name: string) =>
+    name.startsWith('Ícono ') && name !== 'Ícono predeterminado'
+      ? chooseIcon(name.slice('Ícono '.length), screen)
+      : fireEvent.press(screen.getByRole('radio', { name }));
   const save = () => fireEvent.press(screen.getByText('Guardar cambios'));
   const saved = (nombre = 'Efectivo') => account({ nombre, color: 'rosa', icono: 'bank' });
 
@@ -257,9 +260,8 @@ describe('MoreScreen: apariencia en Datos de cuenta (docs/007 §5.14, CTA-01..13
     expect(
       screen.getByRole('radio', { name: 'Color rosa' }).props.accessibilityState.selected,
     ).toBe(true);
-    expect(
-      screen.getByRole('radio', { name: 'Ícono Banco' }).props.accessibilityState.selected,
-    ).toBe(true);
+    expect(screen.getByRole('button', { name: 'Ícono Banco, cambiar' })).toBeTruthy();
+    expect(screen.getByText('Ícono: Banco')).toBeTruthy();
     screen.unmount();
   });
 

@@ -4,7 +4,7 @@ import { StyleSheet } from 'react-native';
 import { type AppearanceDraft } from '../lib/account-appearance';
 import { accountColors } from '../lib/accounts';
 import { colors } from '../theme/tokens';
-import { mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
+import { chooseIcon, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import { AccountPreview, AppearancePicker, COLOR_ASSIGNED_ON_CREATE } from './account-appearance';
 
 relaxTimeoutsForColdCache();
@@ -39,7 +39,6 @@ describe('AppearancePicker: estructura y accesibilidad (CTA-10)', () => {
       screen.getByText('Opcional. Te ayuda a reconocer la cuenta de un vistazo.'),
     ).toBeTruthy();
     expect(screen.getByLabelText('Color de la cuenta').props.accessibilityRole).toBe('radiogroup');
-    expect(screen.getByLabelText('Ícono de la cuenta').props.accessibilityRole).toBe('radiogroup');
     expect(
       screen.getByRole('radio', { name: 'Color predeterminado' }).props.accessibilityState,
     ).toEqual({
@@ -56,18 +55,15 @@ describe('AppearancePicker: estructura y accesibilidad (CTA-10)', () => {
     expect(screen.getByText('Ícono: predeterminado')).toBeTruthy();
   });
 
-  it('seis colores y doce íconos con etiquetas en español', async () => {
+  it('seis colores y una sola fila de ícono (la rejilla vive en la hoja)', async () => {
     await renderPicker();
     for (const name of ['aguamarina', 'lavanda', 'albaricoque', 'celeste', 'rosa', 'limón']) {
       expect(screen.getByRole('radio', { name: `Color ${name}` })).toBeTruthy();
     }
-    expect(screen.getAllByTestId('icon-grid')).toHaveLength(1);
-    for (const name of ['Billetera', 'Tarjeta', 'Banco', 'Alcancía', 'Efectivo', 'Inversiones']) {
-      expect(screen.getByRole('radio', { name: `Ícono ${name}` })).toBeTruthy();
-    }
-    expect(screen.getByRole('radio', { name: 'Ícono Ahorros' })).toBeTruthy();
-    // 12 íconos + chip: 13 radios de ícono; 7 de color.
-    expect(screen.getAllByRole('radio')).toHaveLength(7 + 13);
+    expect(screen.queryByTestId('icon-grid')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ícono predeterminado, cambiar' })).toBeTruthy();
+    // Chip «Predeterminado» de ícono + 7 de color.
+    expect(screen.getAllByRole('radio')).toHaveLength(7 + 1);
   });
 
   it('el seleccionado es exclusivo y el resumen lo nombra', async () => {
@@ -79,11 +75,12 @@ describe('AppearancePicker: estructura y accesibilidad (CTA-10)', () => {
       screen.getByRole('radio', { name: 'Color predeterminado' }).props.accessibilityState.selected,
     ).toBe(false);
     expect(
-      screen.getByRole('radio', { name: 'Ícono Banco' }).props.accessibilityState.selected,
-    ).toBe(true);
+      screen.getByRole('radio', { name: 'Ícono predeterminado' }).props.accessibilityState.selected,
+    ).toBe(false);
+    expect(screen.getByRole('button', { name: 'Ícono Banco, cambiar' })).toBeTruthy();
     expect(screen.getByText('Color: Limón')).toBeTruthy();
     expect(screen.getByText('Ícono: Banco')).toBeTruthy();
-    expect(screen.getAllByText('✓', { includeHiddenElements: true }).length).toBe(2);
+    expect(screen.getAllByText('✓', { includeHiddenElements: true }).length).toBe(1);
   });
 
   it('«✓» de la muestra usa colors.text y el anillo de reposo 1.5 dp borderStrong', async () => {
@@ -100,23 +97,15 @@ describe('AppearancePicker: estructura y accesibilidad (CTA-10)', () => {
     });
   });
 
-  it('el glifo de la rejilla mide 24 sp', async () => {
+  it('la hoja usa 24 sp en el glifo y 5 columnas a 360 dp (celda de 56 dp)', async () => {
     await renderPicker();
+    await fireEvent.press(screen.getByRole('button', { name: /^Ícono .*, cambiar$/ }));
     const glyph = screen.getByText('👛', { includeHiddenElements: true, exact: true });
     expect(StyleSheet.flatten(glyph.props.style).fontSize).toBe(24);
-  });
-
-  it.each([
-    // ancho útil = ancho - 2 * margen 16 - 2 * relleno 16 de la tarjeta
-    [360, 5, 52],
-    [320, 4, 58],
-  ])('a %s dp la rejilla usa %s columnas (celda %s)', async (width, _columns, cell) => {
-    mockWindow(width);
-    await renderPicker(undefined, { inset: 16 });
-    const flat = StyleSheet.flatten(
+    const cell = StyleSheet.flatten(
       screen.getByRole('radio', { name: 'Ícono Billetera' }).props.style,
     );
-    expect(flat.width).toBe(cell);
+    expect(cell.width).toBe(56);
   });
 });
 
@@ -127,7 +116,7 @@ describe('AppearancePicker: selección', () => {
     expect(onChange).toHaveBeenLastCalledWith({ color: 'limon' });
     await fireEvent.press(screen.getByRole('radio', { name: 'Color predeterminado' }));
     expect(onChange).toHaveBeenLastCalledWith({ color: null });
-    await fireEvent.press(screen.getByRole('radio', { name: 'Ícono Viajes' }));
+    await chooseIcon('Viajes', screen);
     expect(onChange).toHaveBeenLastCalledWith({ icono: 'plane' });
     await fireEvent.press(screen.getByRole('radio', { name: 'Ícono predeterminado' }));
     expect(onChange).toHaveBeenLastCalledWith({ icono: null });
@@ -138,8 +127,12 @@ describe('AppearancePicker: selección', () => {
     for (const radio of screen.getAllByRole('radio')) {
       expect(radio.props.accessibilityState.disabled).toBe(true);
     }
+    expect(
+      screen.getByRole('button', { name: /^Ícono .*, cambiar$/ }).props.accessibilityState.disabled,
+    ).toBe(true);
     await fireEvent.press(screen.getByRole('radio', { name: 'Color limón' }));
-    await fireEvent.press(screen.getByRole('radio', { name: 'Ícono Banco' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^Ícono .*, cambiar$/ }));
+    expect(screen.queryByLabelText('Buscar ícono')).toBeNull();
     expect(onChange).not.toHaveBeenCalled();
   });
 

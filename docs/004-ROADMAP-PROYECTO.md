@@ -345,17 +345,45 @@ Línea de trabajo transversal, no es una fase numerada de docs/001 §11. Plan en
 [ ] R3 - Nuevo movimiento (orden aprobado).
 [ ] R4 - Historial, Calendario, Reportes y Categorías con el nuevo sistema visual.
 [ ] R5 - Guías contextuales y estados vacíos.
-[ ] R5.1 - Mejoras UX y ajustes Android (docs/003 «Decisión R5.1»). **Parcialmente implementada; no está completada.** Implementado y validado en local: Login renovado con el botón oficial de Google, «Cerrar sesión» en Mis cuentas, selección de ícono de categoría, «+ Crear categoría» dentro de Nuevo movimiento y mitigación provisional de la barra de estado (commit `948d310`); personalización de cuentas con color e ícono (docs/003 D12), implementada solo en local. Pendiente: migración D1 0004 y despliegue del Worker en DEV (no ejecutados), validación en Android real (docs/010 niveles A y D, casos CTA-14 a CTA-16), ocultar la barra inferior del sistema (módulo nativo y cambio de norma) y la corrección exacta de insets (`react-native-safe-area-context`), ambos bloqueados por autorización.
+[ ] R5.1 - Mejoras UX y ajustes Android (docs/003 «Decisión R5.1»). **Parcialmente implementada; no está completada.** Implementado y validado en local: Login renovado con el botón oficial de Google, «Cerrar sesión» en Mis cuentas, selección de ícono de categoría, «+ Crear categoría» dentro de Nuevo movimiento y mitigación provisional de la barra de estado (commit `948d310`); personalización de cuentas con color e ícono (docs/003 D12), implementada en local con migración 0004 y Worker ya aplicados en DEV (2026-10-17). Pendiente: pruebas autenticadas de personalización en Android real, validación en Android real (docs/010 niveles A y D, casos CTA-14 a CTA-16), ocultar la barra inferior del sistema (módulo nativo y cambio de norma) y la corrección exacta de insets (`react-native-safe-area-context`), ambos bloqueados por autorización.
+Actualización 2026-10-17 (paso 362, local, sin commit): el usuario comunicó la validación en Android (Expo Tunnel) de Login, cierre de sesión, colores e íconos de cuentas y categorías, crear categoría en Nuevo movimiento y separación de datos entre usuarios. Íconos ampliados a 246 (cuentas) y 249 (categorías) con selector «Elegir ícono» (docs/003 D13): `mobile-ux-qa` APROBADO CON OBSERVACIONES tras corregir un defecto alto (R51-01) y `qa-engineer` APROBADO (app: 53 suites y 1776 pruebas; API: 28 archivos y 1287 pruebas; tsc, ESLint y Prettier limpios). Pendiente: redesplegar el Worker DEV (autorización), validar en dispositivo ICO-01 a ICO-15 (docs/010 §21) y decidir la barra inferior (docs/003 D14, estudiada, no implementada). **R5.1 sigue sin completarse** mientras la barra inferior esté pendiente.
+
+Paso 363 (2026-10-17): catálogo consolidado en un commit local (sin push) tras revisar palabras clave y agrupación y repetir QA (app: 53 suites y 1778 pruebas; API: 28 archivos y 1287 pruebas; tsc, ESLint y Prettier limpios). La prueba de las 246 claves en PATCH recibió un timeout explícito de 120 s (tardaba ~17 s bajo carga y excedía los 5 s por defecto). La prueba inmersiva (docs/003 D14) queda propuesta para R6, sujeta a aprobación; no está implementada. Las etapas F-A y F-B no cambian.
+
 [ ] R6 - Ícono, splash y nombre (requiere nueva development build y autorización expresa).
 
 Pendiente transversal: validación en Android real (niveles A y D de docs/010) y decisiones abiertas listadas en docs/003 (Decisión R0, «Pendientes»). No se toca la API, D1, sesiones ni dependencias nativas salvo decisión posterior.
 
-## Rediseño R5.1 - Personalización de cuentas (2026-10-17, local)
+## Rediseño R5.1 - Personalización de cuentas (2026-10-17, local y DEV)
 
 Implementado en local, sin migración remota ni despliegue (docs/003 D12): migración aditiva `api/migrations/0004_account_appearance.sql` (columnas `color` e `icono` nullable en `accounts`, CHECK de forma, sin tocar filas), API de cuentas con `color` e `icono` en las respuestas y en POST/PATCH (enum en Zod; PATCH ausente = sin cambio, null = predeterminado), y en la app selectores de color (6) e ícono (12) en Crear y Editar cuenta con vista previa. Sin soporte de la API (DEV actual o lista vacía) la app oculta el selector y no envía los campos. No se guardan solo en el teléfono. Saldos, reportes y exportación no usan los campos.
+
+Despliegue en DEV (2026-10-17, autorizado expresamente; solo DEV, sin cambios en producción): migración `0004_account_appearance.sql` aplicada en D1 `controlgastos-db-dev` (antes: 0001–0003 aplicadas y solo 0004 pendiente; después: ninguna pendiente). Conteos conservados antes y después (users 2, refresh_tokens 13, accounts 3, categories 34, transactions 5). `accounts` incorpora `color` e `icono` TEXT opcionales, sin valor por defecto; las 3 cuentas existentes conservan NULL. El esquema completo (22 objetos) solo difiere en `accounts`. Worker `controlgastos-api-dev` actualizado con `cwrangler deploy --env dev` (dry-run sin bindings nuevos): versionId `1e918a4a-fc03-45d2-8a84-f79ac9a095ff`, 2026-10-17 12:02:56–12:03:03 UTC, URL https://controlgastos-api-dev.luis-caiza-soria.workers.dev. Smoke tests no autenticados aprobados: `/health` 200; `/accounts` sin JWT y con JWT inválido 401 con `Cache-Control: no-store`. `qa-engineer`: verificación independiente APROBADA. Pendientes: pruebas autenticadas de personalización en Android (no realizadas), ajustes de barra inferior e insets. R5.1 queda parcialmente completada; R6 no iniciado.
 
 Evidencia: API 27 archivos y 1034 pruebas; app 51 suites y 1721 pruebas (líneas base 979 y 1641 de antes de este trabajo); `tsc` y ESLint sin errores; Prettier sin errores en los archivos tocados (`api/wrangler.jsonc` ya fallaba antes y no se modificó). `mobile-ux-qa`: sin defectos críticos ni altos; medios aceptados (UX-CTA-01: tras un 400 por apariencia el bloque se oculta; UX-CTA-02: texto de CTA-13 alineado en docs/010) y 5 bajos registrados en docs/003. `qa-engineer`: aprobado.
 
 Suites completas: aprobadas en una corrida con concurrencia reducida (API `npx vitest run --maxWorkers=1 --no-file-parallelism`, 229 s; app `npx jest --ci --maxWorkers=2`, 24 s). Con la concurrencia por defecto hubo timeouts intermitentes y cambiantes (5000 ms en API; `findBy` en app) que pasan aislados. Causa investigada: presión de memoria del Dev Container (3,7 GB de RAM y swap lleno), no defectos de las pruebas ni de este cambio (indicios, no prueba directa). No se subieron timeouts ni se debilitaron pruebas. Comando de cierre recomendado con concurrencia reducida; reducir la memoria usada por el entorno antes de cerrar.
 
-Pendientes y riesgos: migración 0004 y Worker en DEV (orden: migración, Worker, app); validar en Android la vista previa visible en 360x640, el render de los emojis, la fuente al 200 %, el teclado y la barra inferior; con lista vacía la primera cuenta solo se personaliza al editarla. R6 no iniciado.
+Pendientes y riesgos: validar en Android (migración 0004 y Worker ya en DEV) la vista previa visible en 360x640, el render de los emojis, la fuente al 200 %, el teclado y la barra inferior; con lista vacía la primera cuenta solo se personaliza al editarla. R6 no iniciado.
+
+# Capacidades futuras (no iniciadas)
+
+Registradas el 2026-10-17 por petición del usuario, fuera del alcance original. **Ninguna está implementada ni aprobada; no hay EAS Update ni i18n configurados.** Propuestas y decisiones pendientes en docs/003 «Decisión F-A / F-B»; casos de experiencia propuestos en docs/010 §20.
+
+Orden de prioridad vigente (sin renumerar etapas existentes):
+
+1. Completar R5.1.
+2. Validar en Android real.
+3. Completar R6.
+4. Integrar el rediseño.
+5. Retomar el alcance funcional pendiente del roadmap (Fase 6, conciliación).
+6. Actualización de versiones y multidioma, en etapas posteriores.
+
+[ ] F-A - Versiones y actualización de la app: versionName y versionCode de Android, EAS Build, EAS Update (runtimeVersion y canales), Google Play cuando corresponda, detección de nueva versión, aviso opcional y obligatorio según compatibilidad con la API, rollback, separación DEV/producción y pruebas de compatibilidad entre versiones. Estado verificado: `expo-updates`, `runtimeVersion`, `updates` y canales no existen; `eas.json` tiene `appVersionSource: remote`. Publicar en Google Play requiere cambiar primero docs/001 §3.
+[ ] F-B - Multidioma: español inicial, inglés propuesto, arquitectura de traducciones y centralización de textos, formato de fechas, montos y números, mensajes del backend por código de error, detección y persistencia del idioma, accesibilidad y pruebas con textos largos. Estado verificado: sin capa de i18n; 300 a 450 cadenas estimadas por revisar.
+
+Relación con la Fase 6: sus pantallas, textos y códigos de error nuevos se escriben en módulos de mensajes agrupados para que F-B sea una migración mecánica.
+
+## Verificación puntual de UXQA-R3-01 (2026-10-17)
+
+Revisado en código en HEAD b7e82fa, sin ejecución en dispositivo: el defecto está **cerrado y no fue reintroducido** (docs/010 §12.8 y «Verificación puntual» en §20). Ante un fallo incierto al guardar un gasto se muestra «No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.»; `POST /transactions` no se reintenta automáticamente y no hay idempotencia (riesgo aceptado en docs/003). Se corrigieron en docs/010 las filas históricas que aún figuraban como abiertas. Pendiente en nivel D: corte de red real tras pulsar Guardar.

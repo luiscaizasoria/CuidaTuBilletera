@@ -221,7 +221,6 @@ export default function MoreScreen({
                 onChange={(patch) => setAppearance((current) => ({ ...current, ...patch }))}
                 busy={rename.pending}
                 accountId={account.id}
-                inset={16}
               />
             ) : null}
             {saveError || rename.error ? (

@@ -11,7 +11,12 @@ import {
 import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type Category, type ResourcesApi } from '../lib/resources-api';
 import { account, category, fakeResourcesApi, pageOf, transaction } from '../resources-test-utils';
-import { controlledPromise, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
+import {
+  chooseIcon,
+  controlledPromise,
+  mockWindow,
+  relaxTimeoutsForColdCache,
+} from '../test-utils';
 import { LIMIT_REACHED_CATEGORY_MESSAGE, NOT_CREATED_MESSAGE } from './category-create-sheet';
 import TransactionFormScreen from './TransactionFormScreen';
 
@@ -221,7 +226,8 @@ describe('hoja «Nueva categoría» (R51-20)', () => {
     expect(sheet().getByText('Color')).toBeTruthy();
     expect(sheet().getAllByRole('radio', { name: /^Color / })).toHaveLength(7);
     expect(sheet().getByText('Ícono')).toBeTruthy();
-    expect(sheet().getAllByRole('radio', { name: /^Ícono / })).toHaveLength(30);
+    expect(sheet().getByRole('button', { name: 'Ícono predeterminado, cambiar' })).toBeTruthy();
+    expect(sheet().queryAllByRole('radio', { name: /^Ícono / })).toHaveLength(0);
     expect(sheet().getByText('Vista previa')).toBeTruthy();
     // El teclado no salta al abrir.
     expect(sheet().getByLabelText('Nombre de la categoría').props.autoFocus).toBeFalsy();
@@ -287,6 +293,35 @@ describe('conservación del movimiento (R51-21)', () => {
     expectUntouched();
   });
 
+  it('R5.1b: cancelar la hoja «Elegir ícono» no cambia el ícono ni ensucia la hoja de categoría', async () => {
+    await renderForm();
+    await openSheet();
+    await fireEvent.press(sheet().getByRole('button', { name: 'Ícono predeterminado, cambiar' }));
+    await fireEvent.press(sheet().getByRole('radio', { name: 'Ícono Billetera' }));
+    await fireEvent.press(
+      within(screen.getByTestId('icon-picker-footer')).getByRole('button', { name: 'Cancelar' }),
+    );
+    expect(sheetOpen()).toBe(true);
+    expect(sheet().getByRole('button', { name: 'Ícono predeterminado, cambiar' })).toBeTruthy();
+    // La hoja de categoría sigue sin cambios: cancelarla no pregunta.
+    await fireEvent.press(sheet().getByRole('button', { name: 'Cancelar' }));
+    expect(sheetOpen()).toBe(false);
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('R5.1b: elegir un ícono con la hoja ensucia la categoría y se envía al crearla', async () => {
+    const api = makeApi();
+    await renderForm(api);
+    await openSheet();
+    await typeName('Gym');
+    await chooseIcon('Pizza', sheet());
+    expect(sheet().getByRole('button', { name: 'Ícono Pizza, cambiar' })).toBeTruthy();
+    await saveCategory();
+    await act(async () => undefined);
+    expect(api.createCategory).toHaveBeenCalledTimes(1);
+    expect(api.createCategory.mock.calls[0]![2]).toMatchObject({ nombre: 'Gym', icono: 'pizza' });
+  });
+
   it('un fallo al crear deja el movimiento intacto', async () => {
     const api = makeApi({
       createCategory: jest.fn().mockRejectedValue(new ApiRequestError(409, 'LIMIT_REACHED')),
@@ -333,7 +368,7 @@ describe('guardar (R51-22, R51-23)', () => {
     await openSheet();
     await typeName('  Gym  ');
     await fireEvent.press(sheet().getByRole('radio', { name: 'Color Rojo' }));
-    await fireEvent.press(sheet().getByRole('radio', { name: 'Ícono Deporte' }));
+    await chooseIcon('Deporte', sheet());
     const save = sheet().getByRole('button', { name: 'Guardar categoría' });
     await fireEvent.press(save);
     await fireEvent.press(sheet().getByRole('button', { name: 'Guardar categoría' }));
@@ -651,8 +686,8 @@ describe('accesibilidad y fuente ampliada (R51-27)', () => {
       const size = (style.minHeight ?? style.height ?? 0) as number;
       expect(size).toBeGreaterThanOrEqual(48);
     }
-    // Los 30 íconos son tocables desde el scroll.
-    expect(within(scroll).getAllByRole('radio', { name: /^Ícono / })).toHaveLength(30);
+    // El ícono se elige con la fila «Ícono» del scroll (la rejilla vive en su propia hoja).
+    expect(within(scroll).getByRole('button', { name: /^Ícono .*, cambiar$/ })).toBeTruthy();
   });
 
   it('la hoja alta limita su altura al 75 % de la ventana menos el margen superior', async () => {

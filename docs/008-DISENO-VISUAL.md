@@ -601,6 +601,402 @@ Compatibilidad (decisión R5.1 D9, Unicode ≤ 11), por conocimiento del estánd
 
 Etiquetas accesibles: «Color {Etiqueta en minúscula}» e «Ícono {Etiqueta}» (docs/007 §5.14.F). El orden de las filas es el orden de la rejilla.
 
+### 6.17 R5.1b: catálogo único de íconos y selector «Elegir ícono» (PROPUESTA; implementa docs/007 §5.15 A; sin cambios de código)
+
+Solo especificación. Decisiones del coordinador aplicadas: catálogo único en la app compartido por cuentas y categorías (P2), cuentas también usan la hoja (P1), «Usar este ícono» confirma (P4). La API valida solo la clave; el emoji, el grupo y las palabras clave viven en la app. Las 35 claves existentes (12 de cuenta, 30 de categoría, 7 comunes) conservan clave, emoji y nombre. Total propuesto: **249 entradas en 17 grupos**; verificado con un script del scratchpad de la sesión (no incorporado al repositorio): claves únicas, emojis únicos, nombres únicos y todas las claves cumplen `^[a-z0-9-]{1,20}$` (cumplen también `^[a-z0-9_-]{1,40}$`).
+
+#### 6.17.1 Reglas del catálogo
+
+1. Emoji de Unicode 10 o anterior (el más reciente es 🧒 🧠 🧘 🧥, Unicode 10; se evitaron los de Emoji 11 en adelante, p. ej. 🧳 🧭 🧩 🦴 🦷 🧾). Por conocimiento del estándar; **sin prueba en dispositivo** (docs/010 nivel D pendiente).
+2. Sin ZWJ, sin tonos de piel y sin banderas. Una sola excepción de forma: los 5 emojis existentes que llevan U+FE0F (🍽️ ✈️ 🛍️ 🏋️ 🏷️) se conservan tal cual. Las 244 entradas restantes usan caracteres con presentación de emoji por defecto (no necesitan U+FE0F); se descartaron los que sí lo necesitan (✂ ⚙ ✉ ❤ ☀ ☁ 🖥 🛠 🏖 ⚠ ♻ 🕹 …).
+3. Sin duplicados de emoji entre claves ni de nombre entre entradas (la etiqueta «Ícono {nombre}» es única).
+4. Dos entradas existentes son glifos de texto, no emojis: `ellipsis` ⋯ y `plus-circle` ＋ (se dibujan en blanco sobre el color de la categoría, `category-appearance.ts`). Se marcan **T**. Recomendación: son **solo de categorías** (campo `scope`); el selector de cuentas no las muestra (un ＋ o ⋯ no identifica una cuenta). `tag` (🏷️) sigue siendo el predeterminado de categorías y no se ofrece en cuentas.
+5. Forma sugerida del dato (decisión de implementación): `{ key, glyph, name, group, keywords, text?, scope? }`; `keywords` en minúscula y sin tildes; la búsqueda normaliza `NFD`. Orden de grupos y de celdas = el de las tablas.
+6. Las palabras clave son contenido en español pendiente de revisión del usuario (P5). Incluyen formas comunes regionales («chompa», «bencina», «palta», «planilla»); no hay reglas de singular/plural.
+
+Leyenda de la columna Existente: cuenta, categoría, o ambas (así figuran hoy en `account-appearance.ts` y `category-appearance.ts`).
+
+#### 6.17.2 Catálogo por grupo
+
+**1. Dinero y ahorro** (14)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `wallet` | 👛 | Billetera | monedero, cartera, dinero | cuenta |
+| `cash` | 💵 | Efectivo | billetes, dinero, plata, contado | cuenta |
+| `money-bag` | 💰 | Ahorros | ahorro, bolsa, dinero, plata | cuenta y categoría |
+| `piggy-bank` | 🐷 | Alcancía | chanchito, cerdito, ahorro, guardar | cuenta |
+| `trending-up` | 📈 | Inversiones | inversion, sube, ganancia, bolsa, rendimiento | cuenta y categoría |
+| `chart-down` | 📉 | Pérdidas | baja, cae, perdida, descenso |  |
+| `bar-chart` | 📊 | Estadísticas | grafico, barras, reporte, resumen |  |
+| `money-wings` | 💸 | Dinero que sale | gasto, vuela, pago, gastar |  |
+| `exchange` | 💱 | Cambio de moneda | divisa, cambio, dolar, tipo de cambio |  |
+| `dollar-sign` | 💲 | Dólar | dolares, precio, moneda, usd |  |
+| `euro` | 💶 | Euro | euros, moneda, europa |  |
+| `yen` | 💴 | Yen | moneda, japon, asia |  |
+| `pound` | 💷 | Libra | moneda, esterlina, reino unido |  |
+| `gem` | 💎 | Joyas | diamante, lujo, gema, valioso |  |
+
+**2. Bancos y tarjetas** (14)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `card` | 💳 | Tarjeta | credito, debito, pago, visa | cuenta |
+| `bank` | 🏦 | Banco | cuenta, ahorros, corriente, entidad | cuenta |
+| `atm` | 🏧 | Cajero | retiro, atm, cajero automatico |  |
+| `handshake` | 🤝 | Acuerdo | prestamo, trato, deuda, pacto |  |
+| `ledger` | 📒 | Libro de cuentas | libreta, registro, contabilidad |  |
+| `clipboard` | 📋 | Trámites | tramite, lista, formulario, papeles, impuestos |  |
+| `scroll` | 📜 | Documento | contrato, escritura, papel |  |
+| `lock` | 🔒 | Seguridad | candado, cerrado, privado, clave |  |
+| `key` | 🔑 | Llave | clave, acceso, alquiler, arriendo |  |
+| `outbox` | 📤 | Transferencia enviada | envio, enviar, transferencia, salida |  |
+| `inbox` | 📥 | Transferencia recibida | recibir, recibido, ingreso, entrada, deposito |  |
+| `repeat` | 🔁 | Pago recurrente | suscripcion, mensual, repetir, cuota |  |
+| `calendar-due` | 📅 | Vencimientos | fecha, vence, plazo, calendario |  |
+| `bell` | 🔔 | Recordatorio | aviso, alerta, notificacion |  |
+
+**3. Hogar** (14)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `home` | 🏠 | Hogar | casa, vivienda, alquiler, arriendo, renta, hipoteca | cuenta y categoría |
+| `house-garden` | 🏡 | Casa con jardín | casa, jardin, vivienda, propiedad |  |
+| `door` | 🚪 | Puerta | entrada, mudanza, cerradura |  |
+| `shower` | 🚿 | Ducha | baño, agua, aseo |  |
+| `bathtub` | 🛁 | Bañera | baño, tina, aseo |  |
+| `toilet` | 🚽 | Baño | sanitario, inodoro, aseo |  |
+| `hammer` | 🔨 | Martillo | herramienta, obra, construccion, carpinteria |  |
+| `wrench` | 🔧 | Reparaciones | arreglo, mantenimiento, mecanico, llave inglesa | categoría |
+| `nut-bolt` | 🔩 | Tornillería | ferreteria, tuerca, tornillo, repuesto |  |
+| `plug` | 🔌 | Enchufe | electricidad, cable, corriente, instalacion |  |
+| `plant` | 🌱 | Plantas | planta, brote, vivero, cultivo |  |
+| `herb` | 🌿 | Jardín | jardineria, hierba, verde, patio |  |
+| `sunflower` | 🌻 | Flores | girasol, flor, decoracion |  |
+| `set-square` | 📐 | Obra | escuadra, construccion, remodelacion, medida |  |
+
+**4. Alimentación** (22)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `utensils` | 🍽️ | Comida | restaurante, almuerzo, cena, plato, alimentos | categoría |
+| `shopping-cart` | 🛒 | Supermercado | super, compras, mercado, carrito, despensa, alimentos | categoría |
+| `coffee` | ☕ | Café | cafeteria, cafe, desayuno, te | categoría |
+| `pizza` | 🍕 | Pizza | comida rapida, pizzeria, italiana |  |
+| `burger` | 🍔 | Hamburguesa | comida rapida, hamburguesa, fast food |  |
+| `fries` | 🍟 | Papas fritas | comida rapida, papas, snack |  |
+| `taco` | 🌮 | Taco | mexicana, comida, antojito |  |
+| `sushi` | 🍣 | Sushi | japonesa, pescado, arroz |  |
+| `ramen` | 🍜 | Sopa | fideos, ramen, caldo, sopa |  |
+| `bread` | 🍞 | Pan | panaderia, pan, desayuno |  |
+| `meat` | 🍖 | Carne | carniceria, asado, parrilla |  |
+| `chicken` | 🍗 | Pollo | presa, pollo frito, aves |  |
+| `apple` | 🍎 | Fruta | manzana, frutas, verdura, mercado |  |
+| `banana` | 🍌 | Banano | platano, fruta, banana |  |
+| `avocado` | 🥑 | Aguacate | palta, verdura, fruta |  |
+| `carrot` | 🥕 | Verduras | zanahoria, hortalizas, vegetales |  |
+| `salad` | 🥗 | Ensalada | saludable, dieta, vegetariana |  |
+| `cake` | 🍰 | Postres | pastel, torta, dulce, pasteleria |  |
+| `ice-cream` | 🍦 | Helado | heladeria, postre, dulce |  |
+| `cookie` | 🍪 | Galletas | snack, dulce, bocadillo |  |
+| `beer` | 🍺 | Cerveza | bar, licor, bebida, alcohol |  |
+| `wine` | 🍷 | Vino | licor, bebida, copa, alcohol |  |
+
+**5. Transporte** (16)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `bus` | 🚌 | Transporte público | bus, autobus, pasaje, colectivo | categoría |
+| `car` | 🚗 | Auto | carro, coche, vehiculo, automovil | categoría |
+| `fuel` | ⛽ | Combustible | gasolina, diesel, gasolinera, bencina, nafta | categoría |
+| `taxi` | 🚕 | Taxi | carrera, uber, viaje, movilidad |  |
+| `metro` | 🚇 | Metro | subte, subterraneo, tren urbano |  |
+| `train` | 🚆 | Tren | ferrocarril, pasaje, viaje |  |
+| `tram` | 🚊 | Tranvía | tren ligero, tram, pasaje |  |
+| `bike` | 🚲 | Bicicleta | bici, ciclismo, pedal |  |
+| `kick-scooter` | 🛴 | Monopatín | patineta, scooter, patin |  |
+| `motor-scooter` | 🛵 | Moto | motocicleta, scooter, motoneta |  |
+| `truck` | 🚚 | Camión | flete, envio, mudanza, carga |  |
+| `van` | 🚐 | Furgoneta | camioneta, minibus, van |  |
+| `bus-stop` | 🚏 | Parada | paradero, estacion, bus |  |
+| `traffic-light` | 🚦 | Semáforo | transito, trafico, via |  |
+| `construction` | 🚧 | Obras viales | obra, via, carretera, peajes |  |
+| `siren` | 🚨 | Multas | multa, infraccion, policia, transito |  |
+
+**6. Salud** (14)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `heart-pulse` | 🩺 | Salud | medico, doctor, consulta, estetoscopio, dentista | categoría |
+| `pill` | 💊 | Medicinas | medicina, farmacia, pastilla, remedio, medicamentos | categoría |
+| `syringe` | 💉 | Vacunas | vacuna, inyeccion, jeringa |  |
+| `ambulance` | 🚑 | Emergencia | ambulancia, urgencias, auxilio |  |
+| `hospital` | 🏥 | Hospital | clinica, centro medico, internacion |  |
+| `glasses` | 👓 | Lentes | gafas, optica, oculista, vista |  |
+| `brain` | 🧠 | Salud mental | psicologia, terapia, mente, psicologo |  |
+| `massage` | 💆 | Masajes | spa, relajacion, fisioterapia |  |
+| `haircut` | 💇 | Peluquería | corte, cabello, barberia, pelo |  |
+| `nails` | 💅 | Uñas | manicura, belleza, esteticista |  |
+| `mask` | 😷 | Mascarilla | cubrebocas, tapabocas, enfermedad, prevencion |  |
+| `microscope` | 🔬 | Laboratorio | examenes, analisis, laboratorio |  |
+| `yoga` | 🧘 | Bienestar | yoga, meditacion, relajacion |  |
+| `sleep` | 😴 | Descanso | dormir, sueño, reposo |  |
+
+**7. Educación** (12)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `graduation-cap` | 🎓 | Educación | universidad, colegio, titulo, matricula, pension | categoría |
+| `book` | 📚 | Libros | libro, lectura, biblioteca, textos | categoría |
+| `open-book` | 📖 | Lectura | leer, libro abierto, novela |  |
+| `school` | 🏫 | Escuela | colegio, instituto, clases |  |
+| `backpack` | 🎒 | Mochila | utiles, escolar, colegio |  |
+| `memo` | 📝 | Tareas | apuntes, examen, notas, deberes |  |
+| `notebook` | 📓 | Cuaderno | libreta, apuntes, escolar |  |
+| `ruler` | 📏 | Regla | utiles, medida, escolar |  |
+| `globe` | 🌎 | Idiomas | ingles, idioma, mundo, curso |  |
+| `abc` | 🔤 | Alfabeto | letras, lengua, ingles, aprender |  |
+| `telescope` | 🔭 | Ciencia | astronomia, investigacion, telescopio |  |
+| `speech` | 💬 | Conversación | charla, clases, tutoria, conversacion |  |
+
+**8. Trabajo y negocios** (14)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `briefcase` | 💼 | Trabajo | empleo, sueldo, salario, oficina, nomina | cuenta y categoría |
+| `office` | 🏢 | Oficina | edificio, empresa, coworking |  |
+| `factory` | 🏭 | Fábrica | industria, produccion, taller |  |
+| `store` | 🏪 | Tienda | negocio, local, comercio, bodega |  |
+| `department-store` | 🏬 | Centro comercial | mall, almacen, tiendas |  |
+| `necktie` | 👔 | Formal | corbata, traje, reunion, empleo |  |
+| `folder` | 📁 | Carpeta | archivos, documentos, proyecto |  |
+| `package` | 📦 | Paquetes | envio, encomienda, inventario, mercaderia |  |
+| `paperclip` | 📎 | Papelería | clip, adjunto, oficina, suministros |  |
+| `pushpin` | 📌 | Pendiente | chincheta, fijo, importante |  |
+| `megaphone` | 📣 | Publicidad | marketing, anuncio, promocion |  |
+| `mailbox` | 📬 | Correspondencia | correo, cartas, buzon |  |
+| `worker` | 👷 | Obrero | construccion, jornal, mano de obra |  |
+| `card-index` | 📇 | Contactos | clientes, agenda, directorio |  |
+
+**9. Viajes** (16)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `plane` | ✈️ | Viajes | avion, vuelo, pasaje, aeropuerto | cuenta y categoría |
+| `hotel` | 🏨 | Hotel | alojamiento, hospedaje, estadia |  |
+| `ticket` | 🎫 | Entradas | boleto, ticket, evento, acceso |  |
+| `tent` | ⛺ | Camping | carpa, acampar, naturaleza |  |
+| `palm` | 🌴 | Vacaciones | playa, palmera, descanso, tropical |  |
+| `ship` | 🚢 | Barco | crucero, ferry, navegar |  |
+| `sailboat` | ⛵ | Velero | vela, navegar, mar |  |
+| `station` | 🚉 | Estación | terminal, tren, anden |  |
+| `statue-liberty` | 🗽 | Turismo | ciudad, estatua, visita, destino |  |
+| `mountain` | 🗻 | Montaña | excursion, senderismo, volcan, paisaje |  |
+| `sunrise` | 🌅 | Paisaje | amanecer, atardecer, mirador |  |
+| `passport` | 🛂 | Pasaporte | migracion, visa, frontera, documentos |  |
+| `baggage` | 🛄 | Equipaje | maleta, aeropuerto, equipaje |  |
+| `departure` | 🛫 | Salida | despegue, vuelo, ida |  |
+| `arrival` | 🛬 | Llegada | aterrizaje, vuelo, regreso |  |
+| `wave` | 🌊 | Playa | mar, ola, costa, balneario |  |
+
+**10. Compras** (14)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `shopping-bag` | 🛍️ | Compras | bolsa, tienda, shopping | cuenta y categoría |
+| `shirt` | 👕 | Ropa | camiseta, polo, prenda, vestimenta | categoría |
+| `gift` | 🎁 | Regalos | regalo, obsequio, cumpleaños, detalle | cuenta y categoría |
+| `dress` | 👗 | Vestido | ropa, moda, boutique |  |
+| `jeans` | 👖 | Pantalón | jean, ropa, pantalones |  |
+| `coat` | 🧥 | Abrigo | chaqueta, chompa, chamarra, campera, invierno |  |
+| `sneaker` | 👟 | Zapatillas | tenis, calzado, deportivas |  |
+| `shoe` | 👞 | Zapatos | calzado, formal, zapateria |  |
+| `high-heel` | 👠 | Tacones | calzado, fiesta, zapatos |  |
+| `handbag` | 👜 | Cartera | bolso, cartera, accesorio |  |
+| `hat` | 🎩 | Sombrero | accesorio, gorro, elegante |  |
+| `ring` | 💍 | Anillo | joyeria, compromiso, boda, alianza |  |
+| `lipstick` | 💄 | Maquillaje | cosmeticos, belleza, labial |  |
+| `watch` | ⌚ | Reloj | accesorio, hora, relojeria |  |
+
+**11. Entretenimiento** (18)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `gamepad` | 🎮 | Juegos | videojuegos, consola, play, gaming | categoría |
+| `music` | 🎵 | Música | canciones, spotify, streaming, conciertos | categoría |
+| `film` | 🎬 | Cine | pelicula, streaming, series, netflix | categoría |
+| `theater` | 🎭 | Teatro | obra, espectaculo, funcion |  |
+| `palette` | 🎨 | Arte | pintura, dibujo, manualidades, hobby |  |
+| `microphone` | 🎤 | Karaoke | cantar, show, microfono |  |
+| `headphones` | 🎧 | Audífonos | musica, podcast, escuchar |  |
+| `guitar` | 🎸 | Guitarra | instrumento, banda, rock |  |
+| `piano` | 🎹 | Piano | teclado, instrumento, clases |  |
+| `drum` | 🥁 | Percusión | tambor, instrumento, percusion |  |
+| `dice` | 🎲 | Juegos de mesa | dados, azar, mesa, juego |  |
+| `bowling` | 🎳 | Boliche | bolos, juego, salida |  |
+| `circus` | 🎪 | Circo | feria, carpa, espectaculo |  |
+| `roller-coaster` | 🎢 | Parque de diversiones | montaña rusa, parque, atracciones |  |
+| `party` | 🎉 | Fiesta | celebracion, cumpleaños, evento, reunion |  |
+| `balloon` | 🎈 | Globos | cumpleaños, decoracion, fiesta |  |
+| `popcorn` | 🍿 | Palomitas | cine, snack, pelicula |  |
+| `tv` | 📺 | Televisión | tele, cable, streaming, suscripcion |  |
+
+**12. Tecnología** (14)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `phone` | 📱 | Teléfono | celular, movil, plan, smartphone | categoría |
+| `wifi` | 📶 | Internet | wifi, red, datos, conexion, plan | categoría |
+| `laptop` | 💻 | Computadora | laptop, portatil, pc, ordenador |  |
+| `floppy` | 💾 | Almacenamiento | disco, guardar, nube, memoria |  |
+| `cd` | 💿 | Disco | cd, musica, software |  |
+| `camera` | 📷 | Cámara | foto, fotografia, video |  |
+| `video-camera` | 📹 | Video | grabacion, filmacion, camara |  |
+| `battery` | 🔋 | Batería | cargador, pila, energia |  |
+| `antenna` | 📡 | Antena | señal, satelite, television |  |
+| `robot` | 🤖 | Robot | inteligencia artificial, ia, automatizacion |  |
+| `handset` | 📞 | Llamadas | telefono, fijo, llamada |  |
+| `globe-web` | 🌐 | Sitio web | dominio, hosting, pagina, web |  |
+| `search` | 🔍 | Búsqueda | lupa, buscar, investigar |  |
+| `flashlight` | 🔦 | Linterna | iluminacion, herramienta, electronica |  |
+
+**13. Mascotas** (12)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `paw` | 🐾 | Mascotas | huellas, animal, veterinario, patas | categoría |
+| `dog` | 🐶 | Perro | perrito, cachorro, paseo, veterinario |  |
+| `cat` | 🐱 | Gato | felino, minino, arena |  |
+| `rabbit` | 🐰 | Conejo | roedor, mascota, jaula |  |
+| `hamster` | 🐹 | Hámster | roedor, mascota, jaula |  |
+| `fish` | 🐟 | Pez | acuario, pecera, alimento |  |
+| `bird` | 🐦 | Ave | pajaro, canario, jaula |  |
+| `turtle` | 🐢 | Tortuga | reptil, acuario, mascota |  |
+| `horse` | 🐴 | Caballo | equitacion, establo, hipica |  |
+| `parrot` | 🦜 | Loro | ave, pajaro, mascota |  |
+| `lizard` | 🦎 | Reptil | lagartija, iguana, terrario |  |
+| `bee` | 🐝 | Abeja | miel, apicultura, insecto |  |
+
+**14. Familia** (12)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `baby` | 👶 | Bebé | recien nacido, pañales, guarderia |  |
+| `child` | 🧒 | Niño | hijos, infantil, menor |  |
+| `boy` | 👦 | Hijo | chico, niño, escolar |  |
+| `girl` | 👧 | Hija | chica, niña, escolar |  |
+| `man` | 👨 | Papá | padre, hombre, pareja |  |
+| `woman` | 👩 | Mamá | madre, mujer, pareja |  |
+| `older-man` | 👴 | Abuelo | adulto mayor, familia, jubilado |  |
+| `older-woman` | 👵 | Abuela | adulta mayor, familia, jubilada |  |
+| `family` | 👪 | Familia | hogar, hijos, padres |  |
+| `couple` | 💑 | Pareja | novio, novia, aniversario, esposo |  |
+| `heart` | 💖 | Cariño | amor, corazon, afecto, donacion |  |
+| `baby-bottle` | 🍼 | Biberón | bebe, leche, formula, lactancia |  |
+
+**15. Deportes** (16)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `dumbbell` | 🏋️ | Deporte | gimnasio, pesas, gym, ejercicio | categoría |
+| `soccer` | ⚽ | Fútbol | futbol, balon, cancha, pelota |  |
+| `basketball` | 🏀 | Baloncesto | basquet, balon, cancha |  |
+| `baseball` | ⚾ | Béisbol | beisbol, pelota, bate |  |
+| `tennis` | 🎾 | Tenis | raqueta, cancha, pelota |  |
+| `volleyball` | 🏐 | Voleibol | voley, pelota, red |  |
+| `pingpong` | 🏓 | Ping pong | tenis de mesa, raqueta |  |
+| `golf` | ⛳ | Golf | campo, palos, bandera |  |
+| `swimmer` | 🏊 | Natación | piscina, nadar, agua |  |
+| `runner` | 🏃 | Correr | trote, running, maraton, carrera |  |
+| `cyclist` | 🚴 | Ciclismo | bicicleta, ruta, pedalear |  |
+| `trophy` | 🏆 | Torneo | copa, campeonato, premio |  |
+| `medal` | 🏅 | Medalla | premio, competencia, logro |  |
+| `boxing` | 🥊 | Boxeo | guantes, pelea, gimnasio |  |
+| `martial-arts` | 🥋 | Artes marciales | karate, judo, taekwondo |  |
+| `fishing` | 🎣 | Pesca | pescar, caña, rio |  |
+
+**16. Servicios** (13)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `lightbulb` | 💡 | Servicios básicos | luz, electricidad, planilla, foco, recibo, factura | categoría |
+| `water-drop` | 💧 | Agua | agua potable, gota, planilla, recibo, factura |  |
+| `tap-water` | 🚰 | Agua potable | grifo, llave de agua, tuberia |  |
+| `bolt` | ⚡ | Energía | rayo, electricidad, corriente |  |
+| `flame` | 🔥 | Gas | calefaccion, cocina, estufa, combustion |  |
+| `litter` | 🚮 | Basura | aseo, recoleccion, reciclaje |  |
+| `newspaper` | 📰 | Periódico | diario, revista, suscripcion, noticias |  |
+| `post-office` | 🏤 | Correos | envios, correo, oficina postal |  |
+| `postbox` | 📮 | Buzón | cartas, correo, envio |  |
+| `email` | 📧 | Correo electrónico | email, mail, mensaje |  |
+| `fire-engine` | 🚒 | Bomberos | incendio, emergencia, seguro |  |
+| `police` | 👮 | Policía | seguridad, vigilancia, denuncia |  |
+| `hourglass` | ⌛ | Plazos | tiempo, espera, vencimiento |  |
+
+**17. Otros** (14)
+
+| Clave | Emoji | Nombre | Palabras clave | Existente |
+| --- | --- | --- | --- | --- |
+| `ellipsis` | ⋯ | Otros | varios, miscelanea, general | categoría (glifo de texto) |
+| `plus-circle` | ＋ | Ingreso extra | sumar, adicional, extra, bono | categoría (glifo de texto) |
+| `tag` | 🏷️ | Etiqueta | marca, precio, predeterminado, general | categoría |
+| `star` | ⭐ | Favorito | estrella, destacado, importante |  |
+| `sparkles` | ✨ | Especial | brillo, novedad, limpieza |  |
+| `question` | ❓ | Sin clasificar | pregunta, duda, desconocido |  |
+| `exclamation` | ❗ | Importante | urgente, aviso, atencion |  |
+| `check` | ✅ | Pagado | listo, hecho, completado, confirmado |  |
+| `rainbow` | 🌈 | Arcoíris | colores, alegria, suerte |  |
+| `moon` | 🌙 | Noche | luna, nocturno, dormir |  |
+| `umbrella` | ☔ | Imprevistos | lluvia, paraguas, emergencia, seguro |  |
+| `clover` | 🍀 | Suerte | trebol, loteria, azar |  |
+| `rocket` | 🚀 | Proyecto | cohete, emprendimiento, inicio, lanzamiento |  |
+| `flag` | 🚩 | Marcador | bandera, destacar, pendiente |  |
+
+Resumen: Dinero y ahorro 14; Bancos y tarjetas 14; Hogar 14; Alimentación 22; Transporte 16; Salud 14; Educación 12; Trabajo y negocios 14; Viajes 16; Compras 14; Entretenimiento 18; Tecnología 14; Mascotas 12; Familia 12; Deportes 16; Servicios 13; Otros 14. Total 249.
+#### 6.17.3 Reglas visuales del selector
+
+Todo reutiliza tokens existentes (`colors`, `spacing`, `radii`, `typography`, `sizes.touchMin`); no se crea ningún token ni color nuevo.
+
+| Elemento | Regla |
+| --- | --- |
+| Glifo en la rejilla | 24 sp, `maxFontSizeMultiplier={1.5}`, centrado (igual que 6.15.4 y 6.16.3; el 22 sp de docs/007 §5.15 A.2 no se usa, para no crear un segundo tamaño). Emoji sin recolorear. Glifos de texto T (solo categorías): `colors.text`, no blanco (el fondo de la celda es claro). |
+| Celda | ≥ 48 × 48 dp (`sizes.touchMin`), separación 8 dp (`spacing.sm`), radio `radii.md - 2`, columnas = `clamp(floor((ancho + 8) / 56), 4, 6)`. En la hoja a 360 dp (ancho 312): 5 columnas, celda ≈ 56 dp; a 320 dp: 5; a 412 dp: 6; con fuente ≥ 1.5: 4 y las celdas crecen en alto. El grupo más grande (Alimentación, 22) ocupa 5 filas (≈ 272 dp) a 360 dp; se desplaza dentro de la hoja. |
+| Reposo | Fondo `surface`, borde 1.5 `border` (decorativo; el glifo y el nombre identifican la celda). Presionado: opacidad 0.85. |
+| Seleccionado (3 señales, no solo color) | Fondo `brand100` + borde 3 dp `colors.text` + insignia «✓» (círculo `colors.text` de 16 dp en la esquina superior derecha, «✓» blanco 11 sp 800; decorativa) + `accessibilityState {selected: true}` + línea «Seleccionado: {nombre}» bajo la rejilla (`typography.small`, `text2`). El borde se pinta dentro de la caja: el tamaño no cambia al elegir. |
+| Foco (TalkBack/teclado) | Anillo de 2 dp `colors.text`, como `useFocus`. |
+| Chips de grupo | Fila de scroll horizontal, 17 chips; alto 48 dp, relleno horizontal 16, separación 8, radio `radii.pill`, texto `typography.brandLabel` (14/800) `colors.text`, una línea. Reposo: `surface` + borde 1.5 `border`. Activo: `brand100` + borde 3 dp `colors.text` + «✓ » antes del texto (la señal no es solo el color). Los chips no llevan emoji (evita ruido y duplicar glifos). Indicio de desplazamiento: el primer chip oculto asoma parcialmente en el borde; al abrir se desplaza hasta dejar el activo visible y centrado. Sin degradados ni sombras (barato de renderizar). Se ocultan mientras hay búsqueda. |
+| Buscador | `TextInput` 48 dp, fondo `surface`, borde 1.5 `borderStrong` (3.58:1 sobre `surface`), texto `text`, marcador `text2` (7.62:1 sobre `surface`), radio `radii.md`. Botón «Borrar búsqueda» de 48 dp. |
+| Fila «Ícono» del formulario | 56 dp; mosaico de 40 dp con el glifo a 24 sp (fondo `segBg` o el `tile` de la cuenta), texto «Ícono: {nombre}» `text` y «Cambiar» `brand700` (7.49:1 sobre `surface`). |
+| Hoja | `Sheet tall` existente: `surface`, radio superior 24, asa 40 × 4, velo `depth.scrim`. Pie fijo con «Usar este ícono» (`primary`, 48) y «Cancelar» (`ghost`, 48), borde superior 1 `border`. Sin animación nueva. |
+| Sin resultados | Texto `text2` centrado (7.62:1 sobre `surface`) y botón «Borrar búsqueda». |
+
+Contrastes de la interfaz del selector, calculados con la fórmula WCAG (script del scratchpad): `text` sobre `surface` 16.49; `text` sobre `brand100` (`#D3EBF0`) 13.28; `text2` sobre `surface` 7.62; «✓» blanco sobre `text` 16.49; borde 3 dp `text` sobre `brand100` 13.28 (cumple 3:1); `borderStrong` sobre `surface` 3.58 (cumple 3:1). `brand100` frente a `surface` es solo 1.24:1: por eso el estado seleccionado NUNCA depende del fondo, sino del borde grueso, la insignia, el estado accesible y el texto «Seleccionado».
+
+#### 6.17.4 Legibilidad del glifo sobre los 6 colores de acento
+
+Un emoji es una imagen a color; WCAG 1.4.3 (texto) no lo mide como tal y 1.4.11 aplica solo a gráficos necesarios para entender la interfaz. Aquí el ícono **nunca es la única señal**: el nombre del ícono está en la fila del formulario, en «Seleccionado: {nombre}», y la etiqueta accesible lo repite. Aun así se midió el peor caso con colores de referencia de las fuentes de emoji habituales (contraste WCAG contra cada `tile`; el fondo de la celda del selector es `surface`/`brand100`, no el `tile`):
+
+| Color de referencia | aguamarina | lavanda | albaricoque | celeste | rosa | limón | sobre `surface` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Blanco `#FFFFFF` | 1.31 | 1.50 | 1.36 | 1.40 | 1.45 | 1.25 | 1.00 |
+| Gris claro `#CCD6DD` | 1.13 | 1.01 | 1.08 | 1.05 | 1.02 | 1.18 | 1.48 |
+| Amarillo `#FFCC4D` | 1.15 | 1.00 | 1.10 | 1.07 | 1.03 | 1.20 | 1.50 |
+| Verde `#77B255` | 1.94 | 1.69 | 1.86 | 1.80 | 1.75 | 2.03 | 2.54 |
+| Azul `#55ACEE` | 1.89 | 1.65 | 1.81 | 1.75 | 1.70 | 1.97 | 2.46 |
+| Rojo `#DD2E44` | 3.53 | 3.08 | 3.39 | 3.29 | 3.18 | 3.70 | 4.62 |
+| Marrón `#C1694F` | 2.97 | 2.60 | 2.86 | 2.77 | 2.68 | 3.12 | 3.89 |
+| Contorno gris `#66757F` | 3.64 | 3.18 | 3.50 | 3.39 | 3.28 | 3.81 | 4.76 |
+
+Lectura honesta: los rellenos claros (blanco, amarillo, gris claro) no alcanzan 3:1 sobre ningún tono pastel, ni siquiera sobre blanco; los emojis de Android (Noto Color Emoji) llevan contorno oscuro, que sí supera 3:1 en los seis, pero **eso no se pudo verificar aquí** (no hay fuente de emoji en el entorno ni dispositivo). Reglas:
+
+1. El glifo se mantiene a 24 sp en el selector y a 28 dp en la vista previa y `AccountCard` (6.16.3); no se reduce.
+2. Lista de vigilancia para la prueba en dispositivo (riesgo de relleno claro): 🛁 🚽 🍦 💿 ⌛ 🍼 🍞 🧥 💍 🔦 ☔ 📓 📒 sobre `limon`, `lavanda` y `rosa`. Criterio: reconocible a 24 sp sin su etiqueta. Si falla alguno, se sustituye por otro emoji (la clave no cambia).
+3. Plan alternativo si `mobile-ux-qa` reporta ilegibilidad generalizada sobre un `tile`: dibujar el glifo sobre un círculo `surface` de 40 dp dentro del mosaico (`surface` alcanza ≥ 1.48 y el contorno del emoji queda sobre blanco, no sobre pastel). No se aplica de entrada: cambia la apariencia de las tarjetas de cuenta ya aprobadas.
+4. Glifos de texto T (solo categorías): blanco sobre `categoryFill` (≥ 3:1 por construcción, ya existente). En el selector, `colors.text` sobre `surface` 16.49 y sobre `brand100` 13.28.
+5. El semántico de importes (verde ingreso, coral gasto) no se usa en ningún estado del selector; los emojis verdes o rojos del catálogo (💵 📈 💸 📉) no cambian esa regla: el color de importes sigue viniendo solo de `income` y `expense`.
+
+Texto del título «Elegir ícono», chips y nombres: español, sin emojis en etiquetas del sistema.
+
 ## 7. Iconografía de categorías
 
 Las categorías ya guardan `icono` (clave tipo Lucide) y `color`. Comparación:

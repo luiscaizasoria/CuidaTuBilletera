@@ -1,5 +1,6 @@
 // Apariencia de las categorías (docs/008 §2.7 y §11): fondo del cuadrado de ícono y glifo.
-// Puro y sin dependencias: el color de la API no se modifica, solo se oscurece el fondo mostrado.
+// Puro y sin dependencias de React: el color de la API no se modifica, solo se oscurece el fondo mostrado.
+import { iconsForScope } from './icon-catalog';
 
 function channels(hex: string): [number, number, number] {
   return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
@@ -55,40 +56,17 @@ export interface CategoryIconOption extends CategoryGlyph {
   name: string;
 }
 
-// Catálogo cerrado de 30 íconos (docs/007 §5.13 D). Incluye los 11 slugs de las categorías por defecto
-// de la API (api/src/services/default-categories.ts) y `tag`, el valor por defecto de la API.
-export const CATEGORY_ICON_OPTIONS: readonly CategoryIconOption[] = [
-  { slug: 'utensils', glyph: '🍽️', name: 'Comida' },
-  { slug: 'shopping-cart', glyph: '🛒', name: 'Supermercado' },
-  { slug: 'coffee', glyph: '☕', name: 'Café' },
-  { slug: 'bus', glyph: '🚌', name: 'Transporte público' },
-  { slug: 'car', glyph: '🚗', name: 'Auto' },
-  { slug: 'fuel', glyph: '⛽', name: 'Combustible' },
-  { slug: 'lightbulb', glyph: '💡', name: 'Servicios básicos' },
-  { slug: 'home', glyph: '🏠', name: 'Hogar' },
-  { slug: 'heart-pulse', glyph: '🩺', name: 'Salud' },
-  { slug: 'pill', glyph: '💊', name: 'Medicinas' },
-  { slug: 'graduation-cap', glyph: '🎓', name: 'Educación' },
-  { slug: 'book', glyph: '📚', name: 'Libros' },
-  { slug: 'briefcase', glyph: '💼', name: 'Trabajo' },
-  { slug: 'shopping-bag', glyph: '🛍️', name: 'Compras' },
-  { slug: 'ellipsis', glyph: '⋯', text: true, name: 'Otros' },
-  { slug: 'gift', glyph: '🎁', name: 'Regalos' },
-  { slug: 'paw', glyph: '🐾', name: 'Mascotas' },
-  { slug: 'shirt', glyph: '👕', name: 'Ropa' },
-  { slug: 'phone', glyph: '📱', name: 'Teléfono' },
-  { slug: 'wifi', glyph: '📶', name: 'Internet' },
-  { slug: 'plane', glyph: '✈️', name: 'Viajes' },
-  { slug: 'gamepad', glyph: '🎮', name: 'Juegos' },
-  { slug: 'music', glyph: '🎵', name: 'Música' },
-  { slug: 'film', glyph: '🎬', name: 'Cine' },
-  { slug: 'wrench', glyph: '🔧', name: 'Reparaciones' },
-  { slug: 'dumbbell', glyph: '🏋️', name: 'Deporte' },
-  { slug: 'trending-up', glyph: '📈', name: 'Inversiones' },
-  { slug: 'money-bag', glyph: '💰', name: 'Ahorros' },
-  { slug: 'plus-circle', glyph: '＋', text: true, name: 'Ingreso extra' },
-  { slug: 'tag', glyph: '🏷️', name: 'Etiqueta' },
-];
+// Íconos de categoría: todo el catálogo único (icon-catalog.ts, 249 entradas). Incluye los 11 slugs de
+// las categorías por defecto de la API (api/src/services/default-categories.ts) y `tag`, el valor por
+// defecto de la API. Las 30 claves originales conservan clave, emoji y nombre.
+export const CATEGORY_ICON_OPTIONS: readonly CategoryIconOption[] = iconsForScope('category').map(
+  (entry) => ({
+    slug: entry.key,
+    glyph: entry.glyph,
+    name: entry.name,
+    ...(entry.text ? { text: true } : {}),
+  }),
+);
 
 // Glifo por clave `icono`, derivado del catálogo. `tag` no entra: es el valor por defecto.
 export const categoryGlyphs: Record<string, CategoryGlyph> = Object.fromEntries(

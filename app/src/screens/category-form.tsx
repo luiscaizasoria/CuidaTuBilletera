@@ -2,12 +2,14 @@
 // docs/008 §6.15.4). Lo usan la pantalla Categorías (tarjeta) y la hoja «Nueva categoría» de Nuevo
 // movimiento (solo los campos, con su propio pie).
 import { useEffect, useRef, useState } from 'react';
-import { BackHandler, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useDiscardGuard } from '../hooks/use-discard-guard';
-import { CATEGORY_ICON_OPTIONS, categoryFill } from '../lib/category-appearance';
+import { categoryFill } from '../lib/category-appearance';
+import { findIcon, iconsForScope } from '../lib/icon-catalog';
 import type { Category, CategoryType, TransactionType } from '../lib/resources-api';
-import { colors, radii, screenMargin, sizes, typography } from '../theme/tokens';
+import { colors, radii, typography } from '../theme/tokens';
 import { CategoryIcon, FormTextInput, TypeToggle } from './form-ui';
+import { IconField } from './icon-picker-sheet';
 import { Button, Card } from './ui';
 
 // Paleta fija de colores (formato #RRGGBB). Son datos que se envían a la API, no estilos.
@@ -39,98 +41,11 @@ export const toCategoryType = (tipo: TransactionType): CategoryType =>
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
 
+const CATEGORY_ENTRIES = iconsForScope('category');
+
 // Ícono del catálogo o null: un slug desconocido (categoría antigua) queda sin selección.
 export function catalogIcon(icono: string): string | null {
-  return CATEGORY_ICON_OPTIONS.some((option) => option.slug === icono) ? icono : null;
-}
-
-// Columnas de la rejilla de íconos: clamp(floor((ancho + 8) / 56), 4, 6); con fuente >= 1.5, 4.
-export function iconColumns(availableWidth: number, fontScale: number): number {
-  if (fontScale >= 1.5) return 4;
-  return Math.min(6, Math.max(4, Math.floor((availableWidth + 8) / 56)));
-}
-
-const GAP = 8;
-
-export interface IconPickerOption {
-  key: string;
-  name: string;
-  glyph: string;
-  // true: glifo de texto que se dibuja en el color de texto (los emojis llevan su propio color).
-  text?: boolean;
-}
-
-const CATEGORY_PICKER_OPTIONS: readonly IconPickerOption[] = CATEGORY_ICON_OPTIONS.map(
-  (option) => ({
-    key: option.slug,
-    name: option.name,
-    glyph: option.glyph,
-    ...(option.text ? { text: true } : {}),
-  }),
-);
-
-// Rejilla de íconos compartida por categorías y cuentas (docs/008 §6.15.4 y §6.16.3). Sin `options`
-// muestra el catálogo de categorías con el nombre de grupo «Ícono».
-export function IconPicker({
-  value,
-  onChange,
-  disabled,
-  availableWidth,
-  options = CATEGORY_PICKER_OPTIONS,
-  groupLabel = 'Ícono',
-}: {
-  value: string | null;
-  onChange: (key: string) => void;
-  disabled: boolean;
-  availableWidth: number;
-  options?: readonly IconPickerOption[];
-  groupLabel?: string;
-}) {
-  const { fontScale } = useWindowDimensions();
-  const columns = iconColumns(availableWidth, fontScale);
-  const cell = Math.floor((availableWidth - GAP * (columns - 1)) / columns);
-  return (
-    <View
-      accessibilityRole="radiogroup"
-      accessibilityLabel={groupLabel}
-      testID="icon-grid"
-      style={styles.iconGrid}
-    >
-      {options.map((option) => {
-        const selected = value === option.key;
-        return (
-          <Pressable
-            key={option.key}
-            accessibilityRole="radio"
-            accessibilityLabel={`Ícono ${option.name}`}
-            accessibilityState={{ selected, disabled }}
-            disabled={disabled}
-            onPress={() => onChange(option.key)}
-            style={({ pressed }) => [
-              styles.iconCell,
-              { width: cell },
-              selected && styles.iconCellSelected,
-              pressed && styles.iconCellPressed,
-              disabled && styles.iconCellDisabled,
-            ]}
-          >
-            <Text
-              {...hidden}
-              maxFontSizeMultiplier={1.5}
-              style={[styles.iconCellGlyph, option.text && styles.iconCellGlyphText]}
-            >
-              {option.glyph}
-            </Text>
-            {selected ? (
-              <View {...hidden} style={styles.iconBadge}>
-                <Text style={styles.iconBadgeText}>✓</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+  return findIcon(CATEGORY_ENTRIES, icono)?.key ?? null;
 }
 
 // Campos del formulario (controlados): nombre, descripción opcional, tipo, color, ícono y vista previa.
@@ -142,7 +57,6 @@ export function CategoryFormFields({
   showDescription = true,
   fixedTypeText,
   hideTypeControl = false,
-  availableWidth,
 }: {
   draft: FormValues;
   onChange: (patch: Partial<FormValues>) => void;
@@ -153,11 +67,9 @@ export function CategoryFormFields({
   fixedTypeText?: string;
   // El tipo ya lo indica otro elemento (p. ej. la píldora de la hoja): no se muestra control ni línea.
   hideTypeControl?: boolean;
-  availableWidth: number;
 }) {
   const { nombre, descripcion, tipo, color, icono } = draft;
   const colorName = CATEGORY_COLORS.find((option) => option.value === color)?.name;
-  const iconName = CATEGORY_ICON_OPTIONS.find((option) => option.slug === icono)?.name;
   return (
     <>
       <Text style={styles.label}>Nombre</Text>
@@ -230,14 +142,12 @@ export function CategoryFormFields({
       </View>
 
       <Text style={styles.label}>Ícono</Text>
-      <Text style={styles.summary}>
-        {iconName ? `Ícono: ${iconName}` : 'Ícono: sin elegir (se usa la etiqueta)'}
-      </Text>
-      <IconPicker
+      <IconField
         value={icono}
-        onChange={(slug) => onChange({ icono: slug })}
+        entries={CATEGORY_ENTRIES}
+        onChange={(key) => onChange({ icono: key })}
         disabled={busy}
-        availableWidth={availableWidth}
+        emptyText="Ícono: sin elegir (se usa la etiqueta)"
       />
 
       <Text style={styles.previewLabel}>Vista previa</Text>
@@ -269,7 +179,6 @@ export function CategoryFormCard({
   onSubmit: (values: FormValues) => void;
   onClose: () => void;
 }) {
-  const { width } = useWindowDimensions();
   const editing = form.kind === 'edit';
   const initial: FormValues = editing
     ? {
@@ -328,8 +237,6 @@ export function CategoryFormCard({
 
   const typeWord = initial.tipo === 'egreso' ? 'Gasto' : 'Ingreso';
   const fixedTypeText = editing ? `Tipo: ${typeWord} (no se puede cambiar)` : undefined;
-  // Ancho útil de la tarjeta: ventana menos márgenes de pantalla y relleno de la tarjeta.
-  const availableWidth = width - 2 * screenMargin(width) - 2 * styles.formCard.padding;
 
   return (
     <Card style={styles.formCard}>
@@ -343,7 +250,6 @@ export function CategoryFormCard({
         busy={busy}
         nameError={nameError}
         fixedTypeText={fixedTypeText}
-        availableWidth={availableWidth}
       />
 
       {nameError ? (
@@ -403,34 +309,6 @@ const styles = StyleSheet.create({
   colorCheck: { fontSize: 18, lineHeight: 22, fontWeight: '800', color: colors.white },
   colorName: { ...typography.small, fontSize: 12, lineHeight: 16, color: colors.text2 },
   colorNameSelected: { fontWeight: '700', color: colors.text },
-  // Rejilla de íconos (docs/008 §6.15.4): celdas de 48 dp mínimo; el borde se pinta dentro de la caja.
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-  iconCell: {
-    minHeight: sizes.touchMin,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.md - 2,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  iconCellSelected: { borderWidth: 3, borderColor: colors.text, backgroundColor: colors.brand100 },
-  iconCellPressed: { opacity: 0.85 },
-  iconCellDisabled: { opacity: 0.5 },
-  iconCellGlyph: { fontSize: 24, lineHeight: 30 },
-  iconCellGlyphText: { fontWeight: '800', color: colors.text },
-  iconBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBadgeText: { fontSize: 11, lineHeight: 14, fontWeight: '800', color: colors.white },
   previewLabel: {
     ...typography.small,
     fontSize: 12,

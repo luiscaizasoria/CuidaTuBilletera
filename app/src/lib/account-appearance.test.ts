@@ -33,24 +33,35 @@ describe('catálogo de apariencia de cuenta', () => {
     expect(accountColorOption('limon')?.label).toBe('Limón');
   });
 
-  it('doce íconos en el orden de docs/008 §6.16.5, con U+FE0F en ✈️ y 🛍️', () => {
-    expect(ACCOUNT_ICON_OPTIONS.map((o) => o.key)).toEqual([
-      'wallet',
-      'card',
-      'bank',
-      'piggy-bank',
-      'cash',
-      'trending-up',
-      'briefcase',
-      'home',
-      'plane',
-      'gift',
-      'shopping-bag',
-      'money-bag',
-    ]);
+  it('246 íconos de cuenta (el catálogo sin los 3 exclusivos de categorías) con las 12 claves originales intactas', () => {
+    expect(ACCOUNT_ICON_OPTIONS).toHaveLength(246);
+    const keys = ACCOUNT_ICON_OPTIONS.map((o) => o.key);
+    for (const exclusive of ['ellipsis', 'plus-circle', 'tag'])
+      expect(keys).not.toContain(exclusive);
+    // Clave, nombre y emoji de las 12 de antes (✈️ y 🛍️ con U+FE0F).
+    const original: [string, string, string][] = [
+      ['wallet', 'Billetera', '👛'],
+      ['card', 'Tarjeta', '💳'],
+      ['bank', 'Banco', '🏦'],
+      ['piggy-bank', 'Alcancía', '🐷'],
+      ['cash', 'Efectivo', '💵'],
+      ['trending-up', 'Inversiones', '📈'],
+      ['briefcase', 'Trabajo', '💼'],
+      ['home', 'Hogar', '🏠'],
+      ['plane', 'Viajes', '✈️'],
+      ['gift', 'Regalos', '🎁'],
+      ['shopping-bag', 'Compras', '🛍️'],
+      ['money-bag', 'Ahorros', '💰'],
+    ];
+    for (const [key, label, glyph] of original) {
+      expect(accountIconOption(key)).toEqual({ key, label, glyph });
+    }
     expect(accountIconOption('plane')?.glyph).toBe('✈️');
     expect(accountIconOption('shopping-bag')?.glyph).toBe('🛍️');
-    expect(accountIconOption('wallet')?.label).toBe('Billetera');
+  });
+
+  it('todas las claves de cuenta cumplen el patrón de la API', () => {
+    for (const option of ACCOUNT_ICON_OPTIONS) expect(option.key).toMatch(/^[a-z0-9-]{1,20}$/);
   });
 
   it('los glifos compartidos coinciden con el catálogo de categorías', () => {
@@ -108,7 +119,7 @@ describe('buildAppearancePatch e isAppearanceDirty', () => {
   });
 
   it('una clave guardada desconocida se muestra como Predeterminado y no se envía si no se toca', () => {
-    const unknown = { color: 'violeta-nuevo', icono: 'rocket' };
+    const unknown = { color: 'violeta-nuevo', icono: 'cohete-viejo' };
     expect(appearanceOf(unknown)).toEqual(DEFAULT_APPEARANCE);
     expect(buildAppearancePatch(unknown, DEFAULT_APPEARANCE)).toEqual({});
     expect(buildAppearancePatch(unknown, { color: 'rosa', icono: null })).toEqual({
