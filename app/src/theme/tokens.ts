@@ -32,6 +32,15 @@ export const colors = {
   white: '#FFFFFF',
 } as const;
 
+// Excepción cromática de marca (docs/008 §6.15.2): solo el botón «Continuar con Google», según la guía
+// de marca de Google. Objeto aparte para no confundirlo con la paleta del proyecto.
+export const brandGoogle = {
+  bg: '#FFFFFF',
+  border: '#747775',
+  text: '#1F1F1F',
+  pressed: '#E6E6E6',
+} as const;
+
 // Color por módulo (docs/007 §3.6). Nunca en la barra de contexto, importes ni FAB.
 export const moduleColors = {
   cuenta: { tile: '#D3EBF0', ink: '#0B4A46' },
@@ -140,6 +149,9 @@ export const sizes = {
   moduleTileSm: 28,
   monthArrow: 32,
   categoryBar: 10,
+  googleLogo: 20,
+  loginMark: 144,
+  loginPig: 120,
 } as const;
 
 // Margen lateral de las pantallas (docs/003 R4 D6): 16 dp con ancho menor de 400 dp y 20 dp desde 400 dp.

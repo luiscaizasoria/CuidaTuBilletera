@@ -1,5 +1,6 @@
 import {
   accountPalette,
+  brandGoogle,
   colors,
   moduleColors,
   screenMargin,
@@ -22,8 +23,8 @@ function ratio(a: string, b: string): number {
 }
 
 describe('tokens', () => {
-  it('sizes tiene exactamente 29 claves con los valores aprobados', () => {
-    expect(Object.keys(sizes)).toHaveLength(29);
+  it('sizes tiene exactamente 32 claves con los valores aprobados', () => {
+    expect(Object.keys(sizes)).toHaveLength(32);
     expect(sizes).toEqual({
       touchMin: 48,
       tabHeight: 62,
@@ -54,6 +55,9 @@ describe('tokens', () => {
       moduleTileSm: 28,
       monthArrow: 32,
       categoryBar: 10,
+      googleLogo: 20,
+      loginMark: 144,
+      loginPig: 120,
     });
   });
 
@@ -108,6 +112,26 @@ describe('tokens', () => {
     expect(typography.amountInput).toEqual({ fontSize: 28, lineHeight: 34, fontWeight: '800' });
     expect(sizes.dateCell).toBe(48);
     expect(sizes.categoryIcon).toBe(32);
+  });
+
+  it('R5.1: brandGoogle es un objeto aparte de colors y cumple la guía de marca (docs/008 §6.15.7)', () => {
+    expect(brandGoogle).toEqual({
+      bg: '#FFFFFF',
+      border: '#747775',
+      text: '#1F1F1F',
+      pressed: '#E6E6E6',
+    });
+    expect(Object.values(colors)).not.toContain('#747775');
+    expect(Object.values(colors)).not.toContain('#1F1F1F');
+    expect(ratio(brandGoogle.text, brandGoogle.bg)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(brandGoogle.text, brandGoogle.pressed)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(brandGoogle.border, brandGoogle.bg)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('R5.1: tamaños nuevos del Login y del logotipo de Google', () => {
+    expect(sizes.googleLogo).toBe(20);
+    expect(sizes.loginMark).toBe(144);
+    expect(sizes.loginPig).toBe(120);
   });
 
   it('borde fuerte >= 3:1 sobre superficie', () => {

@@ -345,6 +345,7 @@ Línea de trabajo transversal, no es una fase numerada de docs/001 §11. Plan en
 [ ] R3 - Nuevo movimiento (orden aprobado).
 [ ] R4 - Historial, Calendario, Reportes y Categorías con el nuevo sistema visual.
 [ ] R5 - Guías contextuales y estados vacíos.
+[ ] R5.1 - Mejoras UX y ajustes Android (docs/003 «Decisión R5.1»): Login renovado con el botón oficial de Google, «Cerrar sesión» en Mis cuentas, ícono de categoría, «+ Crear categoría» dentro de Nuevo movimiento y mitigación de la barra de estado. Bloqueado por autorización: color e ícono de cuenta (migración D1 0004 y API), ocultar la barra inferior del sistema (módulo nativo y cambio de norma) y la corrección exacta de insets (`react-native-safe-area-context`). No se marca completada antes de `mobile-ux-qa` y `qa-engineer`.
 [ ] R6 - Ícono, splash y nombre (requiere nueva development build y autorización expresa).
 
 Pendiente transversal: validación en Android real (niveles A y D de docs/010) y decisiones abiertas listadas en docs/003 (Decisión R0, «Pendientes»). No se toca la API, D1, sesiones ni dependencias nativas salvo decisión posterior.

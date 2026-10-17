@@ -7,10 +7,11 @@ import {
   unavailableMessage,
 } from '../lib/auth-messages';
 import { colors, radii, typography } from '../theme/tokens';
+import { SignOutControl } from './session-ui';
 import { Button } from './ui';
 
 export default function SessionBanner() {
-  const { status, busy, degraded, unavailableCause, error, restore, signOut } = useAuth();
+  const { status, busy, degraded, unavailableCause, error, restore } = useAuth();
   const unavailable = status === 'unavailable';
   if (!unavailable && !degraded) return null;
   return (
@@ -30,9 +31,7 @@ export default function SessionBanner() {
       ) : null}
       <View style={styles.actions}>
         <Button label="Reintentar" variant="primary" busy={busy} onPress={() => void restore()} />
-        {unavailable ? (
-          <Button label="Cerrar sesión" variant="secondary" onPress={() => void signOut()} />
-        ) : null}
+        {unavailable ? <SignOutControl variant="button" /> : null}
       </View>
     </View>
   );

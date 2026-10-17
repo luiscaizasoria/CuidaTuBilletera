@@ -19,6 +19,7 @@ import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, moduleColors, radii, shadows, typography } from '../theme/tokens';
 import { ArchivedNotice } from './account-ui';
 import SessionBanner from './SessionBanner';
+import { SignOutControl } from './session-ui';
 import { Button, ErrorBox, screenStyles as s, useScreenMargin } from './ui';
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
@@ -46,7 +47,7 @@ export default function MoreScreen({
   onNotify?: (message: string) => void;
   bottomInset?: number;
 }) {
-  const { authorizedCall, user, signOut } = useAuth();
+  const { authorizedCall, user } = useAuth();
   const margin = useScreenMargin();
   const { resetAll } = useGuides();
   const resettingHelp = useRef(false);
@@ -202,7 +203,7 @@ export default function MoreScreen({
       <View style={[styles.list, styles.session, shadows.card]}>
         <Text style={styles.small}>Conectado como</Text>
         {user ? <Text style={styles.email}>{user.email}</Text> : null}
-        <Button label="Cerrar sesión" variant="secondary" onPress={() => void signOut()} />
+        <SignOutControl variant="button" />
       </View>
 
       <Pressable

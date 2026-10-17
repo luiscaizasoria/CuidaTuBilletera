@@ -2,7 +2,7 @@
 // los de crear y renombrar pasaron a NewAccountScreen.test y MoreScreen.test, y los de archivar a
 // MoreScreen.test (la lista ya no tiene acciones internas). Se trasladan aquí los casos útiles del
 // antiguo HomeScreen.test (sesión degradada y no disponible, error con reintento, desmontaje, vacío).
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type Page, type ResourcesApi } from '../lib/resources-api';
@@ -281,7 +281,10 @@ describe('AccountsScreen: encabezado, perfil y sesión', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Tu perfil y sesión' }));
     expect(screen.getByText('Ana López')).toBeTruthy();
     expect(screen.getByText('ana@example.com')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    // R5.1: el encabezado también tiene «Cerrar sesión»; se pulsa el de la hoja de perfil.
+    await fireEvent.press(
+      within(screen.getByTestId('profile-sheet')).getByRole('button', { name: 'Cerrar sesión' }),
+    );
     expect(mockAuthState.signOut).toHaveBeenCalledTimes(1);
     expect(Alert.alert).not.toHaveBeenCalled();
   });
@@ -333,7 +336,10 @@ describe('AccountsScreen: encabezado, perfil y sesión', () => {
     expect(screen.getByText(/No se pudo conectar con el servidor/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Reintentar' }));
     expect(mockAuthState.restore).toHaveBeenCalled();
-    await fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+    // R5.1: la franja y el encabezado tienen «Cerrar sesión»; aquí se pulsa el de la franja.
+    await fireEvent.press(
+      within(screen.getByTestId('session-banner')).getByRole('button', { name: 'Cerrar sesión' }),
+    );
     expect(mockAuthState.signOut).toHaveBeenCalled();
     expect(api.listAccounts).not.toHaveBeenCalled();
     expect(screen.queryByTestId('accounts-loading')).toBeNull();

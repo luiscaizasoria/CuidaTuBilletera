@@ -625,13 +625,10 @@ describe('CategoriesScreen: formulario (criterios 34 y 36)', () => {
   });
 });
 
-describe('CategoriesScreen: ayuda al llegar desde el formulario de movimiento (criterio 38)', () => {
-  it('con fromForm muestra la frase; sin él no', async () => {
-    const api = fakeResourcesApi({ listCategories: jest.fn(async () => pageOf(items)) });
-    const view = await render(<CategoriesScreen account={account()} api={api} fromForm />);
-    expect(screen.getByText('Crea una categoría y vuelve para anotar tu movimiento.')).toBeTruthy();
-    await view.unmount();
-    await renderScreen(api);
+describe('CategoriesScreen: R5.1 retira la ayuda «desde el formulario» (R51-18)', () => {
+  it('ya no existe la frase de ayuda ni la prop fromForm', async () => {
+    await renderScreen();
+    await screen.findByText('Comida');
     expect(screen.queryByText(/Crea una categoría y vuelve/)).toBeNull();
   });
 });

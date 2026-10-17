@@ -11,6 +11,7 @@ import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, radii, shadows, tabularNums, typography } from '../theme/tokens';
 import { AccountCard, balanceText } from './account-ui';
 import SessionBanner from './SessionBanner';
+import { SignOutControl } from './session-ui';
 import { ProfileSheet } from './sheets';
 import { Button, EmptyState, GuideCard } from './ui';
 
@@ -41,17 +42,22 @@ export default function AccountsScreen({
   return (
     <View style={styles.container}>
       <View style={styles.brandRow}>
-        <Text style={styles.brand}>CuidaTuBilletera</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Tu perfil y sesión"
-          onPress={() => setProfileOpen(true)}
-          style={styles.avatarTouch}
-        >
-          <View style={[styles.avatar, shadows.card]} {...hidden}>
-            <Text style={styles.avatarText}>{avatarInitial(user?.name, user?.email)}</Text>
-          </View>
-        </Pressable>
+        <Text numberOfLines={2} style={styles.brand}>
+          CuidaTuBilletera
+        </Text>
+        <View style={styles.headerActions}>
+          <SignOutControl variant="icon" />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tu perfil y sesión"
+            onPress={() => setProfileOpen(true)}
+            style={styles.avatarTouch}
+          >
+            <View style={[styles.avatar, shadows.card]} {...hidden}>
+              <Text style={styles.avatarText}>{avatarInitial(user?.name, user?.email)}</Text>
+            </View>
+          </Pressable>
+        </View>
       </View>
       <Text numberOfLines={1} style={styles.greeting}>
         {name ? `Hola, ${name}` : 'Hola'}
@@ -294,7 +300,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  brand: { ...typography.brandLabel, color: colors.brandInk },
+  brand: { ...typography.brandLabel, color: colors.brandInk, flexShrink: 1 },
+  // [🚪] [avatar]: dos zonas de 48 dp separadas 8 dp para evitar toques accidentales.
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   avatarTouch: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   avatar: {
     width: 40,

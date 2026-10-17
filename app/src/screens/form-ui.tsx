@@ -224,6 +224,36 @@ export function CategoryOption({
   );
 }
 
+// Última celda de la rejilla de categorías (R5.1; docs/008 §6.15.5): abre la hoja «Nueva categoría».
+// No es un `radio`: no entra en el conteo de la selección.
+export function CreateCategoryOption({
+  disabled,
+  onPress,
+}: {
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Crear categoría"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.option,
+        styles.createOption,
+        pressed && styles.optionPressed,
+        disabled && styles.optionDisabled,
+      ]}
+    >
+      <Text numberOfLines={2} style={styles.createText}>
+        + Crear categoría
+      </Text>
+    </Pressable>
+  );
+}
+
 // Casilla a todo el ancho (48 dp), con rol `checkbox`. Encendida usa el tono neutro: el coral y el
 // verde significan gasto e ingreso (docs/008 §6.13 punto 7).
 export function CheckboxChip({
@@ -366,6 +396,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  createOption: {
+    justifyContent: 'center',
+    borderStyle: 'dashed',
+    borderColor: colors.borderStrong,
+  },
+  createText: { ...typography.brandLabel, color: colors.brand700, textAlign: 'center' },
   optionPressed: { opacity: 0.85 },
   optionDisabled: { opacity: 0.5 },
   optionName: {

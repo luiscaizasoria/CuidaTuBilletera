@@ -34,6 +34,8 @@ const T = {
   calTile: '#DCEBFF', calInk: '#174C86', calStrong: '#2563C9',
   repTile: '#ECE4FF', repInk: '#4E2DA3',
   masTile: '#E3E8EF', masInk: '#334155',
+  // R5.1: botón de Google (excepción de marca; docs/008 §6.15). Pulsado = #303030 al 12 % sobre blanco.
+  googleBorder: '#747775', googleText: '#1F1F1F', googlePressed: '#E6E6E6',
 };
 // Paleta de cuentas (docs/007 §5.2.4): fondo de tarjeta (card) y mosaico del ícono (tile). Excluye verde de ingreso,
 // coral de gasto y marca. Orden = índice de hash(id) mod 6.
@@ -160,6 +162,22 @@ const pairs = [
   ['R5 ilustración: trazo calInk sobre círculo calTile (3:1)', T.calInk, T.calTile, 3],
   ['R5 ilustración: trazo repInk sobre círculo repTile (3:1)', T.repInk, T.repTile, 3],
   ['R5 ilustración: trazo movInk sobre blanco interior (3:1)', T.movInk, '#FFFFFF', 3],
+  // R5.1 (docs/008 §6.15): Login, botón de Google, selector de ícono
+  ['R5.1 Google: texto googleText sobre blanco', T.googleText, '#FFFFFF'],
+  ['R5.1 Google: texto googleText sobre estado pulsado', T.googleText, T.googlePressed],
+  ['R5.1 Google: borde googleBorder sobre blanco (3:1)', T.googleBorder, '#FFFFFF', 3],
+  ['R5.1 Google: borde googleBorder sobre fondo cálido (3:1)', T.googleBorder, T.bg, 3],
+  ['R5.1 Google: borde googleBorder sobre manchas apiladas, peor caso (3:1)', T.googleBorder, blobWorst, 3],
+  ['R5.1 Login: nota text2 sobre mancha amarilla', T.text2, blobY],
+  ['R5.1 Login: indicador de carga brand700 sobre blanco (3:1)', T.brand700, '#FFFFFF', 3],
+  ['R5.1 selector de ícono: borde elegido text sobre brand100 (3:1)', T.text, T.brand100, 3],
+  ['R5.1 selector de ícono: borde elegido text sobre tarjeta (3:1)', T.text, T.surface, 3],
+  ['R5.1 selector de ícono: «✓» blanco sobre insignia text', '#FFFFFF', T.text],
+  ['R5.1 «+ Crear categoría»: texto brand700 sobre tarjeta', T.brand700, T.surface],
+  ['R5.1 «+ Crear categoría»: borde punteado borderStrong sobre tarjeta (3:1)', T.borderStrong, T.surface, 3],
+  ['R5.1 hoja: píldora «Gasto» expenseText sobre expenseSoft', T.expenseText, T.expenseSoft],
+  ['R5.1 hoja: píldora «Ingreso» incomeText sobre incomeSoft', T.incomeText, T.incomeSoft],
+  ['R5.1 cerrar sesión pulsado: borderStrong sobre segBg (3:1)', T.borderStrong, T.segBg, 3],
 ];
 // Tarjetas de cuenta: textos sobre el fondo de la tarjeta y sobre el círculo decorativo.
 for (const [n, card] of ACC) {

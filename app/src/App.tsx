@@ -52,9 +52,8 @@ function Root({ api, guideStorage }: { api: ResourcesApi; guideStorage?: GuideSt
       <MainNavigator key={user?.id ?? 'none'} api={api} />
     </GuidesProvider>
   ) : (
-    <Screen scroll={false} padded={false}>
-      <LoginScreen />
-    </Screen>
+    // El Login pinta bajo la barra de estado y aplica sus propios márgenes del sistema (R5.1).
+    <LoginScreen />
   );
 }
 

@@ -74,11 +74,11 @@ describe('App: aislamiento de datos entre usuarios', () => {
     await act(async () => {
       await service.signOut();
     });
-    expect(await screen.findByText('Ingresar con Google')).toBeTruthy();
+    expect(await screen.findByText('Continuar con Google')).toBeTruthy();
     expect(screen.queryByText(/Cuenta de Ana/)).toBeNull();
 
     // Ingresa B: empieza en Mis cuentas (no en la pantalla de A) y su lista no muestra datos de A.
-    await fireEvent.press(screen.getByText('Ingresar con Google'));
+    await fireEvent.press(screen.getByText('Continuar con Google'));
     expect(await screen.findByRole('header', { name: 'Mis cuentas' })).toBeTruthy();
     expect(screen.queryByRole('header', { name: 'Categorías' })).toBeNull();
     await openProfile();
@@ -122,7 +122,7 @@ describe('App: aislamiento de datos entre usuarios', () => {
     await act(async () => {
       await service.signOut();
     });
-    await screen.findByText('Ingresar con Google');
+    await screen.findByText('Continuar con Google');
     await act(async () => late.resolve(pageOf([account({ nombre: 'Cuenta tardía' })])));
     expect(screen.queryByText('Cuenta tardía')).toBeNull();
   });
@@ -192,11 +192,11 @@ describe('App: aislamiento de datos entre usuarios', () => {
     await act(async () => {
       await service.signOut();
     });
-    await screen.findByText('Ingresar con Google');
+    await screen.findByText('Continuar con Google');
     expect(screen.queryByText(/de Ana/)).toBeNull();
     expect(screen.queryByText('Nota privada de Ana')).toBeNull();
 
-    await fireEvent.press(screen.getByText('Ingresar con Google'));
+    await fireEvent.press(screen.getByText('Continuar con Google'));
     // B empieza en Mis cuentas (no dentro de la a-2 elegida por A) y sin movimientos de A.
     expect(await screen.findByText('Primera de Beto')).toBeTruthy();
     expect(screen.getByRole('header', { name: 'Mis cuentas' })).toBeTruthy();

@@ -101,17 +101,6 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
 
   const push = (route: Route) =>
     setNav((current) => ({ ...current, stack: [...current.stack, route] }));
-  // «Ir a Categorías» desde el formulario: la categoría se crea en Más > Categorías y Atrás vuelve
-  // a la pestaña de origen (el formulario sin categorías no tiene nada que conservar).
-  const replaceTopWithCategories = () =>
-    setNav((current) => {
-      const top = current.stack[current.stack.length - 1];
-      if (top?.name !== 'newTx' && top?.name !== 'editTx') return current;
-      return {
-        ...current,
-        stack: [...current.stack.slice(0, -1), { name: 'categories', fromForm: true }],
-      };
-    });
   const pop = () => setNav((current) => resolveBackStack(current));
   const goToAccounts = () => {
     setSwitcherOpen(false);
@@ -261,7 +250,6 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
                 });
               }}
               onAccountArchived={markArchived}
-              onOpenCategories={replaceTopWithCategories}
             />
           </View>
         </Screen>
@@ -273,8 +261,8 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
             account={account}
             balance={detail.balance}
             variant="readOnly"
-            exitLabel={route.fromForm ? '‹ Volver' : '‹ Más'}
-            exitAccessibilityLabel={route.fromForm ? 'Volver' : 'Volver a Más'}
+            exitLabel="‹ Más"
+            exitAccessibilityLabel="Volver a Más"
             onExit={pop}
             onRetry={() => retryBalance(account.id)}
           />
@@ -284,7 +272,6 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
               account={account}
               api={api}
               onAccountArchived={markArchived}
-              fromForm={route.fromForm === true}
             />
           </View>
         </Screen>

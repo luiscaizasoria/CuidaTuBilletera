@@ -900,21 +900,17 @@ describe('MainNavigator: R3 confirmación de descarte con Atrás', () => {
     expect(screen.queryByRole('header', { name: 'Nueva cuenta' })).toBeNull();
   });
 
-  it('[Ir a Categorías] sin categorías lleva a Categorías y Atrás vuelve a la pestaña de origen', async () => {
-    const api = makeApi({
-      listCategories: jest.fn(async (_t, _a, options) =>
-        pageOf(options?.tipo === undefined && !options?.incluirArchivadas ? [comida] : []),
-      ),
-    });
+  it('R5.1: sin categorías, [+ Crear categoría] abre la hoja sin salir del formulario (R51-19, R51-24)', async () => {
+    const api = makeApi({ listCategories: jest.fn(async () => pageOf([])) });
     await render(<MainNavigator api={api} />);
     await openEfectivo();
     await openForm();
-    await fireEvent.press(await screen.findByRole('button', { name: 'Ir a Categorías' }));
-    expect(await screen.findByRole('header', { name: 'Categorías' })).toBeTruthy();
-    expect(screen.queryByLabelText('Monto')).toBeNull();
-    expect(await back()).toBe(true);
-    expect(await screen.findByLabelText('Secciones de la cuenta')).toBeTruthy();
-    expect(selectedTab()).toBe('Cuenta');
+    await fireEvent.changeText(screen.getByLabelText('Monto'), '7');
+    expect(screen.queryByRole('button', { name: 'Ir a Categorías' })).toBeNull();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Crear categoría' }));
+    expect(await screen.findByRole('header', { name: 'Nueva categoría' })).toBeTruthy();
+    expect(screen.queryByRole('header', { name: 'Categorías' })).toBeNull();
+    expect(screen.getByLabelText('Monto').props.value).toBe('7');
   });
 
   it('UXQA-R3-02: guardar muestra el aviso de éxito en el Snackbar único del navegador', async () => {
@@ -936,26 +932,6 @@ describe('MainNavigator: R3 confirmación de descarte con Atrás', () => {
     await fireEvent.press(screen.getByText('Cancelar'));
     await screen.findByLabelText('Secciones de la cuenta');
     expect(screen.queryByTestId('snackbar')).toBeNull();
-  });
-
-  it('UXQA-R3-03: Categorías desde el formulario dice «‹ Volver» y Atrás vuelve a donde dice', async () => {
-    const api = makeApi({
-      listCategories: jest.fn(async (_t, _a, options) =>
-        pageOf(options?.tipo === undefined && !options?.incluirArchivadas ? [comida] : []),
-      ),
-    });
-    await render(<MainNavigator api={api} />);
-    await openEfectivo();
-    await goTab('Calendario');
-    await openForm();
-    await fireEvent.press(await screen.findByRole('button', { name: 'Ir a Categorías' }));
-    await screen.findByRole('header', { name: 'Categorías' });
-    expect(screen.getByRole('button', { name: 'Volver' })).toBeTruthy();
-    expect(screen.getByText('Crea una categoría y vuelve para anotar tu movimiento.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Volver a Más' })).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'Volver' }));
-    await screen.findByLabelText('Secciones de la cuenta');
-    expect(selectedTab()).toBe('Calendario');
   });
 
   it('UXQA-R3-03: Categorías desde Más conserva «‹ Más»', async () => {

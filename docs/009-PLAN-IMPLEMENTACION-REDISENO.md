@@ -25,6 +25,7 @@ Orden lógico `orchestrator` → `architect` (§7 ya actualizado en R0) → `mob
 | R3 | Nuevo movimiento (orden, categoría visual, teclado numérico, selector de fecha, anti doble envío, confirmación). | No | No |
 | R4 | Historial, Calendario, Reportes, Categorías con el nuevo sistema visual (sin cambiar cálculos). | Ninguna: barras sin dependencia (docs/003 R4 D1) | No |
 | R5 | Guías contextuales y estados vacíos. | No | No |
+| R5.1 | Mejoras tras la prueba en Android: Login y botón Google oficial, «Cerrar sesión» en Mis cuentas, ícono de categoría, «+ Crear categoría» en Nuevo movimiento, mitigación de la barra de estado. Bloqueado por autorización: color e ícono de cuenta (migración D1 0004 y API), barra inferior del sistema, `react-native-safe-area-context`. Ver docs/003 «Decisión R5.1». | Ninguna (las bloqueadas requerirían módulos nativos o backend) | No para lo implementado; sí para lo bloqueado |
 | R6 | Ícono, ícono adaptable, splash y nombre: `app.json` + `app/assets/`. | `expo-splash-screen` si se decide | **Sí** |
 
 R1 a R5 se pueden entregar con la development build actual. R6 y, según decisión, R4 exigen una nueva build de Android (autorización expresa previa).
@@ -40,6 +41,7 @@ La matriz detallada por archivo de `app/src` está en docs/007-DISENO-UX.md §13
 | R3 | `TransactionFormScreen.tsx` |
 | R4 | `HistoryScreen.tsx`, `CalendarScreen.tsx`, `ReportsScreen.tsx`, `CategoriesScreen.tsx`, `TransactionRow.tsx`, `DatePickerSheet.tsx` (tono neutro), `ui.tsx` (`ScreenTitle`, `SummaryTile`), `lib/calendar.ts` (día de la semana y ancho de celda); especificación en docs/007 §5.11 |
 | R5 | `lib/guides.ts` (nuevo), pantallas con ayudas |
+| R5.1 | `LoginScreen.tsx`, `app/assets/` (logotipo de Google), `AccountsScreen.tsx`, `SessionBanner.tsx`, `MoreScreen.tsx`, `sheets.tsx`, `lib/category-appearance.ts`, `category-form.tsx` (nuevo), `CategoriesScreen.tsx`, `TransactionFormScreen.tsx`, `MainNavigator.tsx`, `theme/useSystemInsets.ts` |
 | R6 | `app/app.json`, `app/assets/*` (copiados desde `docs/design/assets/` tras aprobar) |
 
 No se tocan `/api`, D1, sesión y autenticación, `.github/workflows` ni `tsconfig.json` de la raíz.

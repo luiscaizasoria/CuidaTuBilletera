@@ -60,7 +60,7 @@ export function useDiscardGuard({
   }, []);
 
   // «✕», «‹» y «Cancelar»: ignorados mientras se guarda; con cambios piden confirmar. `action`
-  // permite salir hacia otro destino (p. ej. «Ir a Categorías») con la misma confirmación.
+  // permite salir hacia otro destino con la misma confirmación.
   const requestLeave = useCallback(
     (action?: () => void) => {
       const { busy: isBusy, dirty: isDirty, onLeave: leave } = latest.current;

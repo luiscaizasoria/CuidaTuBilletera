@@ -1,34 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  Alert,
-  BackHandler,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
-import { useDiscardGuard } from '../hooks/use-discard-guard';
 import { useGuide, useGuides } from '../hooks/use-guides';
 import { useLoader, useMutation } from '../hooks/use-loader';
-import { categoryFill } from '../lib/category-appearance';
 import {
   ApiRequestError,
   type Account,
   type Category,
   type CategoryType,
   type ResourcesApi,
-  type TransactionType,
   type UpdateCategoryInput,
 } from '../lib/resources-api';
 import { colors, radii, shadows, sizes, typography } from '../theme/tokens';
-import { CategoryIcon, FormTextInput, TypeToggle } from './form-ui';
+import { CategoryFormCard, type Form, type FormValues } from './category-form';
+import { CategoryIcon } from './form-ui';
 import { Sheet } from './sheets';
 import {
   Button,
-  Card,
   EmptyState,
   ErrorBox,
   LoadingState,
@@ -38,27 +26,9 @@ import {
   useScreenContainerStyle,
 } from './ui';
 
-// Paleta fija de colores (formato #RRGGBB). Son datos que se envían a la API, no estilos.
-export const CATEGORY_COLORS = [
-  { name: 'Rojo', value: '#E53935' },
-  { name: 'Naranja', value: '#FB8C00' },
-  { name: 'Amarillo', value: '#FDD835' },
-  { name: 'Verde', value: '#43A047' },
-  { name: 'Azul', value: '#1E88E5' },
-  { name: 'Morado', value: '#8E24AA' },
-  { name: 'Gris', value: '#757575' },
-] as const;
+// La paleta vive en el formulario compartido; se reexporta para quien ya la importaba desde aquí.
+export { CATEGORY_COLORS } from './category-form';
 
-type Form = { kind: 'create' } | { kind: 'edit'; category: Category };
-
-interface FormValues {
-  nombre: string;
-  descripcion: string;
-  tipo: CategoryType;
-  color: string | null;
-}
-
-export const FROM_FORM_HELP = 'Crea una categoría y vuelve para anotar tu movimiento.';
 export const IN_USE_NOTICE =
   'Esta categoría tiene movimientos, por eso no se puede eliminar. Puedes archivarla: no aparecerá al anotar movimientos nuevos, pero tu historial se conserva.';
 
@@ -67,21 +37,15 @@ const isAccountArchived = (error: unknown) =>
 const isInUse = (error: unknown) =>
   error instanceof ApiRequestError && error.status === 409 && error.code === 'CATEGORY_IN_USE';
 
-const toTransactionType = (tipo: CategoryType): TransactionType =>
-  tipo === 'egreso' ? 'gasto' : 'ingreso';
-
 export default function CategoriesScreen({
   account,
   api,
   onAccountArchived,
-  fromForm = false,
 }: {
   account: Account;
   api: ResourcesApi;
   // 409 ACCOUNT_ARCHIVED al crear o desarchivar: el servidor confirma que la cuenta está archivada.
   onAccountArchived?: (accountId: string) => void;
-  // Se llegó desde Nuevo movimiento: muestra la frase de ayuda.
-  fromForm?: boolean;
 }) {
   const { authorizedCall } = useAuth();
   const containerStyle = useScreenContainerStyle();
@@ -138,6 +102,7 @@ export default function CategoriesScreen({
             tipo: values.tipo,
             ...(desc !== '' ? { descripcion: desc } : {}),
             ...(values.color !== null ? { color: values.color } : {}),
+            ...(values.icono !== null ? { icono: values.icono } : {}),
           });
         }
         const existing = current.category;
@@ -145,6 +110,7 @@ export default function CategoriesScreen({
         if (name !== existing.nombre) changes.nombre = name;
         if (desc !== (existing.descripcion ?? '')) changes.descripcion = desc === '' ? null : desc;
         if (values.color !== null && values.color !== existing.color) changes.color = values.color;
+        if (values.icono !== null && values.icono !== existing.icono) changes.icono = values.icono;
         return api.updateCategory(token, existing.id, changes);
       }),
     );
@@ -198,8 +164,6 @@ export default function CategoriesScreen({
     <ScrollView style={containerStyle} keyboardShouldPersistTaps="handled">
       <ScreenTitle title="Categorías" module="mas" />
       {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
-
-      {fromForm ? <Text style={styles.help}>{FROM_FORM_HELP}</Text> : null}
 
       <Segmented
         accessibilityLabel="Tipo de categoría"
@@ -394,194 +358,7 @@ function CategoryRow({
   );
 }
 
-// Formulario de crear/editar. Monta el guard de descarte solo mientras está abierto (docs/003 R3 D4);
-// Atrás sin cambios cierra el formulario y no la pantalla (listener registrado antes del del guard,
-// por lo que se consulta después de él).
-function CategoryFormCard({
-  form,
-  segment,
-  busy,
-  error,
-  onSubmit,
-  onClose,
-}: {
-  form: Form;
-  segment: CategoryType;
-  busy: boolean;
-  error: string | null;
-  onSubmit: (values: FormValues) => void;
-  onClose: () => void;
-}) {
-  const editing = form.kind === 'edit';
-  const initial: FormValues = editing
-    ? {
-        nombre: form.category.nombre,
-        descripcion: form.category.descripcion ?? '',
-        tipo: form.category.tipo,
-        color: form.category.color,
-      }
-    : { nombre: '', descripcion: '', tipo: segment, color: null };
-  const [nombre, setNombre] = useState(initial.nombre);
-  const [descripcion, setDescripcion] = useState(initial.descripcion);
-  const [tipo, setTipo] = useState<CategoryType>(initial.tipo);
-  const [color, setColor] = useState<string | null>(initial.color);
-  const [nameError, setNameError] = useState<string | null>(null);
-  const initialRef = useRef(initial);
-
-  const dirty = editing
-    ? nombre.trim() !== initialRef.current.nombre ||
-      descripcion.trim() !== initialRef.current.descripcion ||
-      (color !== null && color !== initialRef.current.color)
-    : nombre.trim() !== '' ||
-      descripcion.trim() !== '' ||
-      color !== null ||
-      tipo !== initialRef.current.tipo;
-
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  const busyRef = useRef(busy);
-  busyRef.current = busy;
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (busyRef.current) return true;
-      closeRef.current();
-      return true;
-    });
-    return () => subscription.remove();
-  }, []);
-
-  const { requestLeave } = useDiscardGuard({
-    dirty,
-    busy,
-    onLeave: onClose,
-    title: editing ? '¿Descartar los cambios?' : '¿Descartar esta categoría?',
-    message: editing ? 'Los cambios que hiciste no se guardarán.' : 'Lo que escribiste se perderá.',
-  });
-
-  function save() {
-    if (nombre.trim() === '') {
-      setNameError('Escribe un nombre.');
-      return;
-    }
-    setNameError(null);
-    onSubmit({ nombre, descripcion, tipo, color });
-  }
-
-  const colorName = CATEGORY_COLORS.find((option) => option.value === color)?.name;
-
-  return (
-    <Card style={styles.formCard}>
-      <Text accessibilityRole="header" style={styles.formTitle}>
-        {editing ? 'Editar categoría' : 'Nueva categoría'}
-      </Text>
-
-      <Text style={styles.label}>Nombre</Text>
-      <FormTextInput
-        accessibilityLabel="Nombre de la categoría"
-        placeholder="Nombre"
-        value={nombre}
-        onChangeText={setNombre}
-        editable={!busy}
-        error={nameError !== null}
-      />
-      <Text style={styles.label}>Descripción (opcional)</Text>
-      <FormTextInput
-        accessibilityLabel="Descripción"
-        placeholder="Descripción (opcional)"
-        value={descripcion}
-        onChangeText={setDescripcion}
-        editable={!busy}
-      />
-
-      {editing ? (
-        <Text style={styles.fixedType}>
-          Tipo: {initial.tipo === 'egreso' ? 'Gasto' : 'Ingreso'} (no se puede cambiar)
-        </Text>
-      ) : (
-        <>
-          <Text style={styles.label}>Tipo</Text>
-          <TypeToggle
-            value={toTransactionType(tipo)}
-            onChange={(value) => setTipo(value === 'gasto' ? 'egreso' : 'ingreso')}
-            disabled={busy}
-          />
-        </>
-      )}
-
-      <Text style={styles.label}>Color</Text>
-      <Text style={styles.colorSummary}>
-        {colorName ? `Color: ${colorName}` : 'Color: sin elegir (se asigna uno por defecto)'}
-      </Text>
-      <View accessibilityRole="radiogroup" style={styles.colors}>
-        {CATEGORY_COLORS.map((option) => {
-          const selected = color === option.value;
-          return (
-            <Pressable
-              key={option.value}
-              accessibilityRole="radio"
-              accessibilityLabel={`Color ${option.name}`}
-              accessibilityState={{ selected, disabled: busy }}
-              disabled={busy}
-              onPress={() => setColor(option.value)}
-              style={styles.colorOption}
-            >
-              <View style={[styles.colorRing, selected && styles.colorRingSelected]}>
-                <View style={[styles.colorFill, { backgroundColor: categoryFill(option.value) }]}>
-                  {selected ? (
-                    <Text
-                      importantForAccessibility="no"
-                      accessibilityElementsHidden
-                      style={styles.colorCheck}
-                    >
-                      ✓
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-              <Text style={[styles.colorName, selected && styles.colorNameSelected]}>
-                {option.name}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Text style={styles.previewLabel}>Vista previa</Text>
-      <View style={styles.preview}>
-        <CategoryIcon icono="" color={color ?? ''} size={32} />
-        <Text style={[styles.previewName, nombre.trim() === '' && styles.previewEmpty]}>
-          {nombre.trim() === '' ? 'Nombre de la categoría' : nombre.trim()}
-        </Text>
-      </View>
-
-      {nameError ? (
-        <Text accessibilityRole="alert" style={[styles.error, styles.errorGap]}>
-          {nameError}
-        </Text>
-      ) : null}
-      {error ? (
-        <Text accessibilityRole="alert" style={[styles.error, styles.errorGap]}>
-          {error}
-        </Text>
-      ) : null}
-
-      <View style={styles.formActions}>
-        <Button
-          label={busy ? 'Guardando…' : 'Guardar'}
-          accessibilityLabel="Guardar"
-          variant="primary"
-          tall
-          busy={busy}
-          onPress={save}
-        />
-        <Button label="Cancelar" variant="ghost" disabled={busy} onPress={() => requestLeave()} />
-      </View>
-    </Card>
-  );
-}
-
 const styles = StyleSheet.create({
-  help: { ...typography.small, color: colors.text2, marginBottom: 12 },
   archivedNotice: {
     ...typography.small,
     color: colors.yellowText,
@@ -646,60 +423,4 @@ const styles = StyleSheet.create({
   menu: { gap: 8 },
   menuTitle: { ...typography.h2, color: colors.text },
   menuDanger: { marginTop: 8 },
-  formCard: { marginTop: 12, padding: 16 },
-  formTitle: { ...typography.h2, color: colors.text },
-  label: { ...typography.brandLabel, color: colors.text, marginTop: 16, marginBottom: 8 },
-  fixedType: { ...typography.small, color: colors.text2, marginTop: 16 },
-  colorSummary: { ...typography.small, color: colors.text2, marginBottom: 8 },
-  colors: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  // Ancho fijo de 76 dp y alto adaptable (mínimo 72): crece con fuente ampliada y nombres de 2 líneas.
-  colorOption: { width: 76, minHeight: 72, alignItems: 'center' },
-  colorRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 3,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  colorRingSelected: { borderColor: colors.text },
-  colorFill: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  colorCheck: { fontSize: 18, lineHeight: 22, fontWeight: '800', color: colors.white },
-  colorName: { ...typography.small, fontSize: 12, lineHeight: 16, color: colors.text2 },
-  colorNameSelected: { fontWeight: '700', color: colors.text },
-  previewLabel: {
-    ...typography.small,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '700',
-    color: colors.text2,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  preview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 8,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
-  },
-  previewName: {
-    flexShrink: 1,
-    fontSize: 14,
-    lineHeight: 18,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  previewEmpty: { fontWeight: '400', color: colors.text3 },
-  formActions: { marginTop: 16, gap: 8 },
 });

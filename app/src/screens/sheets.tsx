@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useLoader } from '../hooks/use-loader';
@@ -17,6 +18,7 @@ import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, depth, radii, shadows, tabularNums, typography } from '../theme/tokens';
 import { useSystemInsets } from '../theme/useSystemInsets';
 import { balanceText } from './account-ui';
+import { SignOutControl } from './session-ui';
 import { Button } from './ui';
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
@@ -27,14 +29,27 @@ export function Sheet({
   accessibilityLabel,
   children,
   testID,
+  tall = false,
+  compact = false,
 }: {
   visible: boolean;
   onClose: () => void;
   accessibilityLabel: string;
   children: ReactNode;
   testID?: string;
+  // Variante alta con cuerpo desplazable y pie fijo (R5.1; docs/008 §6.15.5): altura máxima del 75 %
+  // de la ventana menos el margen superior del sistema. `compact` (teclado abierto o ventana baja)
+  // la sube a toda la ventana menos ese margen y 8 dp. Sin `tall` la hoja no cambia.
+  tall?: boolean;
+  compact?: boolean;
 }) {
   const insets = useSystemInsets();
+  const { height } = useWindowDimensions();
+  const maxHeight = tall
+    ? compact
+      ? height - insets.top - 8
+      : 0.75 * height - insets.top
+    : undefined;
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +83,12 @@ export function Sheet({
         <View
           accessibilityViewIsModal
           accessibilityLabel={accessibilityLabel}
-          style={[styles.sheet, shadows.raised, { paddingBottom: 24 + insets.bottom }]}
+          style={[
+            styles.sheet,
+            shadows.raised,
+            { paddingBottom: 24 + insets.bottom },
+            maxHeight !== undefined && { maxHeight },
+          ]}
         >
           <View style={styles.handle} {...hidden} />
           {children}
@@ -80,7 +100,7 @@ export function Sheet({
 
 // Hoja de perfil (docs/007 14.17 a): nombre, correo y «Cerrar sesión» sin confirmación.
 export function ProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   return (
     <Sheet
       visible={visible}
@@ -98,7 +118,7 @@ export function ProfileSheet({ visible, onClose }: { visible: boolean; onClose: 
         </View>
       </View>
       <View style={styles.actions}>
-        <Button label="Cerrar sesión" variant="secondary" onPress={() => void signOut()} />
+        <SignOutControl variant="button" />
         <Button label="Cerrar" variant="ghost" onPress={onClose} />
       </View>
     </Sheet>

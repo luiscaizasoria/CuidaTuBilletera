@@ -49,20 +49,54 @@ export interface CategoryGlyph {
   text?: boolean;
 }
 
-// Glifo por clave `icono` (api/src/services/default-categories.ts).
-export const categoryGlyphs: Record<string, CategoryGlyph> = {
-  utensils: { glyph: '🍽️' },
-  bus: { glyph: '🚌' },
-  lightbulb: { glyph: '💡' },
-  'heart-pulse': { glyph: '🩺' },
-  'graduation-cap': { glyph: '🎓' },
-  home: { glyph: '🏠' },
-  film: { glyph: '🎬' },
-  ellipsis: { glyph: '⋯', text: true },
-  briefcase: { glyph: '💼' },
-  'shopping-bag': { glyph: '🛍️' },
-  'plus-circle': { glyph: '＋', text: true },
-};
+export interface CategoryIconOption extends CategoryGlyph {
+  slug: string;
+  // Nombre en español: etiqueta accesible «Ícono {nombre}» del selector.
+  name: string;
+}
+
+// Catálogo cerrado de 30 íconos (docs/007 §5.13 D). Incluye los 11 slugs de las categorías por defecto
+// de la API (api/src/services/default-categories.ts) y `tag`, el valor por defecto de la API.
+export const CATEGORY_ICON_OPTIONS: readonly CategoryIconOption[] = [
+  { slug: 'utensils', glyph: '🍽️', name: 'Comida' },
+  { slug: 'shopping-cart', glyph: '🛒', name: 'Supermercado' },
+  { slug: 'coffee', glyph: '☕', name: 'Café' },
+  { slug: 'bus', glyph: '🚌', name: 'Transporte público' },
+  { slug: 'car', glyph: '🚗', name: 'Auto' },
+  { slug: 'fuel', glyph: '⛽', name: 'Combustible' },
+  { slug: 'lightbulb', glyph: '💡', name: 'Servicios básicos' },
+  { slug: 'home', glyph: '🏠', name: 'Hogar' },
+  { slug: 'heart-pulse', glyph: '🩺', name: 'Salud' },
+  { slug: 'pill', glyph: '💊', name: 'Medicinas' },
+  { slug: 'graduation-cap', glyph: '🎓', name: 'Educación' },
+  { slug: 'book', glyph: '📚', name: 'Libros' },
+  { slug: 'briefcase', glyph: '💼', name: 'Trabajo' },
+  { slug: 'shopping-bag', glyph: '🛍️', name: 'Compras' },
+  { slug: 'ellipsis', glyph: '⋯', text: true, name: 'Otros' },
+  { slug: 'gift', glyph: '🎁', name: 'Regalos' },
+  { slug: 'paw', glyph: '🐾', name: 'Mascotas' },
+  { slug: 'shirt', glyph: '👕', name: 'Ropa' },
+  { slug: 'phone', glyph: '📱', name: 'Teléfono' },
+  { slug: 'wifi', glyph: '📶', name: 'Internet' },
+  { slug: 'plane', glyph: '✈️', name: 'Viajes' },
+  { slug: 'gamepad', glyph: '🎮', name: 'Juegos' },
+  { slug: 'music', glyph: '🎵', name: 'Música' },
+  { slug: 'film', glyph: '🎬', name: 'Cine' },
+  { slug: 'wrench', glyph: '🔧', name: 'Reparaciones' },
+  { slug: 'dumbbell', glyph: '🏋️', name: 'Deporte' },
+  { slug: 'trending-up', glyph: '📈', name: 'Inversiones' },
+  { slug: 'money-bag', glyph: '💰', name: 'Ahorros' },
+  { slug: 'plus-circle', glyph: '＋', text: true, name: 'Ingreso extra' },
+  { slug: 'tag', glyph: '🏷️', name: 'Etiqueta' },
+];
+
+// Glifo por clave `icono`, derivado del catálogo. `tag` no entra: es el valor por defecto.
+export const categoryGlyphs: Record<string, CategoryGlyph> = Object.fromEntries(
+  CATEGORY_ICON_OPTIONS.filter((option) => option.slug !== 'tag').map((option) => [
+    option.slug,
+    option.text ? { glyph: option.glyph, text: true } : { glyph: option.glyph },
+  ]),
+);
 export const defaultCategoryGlyph: CategoryGlyph = { glyph: '🏷️' };
 
 export function categoryGlyph(icono: string): CategoryGlyph {

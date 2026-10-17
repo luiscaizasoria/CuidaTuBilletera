@@ -58,6 +58,9 @@ export const LOST_RESPONSE_MOVEMENT =
   'No pudimos confirmar si se guardó. Revisa tus movimientos antes de volver a intentar.';
 export const LOST_RESPONSE_ACCOUNT =
   'No pudimos confirmar si se creó. Revisa Mis cuentas antes de volver a intentar.';
+// Respuesta perdida al crear una categoría desde Nuevo movimiento (docs/007 §5.13 E).
+export const UNCERTAIN_CATEGORY_MESSAGE =
+  'No pudimos confirmar si se creó. Revisa la lista de categorías antes de volver a intentar.';
 // Cuenta archivada en otro dispositivo (docs/007 §3.5.3): el movimiento no se guardó.
 export const ACCOUNT_ARCHIVED_ON_SAVE =
   'Esta cuenta está archivada, por eso no se guardó el movimiento. Desarchívala desde Mis cuentas para anotar movimientos.';

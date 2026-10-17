@@ -761,6 +761,8 @@ Todo el nivel D por falta de emulador, dispositivo y TalkBack: J21 a J26 (persis
 
 ## 15. Preparación técnica de la validación Android
 
+> **Corrección del paso 356.** La primera versión de este apartado recomendaba USB con `adb reverse` y afirmaba que `@expo/ngrok` no estaba instalado. Ambas afirmaciones eran erróneas. El mecanismo utilizado y comprobado en este proyecto es el **túnel de Expo (ngrok)**: `cd /workspaces/ControlGastos/app && npx expo start --dev-client --tunnel`, con la Development Build ya instalada en el teléfono (evidencia: informe del usuario del 13/10/2026 sobre las reconexiones del túnel ngrok, y sesiones de Fase 3 con `expo start --tunnel` en marcha; `@expo/ngrok@4.1.3` está instalado en el directorio global de npm del contenedor). **No se requieren ADB, cable USB ni depuración USB.** Las menciones a USB y `adb` de este documento son alternativas históricas no utilizadas; donde un texto posterior diga «opción 1», debe leerse «túnel». Los comandos de `adb` para capturas o `logcat` son opcionales y solo aplican si el usuario los tiene disponibles.
+
 Fecha: 2026-10-16. Rama `feat/rediseno-ux-ui`, HEAD `a64e746` (R5). Solo lectura e inspección: no se inició Metro, no se instaló nada, no se generó APK ni EAS Build, no se tocó `app/` ni `api/` y no se leyó ningún `.env` real (de `app/.env.example` solo se comprobó el nombre de las variables). Este apartado prepara la validación de los niveles D y R pendientes en §14.8; no valida nada por sí mismo.
 
 ### A. Compatibilidad de la development build existente con el código actual
@@ -790,7 +792,7 @@ Cambios que llegan por Metro sin recompilar: todo `app/src/**` (tokens, componen
 
 Estado del entorno comprobado:
 
-- `which adb`: no existe en el contenedor. `npm ls @expo/ngrok`: no instalado (`(empty)`), por lo que `--tunnel` pediría instalarlo (Expo lo ofrece al ejecutar; no se debe aceptar sin autorización, es una dependencia).
+- `which adb`: no existe en el contenedor (no se necesita). `@expo/ngrok@4.1.3` SÍ está instalado en el directorio global de npm (`npm ls -g`; `npm ls` local no lo muestra y de ahí el error inicial): `--tunnel` funciona sin instalar nada.
 - `devcontainer.json` reenvía `8787` (Wrangler) y `8081` (Metro), ambos `onAutoForward: silent`. El reenvío de VS Code escucha en `localhost` del anfitrión, no en la IP LAN.
 - IP del contenedor `172.17.0.2` (red interna Docker, inalcanzable desde el teléfono).
 - docs/005 declara que el contenedor está «instalado y validado», pero que Expo Go contra Metro, tanto desde Windows como desde el contenedor, sigue NO verificado, y recomienda ejecutar Metro en Windows. La variable que fija el host que anuncia Metro es `REACT_NATIVE_PACKAGER_HOSTNAME`.
@@ -804,7 +806,7 @@ Con la información disponible la LAN directa desde el contenedor probablemente 
 | 3 | LAN desde el contenedor con `REACT_NATIVE_PACKAGER_HOSTNAME=<IP LAN de Windows>` | Sin instalar nada | Requiere publicar el 8081 hacia la red (no solo `localhost`) y regla de firewall; no probado |
 | 4 | `--tunnel` | Funciona con cualquier red | Necesita `@expo/ngrok` (dependencia no instalada, requiere autorización), más lento, expone el bundle por un túnel público |
 
-Recomendación: opción 1 (USB + `adb reverse`), por no depender de la red ni de dependencias. Si el usuario prefiere no usar cable, la opción 3 y, en último caso, la 4 con autorización expresa.
+Recomendación vigente (paso 356): **opción 4, `--tunnel`**, que es la que el usuario ya utilizó y comprobó; no necesita cable ni `adb`. Las opciones 1 a 3 son alternativas no utilizadas.
 
 Comandos (a ejecutar por el usuario o con su autorización; no se ejecutaron):
 
@@ -816,7 +818,7 @@ cd /workspaces/ControlGastos/app && npx expo start --dev-client
 npx expo start --dev-client --localhost                      # solo localhost: pareja de «adb reverse»
 npx expo start --dev-client --lan                            # IP del contenedor (172.17.0.2): normalmente inútil para el teléfono
 REACT_NATIVE_PACKAGER_HOSTNAME=<IP-LAN-de-Windows> npx expo start --dev-client --lan   # opción 3
-npx expo start --dev-client --tunnel                         # opción 4: exige @expo/ngrok (autorización)
+npx expo start --dev-client --tunnel                         # opción 4 (la utilizada): @expo/ngrok ya está instalado globalmente
 npx expo start --dev-client --clear                          # primer arranque tras muchos cambios, limpia la caché de Metro
 
 # En Windows (PowerShell), con el teléfono por USB y depuración USB activa:
@@ -872,7 +874,7 @@ No se pudo verificar sin teléfono ni sin ejecutar Metro: que el APK instalado s
 
 ### 16.0 Precondiciones y reglas de ejecución
 
-1. Preparación técnica según el §15: development build `375e4dc0` ya instalada, Metro en el contenedor con `npx expo start --dev-client` y `adb reverse tcp:8081 tcp:8081` desde Windows (opción 1), `app/.env` apuntando a la API de DEV (lo confirma el usuario; no se abre aquí), zona horaria y fecha automáticas del teléfono.
+1. Preparación técnica según el §15: development build ya instalada, Metro en el contenedor con `npx expo start --dev-client --tunnel` (sin `adb` ni cable), `app/.env` apuntando a la API de DEV (lo confirma el usuario; no se abre aquí), zona horaria y fecha automáticas del teléfono.
 2. Datos: el D1 DEV tiene 1 usuario, 0 cuentas, 0 categorías y 0 movimientos (docs/003 y docs/004). Cada prueba crea datos en DEV. Usar solo una cuenta de Google de prueba y datos ficticios (nombres como «Prueba Efectivo»; ningún importe ni comercio real). Los pasos siguen un orden que reutiliza lo creado antes: no saltar pasos sin anotarlo.
 3. Se necesitan dos cuentas de Google de prueba (A y B) para el V30. Las dos deben estar autorizadas como usuarios de prueba en Google Cloud (§15.E-3).
 4. Ancho de pantalla: anotar siempre el ancho real en dp (Ajustes > Opciones de desarrollador > «Ancho mínimo», o el menú del dev client). Si el teléfono no mide 360 ni 412 dp, se puede acercar con Ajustes > Pantalla > «Tamaño de pantalla» o el «Ancho mínimo»; si no se logra, el criterio dependiente queda abierto y se declara el ancho probado. Nunca se informa 360/412 si no se midió.
@@ -1129,8 +1131,137 @@ Leído `app/src/lib/config.ts`, `config.test.ts`, `App.tsx` y `ConfigMissingScre
 3. SHA-1 del keystore de EAS (build `375e4dc0`) registrada en el cliente OAuth Android de Google Cloud con el paquete `com.cuidatubilletera.app`. Si falta: `DEVELOPER_ERROR` en logcat.
 4. Dos cuentas de Google de prueba (A y B) añadidas como usuarios de prueba en la pantalla de consentimiento (necesarias para V30).
 5. APK de la development build `375e4dc0` instalado en el teléfono (no una anterior sin `expo-sharing`) y compatible: R1 a R5 no cambian dependencias nativas.
-6. Depuración USB activa y `adb devices` lista el teléfono; `adb reverse tcp:8081 tcp:8081` hecho desde Windows (según §15) y Metro con `npx expo start --dev-client` en el contenedor.
+6. Metro iniciado en el contenedor con `npx expo start --dev-client --tunnel` (sin `adb` ni cable USB; el túnel ya está soportado) y la app abierta desde el teléfono con el código QR o la URL del túnel.
 7. La API DEV responde y D1 DEV tiene 1 usuario, 0 cuentas, 0 categorías y 0 movimientos, como supone §16.0.
 8. Sesión antigua cerrada en el teléfono (SecureStore conserva la anterior) y fecha, hora y zona horaria automáticas.
 9. Medir el ancho real en dp (Opciones de desarrollador > «Ancho mínimo») y anotar navegación por gestos o tres botones; carpeta de evidencias del §15.D creada.
 10. Datos ficticios solamente (nombres «Prueba …») y recordar que D-1 a D-4 de §17.3 no son defectos al comparar textos.
+
+
+## 18. Informe de ejecución R5.1 (Login, «Cerrar sesión», ícono de categoría, «+ Crear categoría» y barra de estado)
+
+```
+Informe de ejecución UX-QA - R5.1
+Fecha: 2026-10-16
+Rama y commit evaluados: feat/rediseno-ux-ui sobre dbe5201, con los cambios de R5.1 SIN commit
+Ejecutor: mobile-ux-qa (agentId: lo registra quien coordina; no se dispone aquí)
+Alcance: docs/003 «Decisión R5.1» D1 a D12, docs/007 §5.13 (A a J; R51-01 a R51-28 y D1 a D12), docs/008 §6.15.
+         LoginScreen, session-ui, AccountsScreen, SessionBanner, MoreScreen, sheets (Sheet tall/compact), category-form,
+         category-create-sheet, CategoriesScreen, TransactionFormScreen, form-ui, MainNavigator, navigation, App,
+         lib/category-appearance, theme/tokens, theme/useSystemInsets y los assets de brand/ e illustrations/.
+Entorno: niveles A (Jest y revisión de código) y T (contrast.js y cálculo WCAG propio). Sin R ni D: no hay emulador,
+         dispositivo ni TalkBack. NADA de este informe se ejecutó en Android. Los criterios D1 a D12 quedan PENDIENTES.
+Resumen: R51-01 a R51-28 con nivel A/T: OK (R51-05 con matiz); D1 a D12 (nivel D): PENDIENTE.
+         Defectos: 0 críticos, 0 altos, 0 medios, 2 bajos (UXQA-R51-01 y 02). Observaciones: 18.6.
+Decisión: APROBADO CON OBSERVACIONES. Ningún defecto alto ni crítico abierto. El cierre de R5.1 sigue condicionado al
+          nivel D (D1 a D12) y a `qa-engineer`; R5.1 no puede marcarse completada antes.
+```
+
+### 18.1 Comandos y resultados (nivel A/T)
+
+| Comando | Resultado |
+| --- | --- |
+| `cd app && npx jest --ci --maxWorkers=2` | 49 suites, 1643 pruebas, todas en verde (coincide con lo esperado) |
+| `npx jest --ci --no-cache --maxWorkers=2` sobre `LoginScreen`, `session-ui`, `TransactionFormScreen.createCategory`, `CategoriesScreen.icons`, `sheets.tall`, `App.r51`, `MainNavigator.r51` | 7 suites, 90 pruebas en verde con la caché fría (la de `createCategory` tarda ≈ 60 s en frío y la de `icons` ≈ 46 s, sin agotar tiempos) |
+| `npx tsc --noEmit`, `npx eslint --max-warnings=0 src`, `npx prettier --check src` | sin errores ni avisos |
+| `node docs/design/contrast.js --check` | salida 0; 130 pares, mínimo texto 4,60:1, mínimo componente 3,10:1; los 15 pares «R5.1» cumplen |
+| Cálculo WCAG propio (fórmula de luminancia relativa, scratchpad) | pares no incluidos en el script: `incomeText` sobre `bg` (aviso de éxito) 6,47:1; `yellowText` sobre `surface` (aviso del pie) 7,74:1; `text` sobre `brand100` 13,28:1; `brand700` sobre `brand100` 6,03:1; `brandInk` sobre `yellowSoft` 8,94:1. Los pares del script coinciden con docs/008 §6.15.2 (Google 16,48:1 / 13,21:1 / borde 4,53:1 y 3,29:1 sobre las manchas). Texto de Google con opacidad 0,6 (cargando): ≈ 4,35:1, estado deshabilitado exento de WCAG 1.4.3 |
+| `git diff --stat -- api app/package.json app/app.json app/src/lib/auth-service.ts app/src/lib/session-storage.ts app/src/hooks/use-auth.tsx` | sin cambios. `package.json` no contiene `react-native-safe-area-context` ni `expo-navigation-bar`; ninguno se importa en `app/src` (solo aparece el nombre en un comentario de `useSystemInsets.ts`) |
+| `cmp` de assets | `app/assets/brand/google-g.png`, `@2x`, `@3x`, `@4x` idénticos byte a byte a `docs/design/assets/brand/rn/*` (20, 40, 60 y 80 px, RGBA); `app/assets/illustrations/vacio-alcancia.png` idéntico a `docs/design/assets/illustrations/vacio-alcancia.png` (360 × 360, RGBA) |
+
+### 18.2 Resultados por criterio de docs/007 §5.13.H (nivel A salvo indicación)
+
+| Criterio | Resultado | Evidencia |
+| --- | --- | --- |
+| R51-01 Nombre `header`, mensaje variante A, nota de privacidad | OK | `LOGIN_MESSAGE` y `LOGIN_PRIVACY` coinciden letra por letra con docs/007 §5.13.A/B y docs/003 D11.1; `LoginScreen.test` «muestra el nombre como encabezado…». La marca (círculo `yellowSoft`, alcancía) y el subrayado están ocultos a TalkBack (`importantForAccessibility="no"`, `accessibilityElementsHidden`, `accessible={false}`) |
+| R51-02 «Continuar con Google»; ya no existe «Ingresar con Google» | OK | `LoginScreen.test` R51-02; `grep` sin restos en `app/src` (solo el prototipo HTML, que es referencia histórica) |
+| R51-03 Logotipo oculto a lectores | OK | `Image` con `importantForAccessibility="no"` y `accessibilityElementsHidden`; la etiqueta del botón no lo menciona; prueba R51-03 |
+| R51-04 `busy`: `login-loading`, «Ingresando…», `{disabled, busy}`, sin segundo `signIn` | OK | pruebas R51-04 (reposo: una llamada; ocupado: sin llamada). Se verificó en código que el logo se sustituye por el indicador en el mismo hueco de 20 dp |
+| R51-05 Error `alert` sobre el botón; aviso y motivo con los textos existentes | OK con matiz | pruebas R51-05. Matiz en 18.6-1: error y aviso pueden pintarse a la vez (comportamiento existente) pero `signIn` limpia `notice`, por lo que no coexisten en la práctica |
+| R51-06 Botón ≥ 48 dp y contenido en `ScrollView` | OK | `minHeight: sizes.primaryTall` (52), radio 12, borde 1,5; `ScrollView` con `keyboardShouldPersistTaps="handled"` y `flexGrow: 1`; pruebas R51-06 y «estilo de la guía de marca» |
+| R51-07 Control «Cerrar sesión» junto al avatar, 48 × 48, separados | OK | `session-ui.test` R51-07 (48 dp, círculo de 40, glifo oculto) y «🚪 y avatar… 8 dp… 🚪 primero» |
+| R51-08 Un toque = un `signOut`; sin `Alert`; segundo toque ignorado | OK | `useRef` `running` + `pending`; pruebas R51-08, incluida la que libera el control si `signOut` lanza |
+| R51-09 Mismo componente y mismo `signOut` en los cuatro accesos | OK | `SignOutControl` es la única implementación: encabezado (`icon`), `ProfileSheet`, `MoreScreen` y `SessionBanner` (`button`); `grep` confirma que ya nadie llama a `signOut` directamente salvo `session-ui.tsx`; prueba R51-09 |
+| R51-10 Visible y activo con `unavailable` y degradada; avatar abre el perfil | OK | pruebas R51-10. Con sesión degradada la franja solo ofrece «Reintentar» (sin cierre propio); el control del encabezado cubre la salida |
+| R51-11 No borra guías ni preferencias | OK | `SignOutControl` solo llama a `signOut`; prueba R51-11 («no escribe ni borra nada del almacén de guías») y `App.r51` «conserva las guías» |
+| R51-12 30 íconos, slugs válidos, nombres únicos; 11 existentes + `tag`; desconocido da 🏷️ | OK | `category-appearance.test` R51-12 (dos pruebas). Revisión propia: los 30 slugs, glifos y nombres de `CATEGORY_ICON_OPTIONS` coinciden con la tabla de docs/007 §5.13.D |
+| R51-13 `radiogroup` «Ícono», 30 `radio` «Ícono {nombre}», ≥ 48 dp, `selected` solo en el elegido, 4 a 6 columnas | OK | `CategoriesScreen.icons.test` R51-13 e `iconColumns`. Cálculo propio de celdas: formulario a 360 dp = 5 columnas de 56 dp; a 320 dp = 4 de 58; hoja a 320 dp = 5 de 48 dp exactos; a 412 dp = 6 de 54; con fuente ≥ 1,5 = 4 columnas. Ninguna baja de 48 |
+| R51-14 Crear sin elegir no envía `icono`; elegir envía el slug; vista previa | OK | pruebas R51-14 |
+| R51-15 Editar: ícono del catálogo preseleccionado; fuera del catálogo sin selección y 🏷️ | OK | pruebas R51-15 |
+| R51-16 Editar: `icono` solo si cambió | OK | pruebas R51-16 (incluye elegir el mismo: PATCH vacío) |
+| R51-17 Solo el ícono ensucia el formulario; volver al inicial lo limpia | OK | pruebas R51-17 y «al crear, elegir un ícono cuenta para el descarte» |
+| R51-18 Última celda «+ Crear categoría», no es `radio`; ausente en Editar; sin «Ir a Categorías», `onOpenCategories`, `FROM_FORM_HELP` ni `fromForm` | OK | `createCategory.test` R51-18 (cinco pruebas: carga, error, editar, archivada, `busy`). Retiro verificado con `grep` en `app/src`: no quedan `replaceTopWithCategories`, `FROM_FORM_HELP`, `fromForm` ni «Ir a Categorías» fuera de las pruebas negativas. La prop `onOpenCategories` que sigue existiendo es la de `MoreScreen` (fila «Categorías»), no la retirada |
+| R51-19 Vacío por tipo con texto nuevo y botón; sin «Más > Categorías» | OK | prueba R51-19 (gasto e ingreso). Con la cuenta archivada el texto no invita a crear y no hay botón |
+| R51-20 Hoja con «Tipo: …» fijo, nombre, color, ícono y vista previa; sin descripción | OK con observación | prueba R51-20. Ver UXQA-R51-01 («Tipo: Gasto» aparece dos veces) |
+| R51-21 Abrir, cancelar y descartar no alteran el movimiento ni llaman a `onDone` | OK | pruebas R51-21 (cuatro) |
+| R51-22 «Escribe un nombre.»; una sola llamada con el tipo del movimiento aunque se toque dos veces | OK | pruebas R51-22. `tipo` sale del movimiento (`toCategoryType(tipo)`) y la hoja no tiene control de tipo: no puede crearse una categoría del otro tipo |
+| R51-23 Éxito: cierra, selecciona, aviso `status`, borra «Elige una categoría.», no envía el movimiento | OK | pruebas R51-23 (tres). El aviso se retira al elegir otra categoría o cambiar de tipo; `dismiss('categorias')` se llama en `finish` |
+| R51-24 Descarte con y sin cambios por Cancelar, velo y Atrás; ignorado con `busy`; Atrás no llega al guard del movimiento | OK | pruebas R51-24 (cuatro) y `MainNavigator.r51` «Atrás con la hoja abierta la cierra…». Orden de los listeners revisado en código: guard de la hoja, luego cierre de la hoja (siempre `true`), por lo que el guard del formulario nunca se consulta |
+| R51-25 `NAME_TAKEN`, `LIMIT_REACHED`, `ACCOUNT_ARCHIVED`, otro 4xx | OK | pruebas R51-25 (cuatro). Textos de `LIMIT_REACHED` y del fallo incierto idénticos a docs/007 §5.13.E. El código `LIMIT_REACHED` (409) existe en `category-service.ts` de la API |
+| R51-26 Fallo incierto: sin reintento a ciegas, «Revisar la lista», relectura | OK | pruebas R51-26 (cinco). Guardar queda deshabilitado; la relectura usa `listCategories` sin archivadas, `pageSize: 100` (el máximo de la API) y compara nombre y tipo sin distinguir mayúsculas |
+| R51-27 Con `fontScale` 2: cuerpo desplazable, pie alcanzable, 48 dp | OK (A) | prueba R51-27 y `sheets.tall.test` (75 % de la ventana menos el margen superior; compacto: ventana menos margen y 8 dp). El comportamiento real con la fuente de Android y el teclado es nivel D |
+| R51-28 Alcance: sin cambios en `api/`, auth, `session-storage`, `app.json`, `package.json`; suites previas pasan; test/typecheck/lint | OK | 18.1. Las pruebas previas modificadas solo cambian lo que el propio criterio permite (textos de «Ir a Categorías», `fromForm`, «Ingresar con Google», respaldo de 32 dp) |
+
+### 18.3 Verificaciones solicitadas con atención
+
+| Punto | Resultado | Razonamiento |
+| --- | --- | --- |
+| Login fuera de `Screen`: relleno superior ni duplicado ni ausente | OK (A, código) | `Root` monta `LoginScreen` sin `Screen`, de modo que no existe `screen-top-inset`; el Login suma una sola vez `useSystemInsets().top + 16` en el `ScrollView` y el fondo `bg` más las manchas ocupan toda la ventana (`container` `flex: 1`, `overflow: 'hidden'`). `StatusBar style="dark"` sigue en `App`. El resto de pantallas con `Screen` ponen su único `screen-top-inset`; las hojas no suman relleno superior (solo lo restan de su altura máxima). Sin franja visible: PENDIENTE (D1 a D5) |
+| Respaldo de 32 dp (`useSystemInsets`) | OK (A) con hipótesis | `top = max(altura informada, 32)`; el inferior conserva la fórmula anterior (la barra informada, o 24 si no hay) y su respaldo de 48, por lo que no cambia. `ui.test` y `useSystemInsets.test` actualizados con intención. Es una hipótesis marcada como provisional; solo se puede validar con el teléfono (D4: hueco de más de 8 dp en teléfonos sin recorte) |
+| Cerrar sesión unificado, doble toque, sin borrar datos, otro usuario sin fuga | OK (A) | ver R51-07 a R51-11 y `App.r51` («cierra la sesión sin confirmar, conserva las guías y no filtra datos al siguiente usuario»); `MainNavigator` se remonta por `key` de usuario y `GuidesProvider` es por usuario (R5) |
+| Selector de ícono: compatibilidad y envío | OK (A) | los 11 slugs de las categorías por defecto de la API y `tag` están en el catálogo; un slug desconocido no preselecciona ni se envía; descarte contado |
+| «+ Crear categoría»: conserva el movimiento; errores; aislamiento por cuenta y usuario | OK (A) | el estado de la hoja vive solo mientras está abierta (`visible ? <Open/> : null`); `createCategory(token, account.id, …)` usa la cuenta del formulario, que no cambia mientras está abierto (sin selector de cuenta, prueba `MainNavigator.r51`); `createdCategories` es estado del formulario, filtrado por tipo y deduplicado contra la relectura |
+| No aparece al editar ni con cuenta archivada; Sheet tall/compact no altera las otras hojas | OK (A) | `canCreateCategory = !editing && !account.archivada && !archivedBlocked`; `Sheet` solo añade `maxHeight` si `tall`; ninguna otra hoja lo pasa (`sheets.tall.test` «por defecto no limita la altura») |
+| Tipo bloqueado al del movimiento | OK | no hay `TypeToggle` en la hoja; `draft.tipo` y la petición usan el `tipo` recibido |
+| Retirada de «Ir a Categorías»/`fromForm` sin código muerto ni romper Atrás | OK con observación | `navigation.ts`, `MainNavigator` y `CategoriesScreen` sin restos; Atrás desde Categorías cubierto en `MainNavigator.r51`. Código muerto distinto: ver UXQA-R51-02 |
+| Nada bloqueado implementado | OK | sin color ni ícono de cuenta (`NewAccountScreen`, `accounts`, API sin cambios), sin barra inferior oculta, sin `safe-area-context`, sin dependencias ni `app.json` |
+| Contraste y 48 dp | OK (T) | 18.1. Zonas táctiles: Google 52, 🚪 48 (círculo 40), avatar 48, celdas de ícono ≥ 48, «+ Crear categoría» ≥ 56 en la rejilla y 48 como botón, «Revisar la lista»/Guardar/Cancelar `Button` (48; Guardar 52 en la hoja alta) |
+| Colores crudos | OK | en `LoginScreen`, `session-ui`, `category-create-sheet` y `form-ui` no hay literales `#RRGGBB` ni `rgb(`; el Login usa `colors`, `depth` y `brandGoogle`. Los literales de `category-form.tsx` son la paleta de datos `CATEGORY_COLORS` (se envían a la API, existente desde R3) |
+| Decisión del implementador: aviso y error a la vez en el Login | Observación (18.6-1) | conforme al comportamiento existente; no alcanzable tras `signIn` |
+| Decisión del implementador: hoja sin animación de salida | Observación (18.6-2) | consecuencia de montar la hoja solo mientras está abierta; las otras hojas sí animan la salida. No contradice ningún criterio R51 |
+| Decisión del implementador: `role="status"` | Aceptada (A); validación en D8 | RN 0.86 admite `role="status"` en `Text` y `tsc` lo acepta. Se combina con `accessibilityLiveRegion="polite"` y `setAccessibilityFocus`, como pide docs/007 §5.13.E; el riesgo de doble lectura solo se descarta con TalkBack |
+
+### 18.4 «Tipo: Gasto» duplicado en la hoja
+
+Clasificación: **defecto bajo UXQA-R51-01** (texto redundante; la causa es una contradicción documental entre docs/007 y docs/008 que el implementador resolvió aplicando las dos). docs/007 §5.13.E pide una línea fija `small` «Tipo: Gasto»; docs/008 §6.15.5 pide una píldora no interactiva «Gasto» en el encabezado. El código pinta ambas, la píldora con el texto «Tipo: Gasto» y la línea con el mismo texto, sin ocultar ninguna: TalkBack lee «Tipo: Gasto» dos veces y a vista se repite a una distancia de unos 60 dp.
+
+### 18.5 Defectos
+
+| ID | Pantalla | Caso | Severidad | Pasos | Esperado | Obtenido | Evidencia / archivo |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| UXQA-R51-01 | Hoja «Nueva categoría» (Nuevo movimiento) | INF/ACC; R51-20; docs/007 §5.13.E y docs/008 §6.15.5 | Baja | Abrir Nuevo movimiento, tocar «+ Crear categoría» y leer la hoja (con TalkBack, pasar por los elementos) | Un solo indicador del tipo fijado: o la píldora «Gasto»/«Ingreso» (docs/008) o la línea «Tipo: …» (docs/007) | Dos: la píldora del encabezado con «Tipo: Gasto» y la línea fija «Tipo: Gasto» bajo el nombre; ambas accesibles | `app/src/screens/category-create-sheet.tsx` (`styles.pill`, `pillText`) y `app/src/screens/category-form.tsx` (`fixedType`, prop `fixedTypeText`). Nivel A (código). Corrección sugerida: mantener la píldora (docs/008, que es el más reciente) con el texto «Gasto»/«Ingreso» y no pasar `fixedTypeText`, o conservar la línea y ocultar la píldora a los lectores; `mobile-ux-designer` y `mobile-visual-designer` deben unificar docs/007 y docs/008 |
+| UXQA-R51-02 | Código compartido de categorías | Calidad (retirada sin código muerto) | Baja | `grep -rn lockedTipo app/src` | Sin código sin uso tras la retirada de `fromForm`/«Ir a Categorías» | La prop `lockedTipo` de `CategoryFormCard` (y su rama de `fixedTypeText`) solo la usan las pruebas; en producción la hoja usa `CategoryFormFields` directamente. `CATEGORY_ICON_SLUG` solo la usa una prueba | `app/src/screens/category-form.tsx` (`lockedTipo` en las líneas de props, estado inicial y `fixedTypeText`), `app/src/lib/category-appearance.ts` (`CATEGORY_ICON_SLUG`); pruebas `CategoriesScreen.icons.test.tsx` («lockedTipo»). No afecta a la interfaz |
+
+Los dos defectos son bajos y no bloquean. No se hallaron defectos medios, altos ni críticos.
+
+### 18.6 Observaciones sin defecto
+
+1. Login, error y aviso a la vez: `LoginScreen` pinta `notice`, el motivo (solo si no hay `notice` ni error) y `error` sin exclusión entre `notice` y `error`, aunque docs/007 §5.13.A habla de prioridad error, aviso, motivo. Es el comportamiento del Login anterior y `signIn` pone `notice: null` al empezar (`use-auth.tsx`), por lo que solo coexistirían si el cierre publica un error junto con un aviso, caso que `endSession` no produce. Se acepta; si el diseñador quiere una sola caja, se pide la exclusión explícita.
+2. La hoja «Nueva categoría» no tiene animación de salida (se desmonta al cerrar), a diferencia de las otras cuatro hojas. Declarado por el implementador; coherente con la omisión de salida de R5 (§14.5-b). Para el usuario es un cierre brusco, no un fallo. Se puede mantener la hoja montada con `visible` si se quiere la animación.
+3. Contradicciones documentales sin efecto funcional, a devolver a los diseñadores: (a) docs/007 §5.13.B fija el fondo pulsado de Google en `#F1F3F4`; docs/008 §6.15.2 y el código usan `#E6E6E6` (y docs/003 D11.2 menciona solo tres colores de Google; el cuarto sale de docs/008); (b) docs/007 §5.13.D pide borde del ícono elegido `brand700` y docs/008 §6.15.4 `text`, que es lo implementado; (c) docs/008 §6.15.4 calcula 5 columnas a 320 dp en el formulario; el código da 4 (más holgado, 58 dp por celda); (d) la píldora o la línea de tipo (UXQA-R51-01).
+4. Tamaño de «CuidaTuBilletera» con fuente ampliada: `rootTitle` (26 sp, 800) no limita `maxFontSizeMultiplier` y es una sola palabra de 16 letras. A 175 % y 200 % es probable que Android la parta dentro de la palabra a 320 y a 360 dp (estimación por ancho medio, sin medir). El Login anterior tenía el mismo riesgo. Se verifica en D (anotarlo en la prueba de fuente grande).
+5. `Sheet` con `tall` calcula su altura con `useWindowDimensions().height` y `useSystemInsets().top`, que dependen de la misma hipótesis de la barra de estado; si el respaldo de 32 dp resulta corto o largo, la hoja alta cambia unos dp. Sin efecto grave: el pie va dentro de la hoja.
+6. La hoja alta pone `paddingBottom: 24 + insets.bottom` (con el respaldo de 48, 72 dp bajo el pie) incluso con el teclado abierto; ya era así en las otras hojas. Con el teclado abierto en pantallas bajas esos 72 dp restan espacio al cuerpo; D6 lo comprueba.
+7. `tsconfig.json` en la raíz sigue sin seguimiento (ya señalado en §14.7-9); no forma parte de R5.1. Coordinar si se versiona o se descarta antes del commit.
+8. Las suites nuevas son lentas con la caché fría (≈ 60 s `createCategory`, ≈ 46 s `icons`); hoy no agotan tiempos, pero conviene que `qa-engineer` las repita con `--no-cache` en CI (riesgo análogo a UXQA-R4-01).
+
+### 18.7 Pendientes (no demostrados) y motivo
+
+Todo el nivel D por falta de emulador, dispositivo y TalkBack. No se tomaron capturas de la app ni se hizo la comparación de nivel R con `docs/design/capturas/` y el prototipo (el prototipo conserva «Ingresar con Google» y la «G» dibujada: es anterior a R5.1, no es la referencia de este texto).
+
+| Criterio | Qué falta | Nivel |
+| --- | --- | --- |
+| D1 Barra de estado en Login | Reloj, íconos y recorte sin tapar «CuidaTuBilletera» ni el botón | D |
+| D2 Barra de estado en Mis cuentas, Más, Reportes, Calendario y Nuevo movimiento | Encabezado (marca, 🚪, avatar) completamente bajo la barra | D |
+| D3 Hojas | Velo que cubre la barra; sin salto al abrir ni cerrar | D |
+| D4 Teléfono con y sin recorte | Hueco de más de 8 dp respecto de la barra real con el respaldo de 32 dp; anotar modelo y altura | D |
+| D5 Rotación o fuente grande | La reserva superior no cambia ni se duplica | D |
+| D6 Hoja con teclado abierto | Nombre, vista previa y pie visibles o alcanzables; no se pierde lo escrito | D |
+| D7 Hoja a fuente 200 % | Se desplaza; los 30 íconos tocables; Guardar y Cancelar alcanzables | D |
+| D8 TalkBack | «Cerrar sesión» como botón; «Ícono {nombre}, botón de opción, seleccionado»; «+ Crear categoría»; aviso de éxito sin mover el foco de forma confusa (`role="status"` + región viva + foco); logo de Google no se lee dos veces; «Tipo: Gasto» leído dos veces (UXQA-R51-01) | D |
+| D9 Pulgar a 360 dp | «Continuar con Google» y «Cerrar sesión» alcanzables; 10 toques a cada uno entre 🚪 y avatar sin error | D |
+| D10 Logotipo de Google | Nitidez en densidad alta y media (cuatro PNG por densidad, no se pudo ver el empaquetado de Metro) | D |
+| D11 Red lenta o modo avión al guardar la categoría | Mensaje de fallo incierto y «Revisar la lista» | D |
+| D12 Cerrar sesión y entrar con otra cuenta de Google | Datos separados y ayudas por usuario | D |
+
+Tampoco se comprobó en dispositivo: la apariencia del emoji 🚪 y de los glifos del catálogo (🍽️, 🏋️, ＋, ⋯) con la fuente de Android, la carga real de los PNG y el Login a 320 × 568 y fuente 175 % (solo cubierto por las ramas `compact` y `showMark` en Jest). Pendiente de otros agentes: `qa-engineer` repite typecheck, lint y regresión con caché fría; la alcancía de Mis cuentas sigue obligatoria en R6.

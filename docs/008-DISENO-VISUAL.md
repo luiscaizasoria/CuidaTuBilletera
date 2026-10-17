@@ -439,6 +439,102 @@ Solo tokens existentes de `app/src/theme/tokens.ts`. **Ningún color nuevo.** Cu
 
 Decisiones menores para confirmar (no cromáticas): (a) `SummaryTile` en 2 + 1 en lugar de una fila de tres (docs/007 §5.11 D.3 y su wireframe dibujan una fila; no la exigen); (b) `DatePickerSheet` neutro usa `colors.text` como relleno del día elegido (docs/007 K dice «marca», pero `brand700` está reservado a acción primaria/FAB/foco; la cifra blanca sobre `text` da 16.49:1); (c) `maxFontSizeMultiplier` 1.6 solo en `ScreenTitle`; (d) variante `tone="movimientos"` de `Chip` y fondo `expenseSoft` en `ErrorBox`.
 
+### 6.15 R5.1: Login, botón de Google, cerrar sesión, selector de ícono, «+ Crear categoría» y barra de estado (implementa docs/007 §5.13; docs/003 «Decisión R5.1»)
+
+Ajustes puntuales, sin otra identidad visual: todo sale de tokens existentes salvo la excepción de marca de Google (6.15.2) y tres tamaños. Ningún color de dinero (verde/coral) se usa fuera de su significado: el coral/verde solo aparece en la píldora de tipo de la hoja (6.15.5), donde sí significa Gasto/Ingreso. Estado: PROPUESTA hasta que el usuario la apruebe; contraste verificado con `node docs/design/contrast.js --check` (salida 0; 15 pares nuevos «R5.1» en 3.1). No probado en dispositivo.
+
+#### 6.15.1 Login
+
+- **Fondo**: `colors.bg` (crema) con las tres manchas `depth.blobs` ya aprobadas (6.11 y 2.6), no el verde a sangre (rechazado en la iteración 2). Contenedor `flex: 1`, `overflow: 'hidden'`, `backgroundColor: colors.bg`; manchas `position: 'absolute'`, `pointerEvents="none"`, `importantForAccessibility="no"`, detrás del contenido: amarilla 220 dp en (arriba, derecha) con desplazamiento -70/-60; melocotón 170 dp abajo-izquierda (-60/-50); celeste 190 dp a media altura, derecha (-90). Con altura de ventana < 600 dp (o fuente ≥ 1.5) reducir cada mancha al 75 %. Peor caso apilado `#E6DACB`: `text` 11.98:1, `text2` 5.54:1, `brandInk` verificado en 3.1; borde del botón de Google 3.29:1 (par nuevo).
+- **Alcancía en el Login: SÍ, decisión justificada.** docs/003 R2 D2 difiere «la alcancía de Mis cuentas» (encabezado y vacío, UXQA-R2-01) a R6; no prohíbe la alcancía en otra pantalla, y la Bienvenida/Login aprobada (15.13 y 6.11) ya la lleva como personaje. Usar `vacio-alcancia.png` en el Login NO cumple ni adelanta lo pendiente de Mis cuentas: R6 sigue obligado a ponerla allí. Condición: el PNG (360 × 360, transparente, 106 KB) se copia a `app/assets/illustrations/vacio-alcancia.png` (hoy solo hay tres de las cinco; la copia es solo de assets, sin nativo). Si el usuario prefiere atenerse a docs/003 D11.2 al pie de la letra, la alternativa sin recurso es 👛 de 56 sp sobre el mismo círculo. Se pide al usuario confirmar esta decisión (una línea) antes de implementar.
+- **Composición vertical** (columna centrada, `maxWidth: 360`, `alignSelf: 'center'`, `width: '100%'`, `alignItems: 'center'`), de arriba abajo:
+  1. Marca: círculo `colors.yellowSoft` de 144 dp (`sizes.loginMark`) con la alcancía de 120 dp (`sizes.loginPig`) centrada, `resizeMode="contain"`, decorativa (`accessible={false}`, `importantForAccessibility="no"`, `accessibilityElementsHidden`). Compacto (ventana < 600 dp): círculo 120 / alcancía 96. Fuente ≥ 1.75: se oculta todo el bloque. Separación 16 dp (12 compacto).
+  2. «CuidaTuBilletera»: `typography.rootTitle` (26/32 800), `colors.brandInk`, centrado, `accessibilityRole="header"`, `maxFontSizeMultiplier` no se limita; debajo, subrayado amarillo `colors.yellow` de 44 × 5 dp, radio 3, 8 dp bajo el texto (decorativo, oculto).
+  3. Mensaje (variante A, docs/003 D11.1): `typography.body` (15/22) `colors.text2`, centrado, hasta 3 líneas a 360 dp y 4 a 320 dp, 12 dp bajo el subrayado.
+  4. Avisos (solo si existen): caja a todo el ancho de la columna, radio `radii.md` (12), relleno 12, `typography.small` con `fontWeight: '700'` y prefijo «⚠ » oculto: error = `expenseSoft` + `expenseText` (5.17:1); aviso/motivo de cierre = `yellowSoft` + `yellowText`; rol `alert`. 16 dp sobre el botón.
+  5. Botón de Google (6.15.2), 24 dp bajo el mensaje o los avisos.
+  6. Nota de privacidad: `typography.small` (13/18) `colors.text2`, centrada, 12 dp bajo el botón. Sobre mancha amarilla 6.67:1, sobre el peor caso 5.54:1.
+- **Contenedor**: `ScrollView` con `contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16, paddingHorizontal: screenMargin(width) + 8 }}` (24 dp lateral a 320-399 dp, 28 dp desde 400 dp) y `keyboardShouldPersistTaps="handled"`; el fondo y las manchas van FUERA del `ScrollView` (hermanos absolutos) para que no se desplacen. A 320 × 568 dp (ventana útil ≈ 500 dp) el contenido compacto mide unos 380 dp más 112 de relleno: cabe sin desplazar; con fuente 200 % se desplaza y el botón sigue alcanzable.
+- **StatusBar**: `style="dark"` ya existe en `App.tsx`; el Login pinta bajo la barra de estado (el relleno superior usa `useSystemInsets().top`, que con 6.15.6 vale ≥ 32 dp) y ese espacio tiene el mismo color `bg` y las mismas manchas, por lo que no se ve franja. 412 dp: mismos tamaños, más margen lateral (28), sin crecer la columna (máx. 360).
+
+#### 6.15.2 Botón «Continuar con Google»
+
+Única excepción cromática a los tokens del proyecto, justificada por la guía de marca de Google (botón claro). Valores en un objeto aparte, `brandGoogle`, para que no se confundan con la paleta (6.15.7).
+
+| Propiedad | Valor |
+| --- | --- |
+| Fondo | `#FFFFFF` (= `surface`) |
+| Borde | 1.5 dp `#747775` (`brandGoogle.border`); 4.53:1 sobre blanco, 4.39:1 sobre `bg`, 3.29:1 sobre las manchas apiladas |
+| Texto | `#1F1F1F` (`brandGoogle.text`), `typography.button` con `fontWeight: '600'` (16/20); 16.48:1 sobre blanco |
+| Tamaño | ancho 100 % de la columna (máx. 360), `minHeight: sizes.primaryTall` (52), crece con la fuente |
+| Forma | `borderRadius: radii.md` (12; se mantiene la forma de los botones del proyecto en lugar de píldora), `shadows.card` |
+| Contenido | fila centrada, `gap` 12, `paddingHorizontal` 16: logo 20 × 20 + texto (`flexShrink: 1`, hasta 2 líneas, centrado) |
+| Presionado | fondo `#E6E6E6` (`brandGoogle.pressed`, #303030 al 12 % sobre blanco, estado «pulsado» de la guía); texto 13.21:1 |
+| Cargando (`busy`) | texto «Ingresando…», el logo se sustituye por `ActivityIndicator` (`size` 20, `color={colors.brand700}`, `testID="login-loading"`) en el mismo hueco de 20 × 20 (no cambia el ancho); `disabled`, opacidad 0.6 (la ya existente), `accessibilityState {disabled: true, busy: true}` |
+| Deshabilitado | opacidad 0.6; sin otro estado definido por la guía para este caso |
+| Accesibilidad | `accessibilityRole="button"`, `accessibilityLabel` = texto visible; logo oculto (`accessibilityElementsHidden`, `importantForAccessibility="no"`) |
+
+Alto 52 dp (la guía de Google muestra 40 dp como medida de referencia; se amplía por la zona táctil, decisión D11.2 de docs/003). El logo no se recolorea, recorta, redondea ni se le pone fondo ni contorno.
+
+**Carga de `google-g.png`.** El original (`docs/design/assets/brand/google-g.png`, 200 × 204, RGBA) se conserva como fuente. No debe mostrarse tal cual a 20 dp: reducir 10x con `Image` de Android sin remuestreo previo da bordes dentados, y su relación 200:204 no es cuadrada. Se generaron versiones por densidad en un lienzo cuadrado transparente (el «G» escalado sin deformar, con Lanczos), verificadas con `file` y con el píxel de esquina en alfa 0:
+
+| Archivo | Píxeles | Densidad |
+| --- | --- | --- |
+| `docs/design/assets/brand/rn/google-g.png` | 20 × 20 | 1x |
+| `docs/design/assets/brand/rn/google-g@2x.png` | 40 × 40 | 2x |
+| `docs/design/assets/brand/rn/google-g@3x.png` | 60 × 60 | 3x |
+| `docs/design/assets/brand/rn/google-g@4x.png` | 80 × 80 | 4x |
+
+Copiar los cuatro juntos, con estos nombres, a `app/assets/brand/` y cargar con `require('../../assets/brand/google-g.png')`: Metro elige la densidad. Estilo: `style={{ width: sizes.googleLogo, height: sizes.googleLogo }}` (20 × 20, obligatorios), `resizeMode="contain"`. Peso total ≈ 19 KB. No requiere módulo nativo ni build nueva.
+
+#### 6.15.3 Control «Cerrar sesión» del encabezado de Mis cuentas
+
+Implementa docs/007 §5.13 C con la misma familia visual que el avatar (`AccountsScreen.styles.avatar`). Zona táctil 48 × 48 (`sizes.touchMin`) con círculo visual de 40 dp (`sizes.avatar`), a la izquierda del avatar, 8 dp entre zonas (grupo de 104 dp; a 320 dp la marca conserva ≥ 150 dp con `flexShrink: 1` y `numberOfLines={2}`).
+
+| Estado | Aspecto |
+| --- | --- |
+| Reposo | círculo `colors.surface`, borde 1.5 `colors.border`, `shadows.card`; glifo 🚪 de 20 sp (decorativo, `maxFontSizeMultiplier={1.3}` para que quepa en 40 dp con fuente grande) |
+| Presionado | fondo `colors.segBg`, borde 1.5 `colors.borderStrong` (3.10:1 sobre `segBg`) |
+| En curso (`busy`) | `disabled`; el glifo se sustituye por `ActivityIndicator` de 18 dp `colors.brand700`; opacidad 0.7; `accessibilityState {disabled: true, busy: true}` |
+| Sin sesión / `unavailable` | igual que reposo (sigue activo) |
+
+El borde `border` es decorativo (como el del avatar): el glifo identifica el control y la etiqueta «Cerrar sesión» lo nombra. Diferencia con el avatar: sin letra, con glifo. Sin texto visible; sin confirmación.
+
+#### 6.15.4 Selector de ícono de categoría (30 íconos; docs/007 §5.13 D)
+
+- **Rejilla**: `radiogroup` «Ícono». Celdas de 48 dp de alto mínimo (`sizes.touchMin`), radio `radii.md - 2` (10), glifo 24 sp (`maxFontSizeMultiplier={1.5}`), separación 8 dp (`spacing.sm`) en ambos ejes. Ancho de la celda = `(anchoDisponible - 8 × (columnas - 1)) / columnas`.
+- **Columnas** = `clamp(floor((anchoDisponible + 8) / 56), 4, 6)`; con fuente ≥ 1.5, 4 columnas (las celdas crecen en alto, la rejilla no se corta). Ejemplos: formulario de categoría (tarjeta con 16 dp de relleno; ancho = ventana − 2 × margen − 32) a 360 dp (ancho 296) = 5 columnas × 6 filas de 48 dp, a 320 dp (256) = 4 (así lo calcula el código; antes decía 5); hoja de Nuevo movimiento a 360 dp (ancho 312) = 5, a 320 dp (272) = 5 (cabe justo: 5 × 48 + 4 × 8 = 272), a 412 dp (364) = 6. Sin scroll propio en el formulario; dentro de la hoja la rejilla va en el scroll del cuerpo.
+- **Reposo**: `surface`, borde 1.5 `border` (decorativo; el glifo identifica la celda, igual que las opciones de categoría, 6.13). **Elegido**: fondo `brand100`, borde **3 dp `colors.text`** (13.28:1 sobre `brand100`) y una insignia «✓» en la esquina superior derecha dentro de la celda (16 dp, círculo `colors.text`, «✓» blanco 11 sp 800, 16.49:1; decorativa y oculta); `accessibilityState {selected: true}`. Presionado: opacidad 0.85. `busy`: opacidad 0.5. La selección no depende del color: borde grueso, insignia y estado accesible.
+- **Reserva de espacio**: `borderWidth` 3 y 1.5 se pintan dentro de la caja, el tamaño no cambia al elegir.
+- **Vista previa y resumen**: como docs/007 §5.13 D; el ícono elegido se dibuja con `CategoryIcon` y el color elegido.
+
+#### 6.15.5 «+ Crear categoría» y hoja «Nueva categoría»
+
+**Celda en la rejilla** (docs/007 §5.13 E): última celda; mismo ancho (`flex: 1`) y alto mínimo 56 (`sizes.categoryOptionMin`) que una opción; fondo `surface`, borde **2 dp punteado `colors.borderStrong`** (`borderStyle: 'dashed'`; 3.58:1 sobre `surface`), radio `radii.md`, texto «+ Crear categoría» `typography.brandLabel` (14/800) `colors.brand700` (7.49:1) centrado, hasta 2 líneas. Presionado: opacidad 0.85; `busy`: 0.5. Si es la única opción de su fila, ocupa su mitad; no se estira. En el vacío (sin categorías): botón `primary` de 48 dp a ancho completo con el mismo texto.
+
+**Hoja** (`Sheet` existente, sin modificar): `surface`, radio superior 24, asa 40 × 4, relleno horizontal 24 y gap 12 (los propios de `Sheet`); velo `depth.scrim` (`rgba(23,33,31,0.45)`) que cubre también la barra de estado (`statusBarTranslucent`).
+
+1. **Encabezado** (no se desplaza): título «Nueva categoría» `typography.h2` `colors.text` (`header`) y, en la misma fila a la derecha (si no cabe, debajo), la píldora de tipo, no interactiva: «Gasto» (`expenseSoft` + `expenseText`, 5.17:1) o «Ingreso» (`incomeSoft` + `incomeText`, 5.72:1), `typography.small` 700, relleno 4 × 10, radio `radii.pill`; es el tipo fijado del movimiento (la hoja no tiene color de módulo, manda el tipo).
+2. **Cuerpo** en `ScrollView` (`keyboardShouldPersistTaps="handled"`, `showsVerticalScrollIndicator`): Nombre, Color, Ícono, Vista previa; separación 16 entre grupos. **Altura máxima de la hoja** = `0.75 × altoVentana − insets.top` (la hoja nunca pasa del 75 %; tope superior ≥ 8 dp bajo la barra de estado). Con el teclado abierto (altura de ventana < 480 dp) subir el máximo a `altoVentana − insets.top − 8`.
+3. **Pie fijo** (hermano del `ScrollView`): borde superior 1 `colors.border`, relleno superior 12, gap 8; **Guardar categoría** `primary` + `tall` (52) a ancho completo y **Cancelar** `ghost` (48) debajo. Con el teclado abierto o ventana < 480 dp: ambos en una fila (Cancelar y Guardar `flex: 1`, 48 dp) para ahorrar ≈ 56 dp. Error de envío y avisos van sobre el pie (`expenseText` 13/700, rol `alert`), no dentro del scroll.
+4. Con fuente ≥ 1.75: la rejilla de íconos pasa a 4 columnas, la vista previa se mantiene, el cuerpo se desplaza.
+
+#### 6.15.6 Mitigación de la barra de estado (provisional; hipótesis D5)
+
+Valor recomendado: **respaldo superior de 32 dp** y forma `top = Math.max(StatusBar.currentHeight ?? 0, 32)` en `computeInsets` (hoy: `statusBarH > 0 ? statusBarH : 24`). Así: sin recorte (barra de 24 dp) quedan 8 dp de más (dentro de la tolerancia de docs/007 §5.13 F); con recorte (≈ 28 a 40 dp) el valor del sistema, si es mayor, manda, y si el sistema informa 0 se reserva 32. El espacio es del mismo color que la pantalla (`bg` o `surface`, incluida la franja del Login con sus manchas), por lo que no se distingue de una franja de relleno. El respaldo inferior de 48 dp no cambia. Es una aproximación: si en el teléfono la barra mide más de 32 dp, subir a 40 y registrar la medida; la corrección exacta (`react-native-safe-area-context`) sigue bloqueada. Impacto en pruebas: las de `computeInsets` que esperan 24 pasan a 32.
+
+#### 6.15.7 Tokens nuevos (mínimos, sin ningún color de la paleta)
+
+| Token | Valor | Uso |
+| --- | --- | --- |
+| `brandGoogle` (objeto aparte de `colors`) | `{ bg: '#FFFFFF', border: '#747775', text: '#1F1F1F', pressed: '#E6E6E6' }` | Solo el botón «Continuar con Google» (guía de marca; contrastes en 6.15.2) |
+| `sizes.googleLogo` | 20 | Logo «G» |
+| `sizes.loginMark` | 144 | Círculo `yellowSoft` del Login (120 en compacto) |
+| `sizes.loginPig` | 120 | Alcancía del Login (96 en compacto) |
+
+El resto reutiliza tokens: `sizes.touchMin` (48), `sizes.avatar` (40), `sizes.primaryTall` (52), `sizes.categoryOptionMin` (56), `spacing.*`, `radii.*`, `typography.*`, `depth.blobs`, `depth.scrim`. Sustituir en `LoginScreen.tsx` todos los colores crudos (`#ffffff`, `#444444`, `#b00020`, `#8a6d00`, `#1a73e8`) por tokens.
+
+
 ## 7. Iconografía de categorías
 
 Las categorías ya guardan `icono` (clave tipo Lucide) y `color`. Comparación:

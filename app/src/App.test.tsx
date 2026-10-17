@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 import App from './App';
 import type { AuthService } from './lib/auth-service';
@@ -33,7 +33,10 @@ const getHome = () => screen.getByRole('header', { name: 'Mis cuentas' });
 // R2: «Cerrar sesión» vive en la hoja de perfil (avatar) de Mis cuentas.
 const signOutFromProfile = async () => {
   await fireEvent.press(await screen.findByRole('button', { name: 'Tu perfil y sesión' }));
-  await fireEvent.press(screen.getByRole('button', { name: 'Cerrar sesión' }));
+  // R5.1: el encabezado también tiene «Cerrar sesión»; se pulsa el de la hoja de perfil.
+  await fireEvent.press(
+    within(screen.getByTestId('profile-sheet')).getByRole('button', { name: 'Cerrar sesión' }),
+  );
 };
 
 const valid = (): Parameters<typeof fakeStorage>[0] => ({
@@ -75,7 +78,7 @@ describe('App', () => {
   it('sin sesión guardada muestra el login', async () => {
     const { service } = setup();
     await renderApp(service);
-    expect(await screen.findByText('Ingresar con Google')).toBeTruthy();
+    expect(await screen.findByText('Continuar con Google')).toBeTruthy();
     expect(screen.getByText('CuidaTuBilletera')).toBeTruthy();
   });
 
@@ -93,13 +96,13 @@ describe('App', () => {
   it('el login exitoso lleva a la pantalla principal y cerrar sesión regresa al login', async () => {
     const { service, storage } = setup();
     await renderApp(service);
-    await fireEvent.press(await screen.findByText('Ingresar con Google'));
+    await fireEvent.press(await screen.findByText('Continuar con Google'));
 
     expect(await findHome()).toBeTruthy();
     expect(storage.session()).not.toBeNull();
 
     await signOutFromProfile();
-    expect(await screen.findByText('Ingresar con Google')).toBeTruthy();
+    expect(await screen.findByText('Continuar con Google')).toBeTruthy();
     expect(storage.isEmpty()).toBe(true);
   });
 
@@ -107,10 +110,10 @@ describe('App', () => {
     const google = fakeGoogle({ signIn: jest.fn(async () => ({ status: 'cancelled' })) });
     const { service } = setup(undefined, google);
     await renderApp(service);
-    await fireEvent.press(await screen.findByText('Ingresar con Google'));
+    await fireEvent.press(await screen.findByText('Continuar con Google'));
 
     await waitFor(() => expect(google.signIn).toHaveBeenCalled());
-    expect(screen.getByText('Ingresar con Google')).toBeTruthy();
+    expect(screen.getByText('Continuar con Google')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -122,7 +125,7 @@ describe('App', () => {
     });
     const { service } = setup(undefined, google);
     await renderApp(service);
-    await fireEvent.press(await screen.findByText('Ingresar con Google'));
+    await fireEvent.press(await screen.findByText('Continuar con Google'));
 
     expect(await screen.findByText(/Google Play Services/)).toBeTruthy();
   });
@@ -131,7 +134,7 @@ describe('App', () => {
     const google = fakeGoogle({ signIn: jest.fn(() => new Promise(() => {})) });
     const { service } = setup(undefined, google);
     await renderApp(service);
-    await fireEvent.press(await screen.findByText('Ingresar con Google'));
+    await fireEvent.press(await screen.findByText('Continuar con Google'));
 
     expect(await screen.findByTestId('login-loading')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button'));
@@ -146,7 +149,7 @@ describe('App', () => {
 
     expect(await screen.findByText(/no pudimos confirmarlo con el servidor/)).toBeTruthy();
     expect(screen.getByText(/hasta 7 días sin uso/)).toBeTruthy();
-    expect(screen.getByText('Ingresar con Google')).toBeTruthy();
+    expect(screen.getByText('Continuar con Google')).toBeTruthy();
   });
 
   it('si no se pudo borrar el almacenamiento muestra el aviso de almacenamiento seguro', async () => {
@@ -165,7 +168,7 @@ describe('App', () => {
     await renderApp(service);
     await signOutFromProfile();
     await screen.findByText(/no pudimos confirmarlo/);
-    await fireEvent.press(screen.getByText('Ingresar con Google'));
+    await fireEvent.press(screen.getByText('Continuar con Google'));
 
     expect(await findHome()).toBeTruthy();
     expect(screen.queryByText(/no pudimos confirmarlo/)).toBeNull();
@@ -313,7 +316,7 @@ describe('App', () => {
     expect(await screen.findByText('Sesión no disponible')).toBeTruthy();
     clock.advance(5_000); // intervalo mínimo entre reintentos que llegan a la red
     expect(screen.getByText(/No se pudo conectar con el servidor/)).toBeTruthy();
-    expect(screen.queryByText('Ingresar con Google')).toBeNull();
+    expect(screen.queryByText('Continuar con Google')).toBeNull();
 
     await fireEvent.press(screen.getByText('Reintentar'));
     expect(await findHome()).toBeTruthy();
@@ -389,13 +392,13 @@ describe('mensajes de pantalla por causa', () => {
 
       expect(await screen.findByText(REVOKED_TEXT)).toBeTruthy();
       expect(screen.queryByText(/revoc/i)).toBeNull();
-      expect(screen.getByText('Ingresar con Google')).toBeTruthy();
+      expect(screen.getByText('Continuar con Google')).toBeTruthy();
     });
 
     it("sin sesión 'absent' o tras un cierre voluntario no hay aviso", async () => {
       const { service } = setup();
       await renderApp(service);
-      await screen.findByText('Ingresar con Google');
+      await screen.findByText('Continuar con Google');
       expect(screen.queryByRole('alert')).toBeNull();
     });
 
@@ -404,7 +407,7 @@ describe('mensajes de pantalla por causa', () => {
       (google.signIn as jest.Mock).mockRejectedValue(new AuthError('play-services'));
       await renderApp(service);
       await screen.findByText(REVOKED_TEXT);
-      await fireEvent.press(screen.getByText('Ingresar con Google'));
+      await fireEvent.press(screen.getByText('Continuar con Google'));
 
       expect(await screen.findByText(/Google Play Services/)).toBeTruthy();
       expect(screen.queryByText(REVOKED_TEXT)).toBeNull();

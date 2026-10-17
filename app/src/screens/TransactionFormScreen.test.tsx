@@ -45,7 +45,6 @@ function makeApi(overrides: Partial<ResourcesApi> = {}) {
 
 const onDone = jest.fn();
 const onAccountArchived = jest.fn();
-const onOpenCategories = jest.fn();
 const renderForm = (
   api = makeApi(),
   tx?: ReturnType<typeof transaction>,
@@ -58,7 +57,6 @@ const renderForm = (
       transaction={tx}
       onDone={onDone}
       onAccountArchived={onAccountArchived}
-      onOpenCategories={onOpenCategories}
       {...extra}
     />,
   );
@@ -81,7 +79,6 @@ const pressBack = () => backHandlers[backHandlers.length - 1]!();
 beforeEach(() => {
   onDone.mockClear();
   onAccountArchived.mockClear();
-  onOpenCategories.mockClear();
   (TextInput.prototype.focus as jest.Mock).mockClear();
   backHandlers = [];
   removedListeners = 0;
@@ -593,31 +590,18 @@ describe('TransactionFormScreen: nuevo movimiento', () => {
     expect(await screen.findByLabelText('Categoría Comida')).toBeTruthy();
   });
 
-  it('G18: sin categorías del tipo muestra el aviso y [Ir a Categorías]', async () => {
+  it('G18 (R5.1, R51-19): sin categorías del tipo muestra el aviso nuevo y [+ Crear categoría]', async () => {
     const listCategories = jest.fn().mockResolvedValue(pageOf([]));
     await renderForm(makeApi({ listCategories }));
     expect(
       await screen.findByText(
-        'No tienes categorías de gasto activas. Crea una en Más > Categorías.',
+        'No tienes categorías de gasto activas. Crea una para anotar este movimiento.',
       ),
     ).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Ir a Categorías' }));
-    expect(onOpenCategories).toHaveBeenCalledTimes(1);
-    expect(Alert.alert).not.toHaveBeenCalled(); // sin cambios: sin diálogo
-  });
-
-  it('G18: [Ir a Categorías] con cambios sin guardar pide confirmar antes de salir', async () => {
-    const listCategories = jest.fn().mockResolvedValue(pageOf([]));
-    await renderForm(makeApi({ listCategories }));
-    await screen.findByText(/No tienes categorías de gasto activas/);
-    await typeInto('Monto', '5');
-    await fireEvent.press(screen.getByRole('button', { name: 'Ir a Categorías' }));
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
-    expect(onOpenCategories).not.toHaveBeenCalled();
-    const buttons = (Alert.alert as jest.Mock).mock.calls[0]![2] as { onPress?: () => void }[];
-    await act(async () => buttons[1]!.onPress!());
-    expect(onOpenCategories).toHaveBeenCalledTimes(1);
-    expect(onDone).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Más > Categorías/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ir a Categorías' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Crear categoría' })).toBeTruthy();
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 
   it('G17: el pie con Guardar y Cancelar no es descendiente del ScrollView del formulario', async () => {

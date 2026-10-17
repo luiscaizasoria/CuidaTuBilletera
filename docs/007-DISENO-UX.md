@@ -1222,6 +1222,227 @@ De dispositivo (nivel D, teléfono real; no se pueden marcar hechos sin él):
 
 `app/src/lib/guides.ts` (+ `guides.test.ts`, nuevo), proveedor y hook de guías (`app/src/hooks/use-guides.tsx`, nuevo), `app/src/screens/ui.tsx` (`GuideCard`, `EmptyState` con `art`/`compact`), `AccountsScreen.tsx`, `NewAccountScreen.tsx`, `AccountSummaryTab.tsx`, `TransactionFormScreen.tsx`, `CalendarScreen.tsx`, `ReportsScreen.tsx`, `CategoriesScreen.tsx`, `HistoryScreen.tsx` (solo ilustración), `MoreScreen.tsx` (fila de ayudas), `MainNavigator.tsx` (montar el proveedor) y sus pruebas; `app/assets/illustrations/*` solo si se aprueba H.1(a). No se tocan `/api`, `lib/session-storage.ts`, `lib/auth-service.ts`, `app.json` ni `package.json`.
 
+### 5.13 R5.1: Login, «Cerrar sesión» visible, ícono de categoría y «+ Crear categoría» en Nuevo movimiento (especificación; PROPUESTA salvo lo marcado)
+
+Origen: prueba en un Android real (docs/003 «Decisión R5.1» D1 a D10). Regla: preservar lo que funciona. Se implementan solo los puntos 1, 2, 3, 5, 6 y 8 de D1 (numeración de D1: Login, logotipo de Google, «Cerrar sesión» en Mis cuentas, ícono de categoría, «+ Crear categoría», mitigación de la barra de estado). No cambian: autenticación y tokens, cálculos, reportes, calendario, historial, guías R5, navegación aprobada ni contratos de la API (`createCategory` y `updateCategory` ya aceptan `icono` y `color`, D2). Estado de cada afirmación: EXISTENTE = verificado en el código de HEAD dbe5201; APROBADO = docs/003; PROPUESTA = nuevo en esta sección.
+
+#### A. Login (rediseño de contenido de `LoginScreen.tsx`; §5.1 queda sustituido en lo que contradiga esto)
+
+Jerarquía, de arriba abajo, centrada en una columna con ancho máximo de 360 dp:
+
+1. Marca: círculo de 72 dp `brand100` con la alcancía/billetera existente solo si ya hay un recurso aprobado; si no, el emoji 👛 (mismo que `accountIcon` por defecto) decorativo (`importantForAccessibility="no"`). No se crea ilustración nueva (D7 de R5).
+2. Nombre «CuidaTuBilletera»: `typography.rootTitle` en `brandInk`, `accessibilityRole="header"`, centrado. EXISTENTE el texto; cambia la tipografía.
+3. Mensaje del beneficio (`body`, `text2`, centrado, máximo 3 líneas a 360 dp). Dos variantes, a elegir por el usuario (decisión 1):
+   - Variante A (recomendada; es la de §5.1): «Anota lo que entra y lo que sale, y mira cómo está tu dinero.»
+   - Variante B: «Sabe en qué gastas y cuánto te queda, todo en un solo lugar.»
+   Ninguna promete ahorro, estadísticas ni resultados. Sustituye a «Inicia sesión para continuar.».
+4. Avisos y errores (solo si existen; ver estados) en una caja sobre el botón, a todo el ancho.
+5. Botón «Continuar con Google» (ver B), a todo el ancho de la columna, bajo el mensaje, separado 24 dp. Ocupa la zona central-baja del contenido, alcanzable con el pulgar.
+6. Nota de privacidad bajo el botón (`small`, `text2`, centrada, 12 dp de separación): «Usamos tu cuenta de Google solo para identificarte. No vemos tu contraseña.» (texto de §5.1; es verdad con Google Sign-In: la app recibe un token, no la contraseña).
+
+Estados (todos con textos EXISTENTES en `auth-messages.ts`, no se inventa ninguno):
+
+| Estado | Comportamiento |
+| --- | --- |
+| Reposo | Botón activo. |
+| Cargando (`busy`) | Botón con el indicador (se conserva `testID="login-loading"`) y el texto «Ingresando…»; `disabled` y `accessibilityState {disabled: true, busy: true}`; etiqueta accesible «Ingresando…». Un segundo toque no hace nada. El logo se oculta mientras carga para no mostrar dos elementos giratorios y de marca. |
+| Error | `AUTH_ERROR_MESSAGES[error]` en caja `expenseSoft` con texto `expenseText` 14/700 y prefijo «⚠ » decorativo, `accessibilityRole="alert"`, sobre el botón. El botón vuelve a quedar activo (reintentar es tocarlo de nuevo). |
+| Aviso de cierre | `LOGOUT_NOTICE_MESSAGES[notice]` y `SIGNED_OUT_MESSAGES[motivo]` en caja `yellowSoft` con texto `yellowText`, rol `alert`. Prioridad EXISTENTE: error, luego aviso, luego motivo; solo uno de los tres motivos a la vez según la lógica actual. |
+| Éxito | Entra a Mis cuentas sin pantalla intermedia (EXISTENTE). |
+
+Safe areas, pantallas pequeñas y fuente ampliada:
+
+- El contenido va dentro de un `ScrollView` con `contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}` y `keyboardShouldPersistTaps="handled"`: centrado en pantallas altas y desplazable en pantallas cortas o con fuente al 200 %. El botón nunca queda fuera de alcance.
+- Relleno superior = `useSystemInsets().top + 24` e inferior = `useSystemInsets().bottom + 24` (hoy el Login no usa insets, y es una de las pantallas donde la barra de estado puede tapar el contenido: ver F). Relleno lateral = `useScreenMargin()` del tema.
+- 320 dp de ancho: el nombre y el mensaje se ajustan en 2 o 3 líneas, el botón no se trunca (la etiqueta puede ocupar 2 líneas).
+- Fuente ≥ 1.75: se oculta el círculo de marca (como las ilustraciones de R5) y el resto escala.
+- Fondo `bg`; `StatusBar style="dark"` (EXISTENTE en `App.tsx`).
+
+#### B. Botón «Continuar con Google» con el logotipo oficial
+
+- Texto visible EXACTO: «Continuar con Google» (sustituye a «Ingresar con Google»). Cargando: «Ingresando…».
+- Logotipo: el PNG «G» multicolor descargado de Google (D7 de R5.1; hoy aún no está en el repositorio: la ruta final la fija `mobile-engineer`, propuesta `app/assets/brand/google-g.png`), cargado con `require`, de 20 × 20 dp, `resizeMode="contain"`, a la izquierda del texto con 12 dp de separación. No se recolorea, no se recorta, no se dibuja. Es decorativo: `accessibilityElementsHidden` e `importantForAccessibility="no"`.
+- Estilo claro de la guía de marca de Google (los dos colores son excepción de marca, no tokens del proyecto; deben anotarse como tal en docs/008): fondo `#FFFFFF`, borde 1.5 dp `#747775`, texto `#1F1F1F` 16/600, radio 12 dp (se mantiene el de los botones del proyecto en lugar de píldora para no introducir otra forma), alto mínimo 52 dp (`sizes.primaryTall`) para una zona táctil holgada (supera los 48 dp), relleno horizontal 16. Presionado: fondo `#E6E6E6`. Deshabilitado/cargando: opacidad 0.6 (EXISTENTE).
+- Accesibilidad: `accessibilityRole="button"`, `accessibilityLabel` igual al texto visible («Continuar con Google»; «Ingresando…» al cargar), `accessibilityState {disabled: busy, busy}`. Con fuente ampliada el botón crece en alto, no recorta.
+- No cambia `signIn`, el módulo de Google ni el flujo de tokens.
+
+#### C. «Cerrar sesión» visible en el encabezado de Mis cuentas
+
+Hoy (EXISTENTE): el encabezado tiene la marca a la izquierda y el avatar (48 dp) a la derecha; el avatar abre `ProfileSheet`, que tiene «Cerrar sesión» sin confirmación (R2 D5 y D8). `MoreScreen.tsx` y `SessionBanner.tsx` (solo con «Sesión no disponible») tienen su propio botón.
+
+- Forma: botón icono de 48 × 48 dp de zona táctil con un círculo visual de 40 dp (mismo tamaño y estilo `surface` + borde 1.5 `border` que el avatar, para que parezca de la misma familia pero no se confunda con él), con el glifo 🚪 (Unicode 6, decorativo) de 18 dp. `accessibilityRole="button"`, `accessibilityLabel="Cerrar sesión"`. Sin texto visible (el espacio del encabezado es limitado); la etiqueta accesible es la que nombra la acción, por lo que se pide la prueba D8 en dispositivo. Alternativa si el usuario considera la puerta ambigua: texto «Salir» bajo el glifo (decisión 5).
+- Posición: grupo a la derecha de la fila `brandRow`: [🚪] [avatar], con 8 dp entre las dos zonas de 48 dp, para evitar toques accidentales (no hay confirmación). La marca queda a la izquierda con `flexShrink: 1` y `numberOfLines={2}`; a 320 dp el grupo ocupa 104 dp y la marca conserva ≥ 150 dp.
+- Sin confirmación (R2 D5 y D8), sin borrar datos ni preferencias ni ayudas descartadas (R5 D4); llama a la misma función `signOut` de `useAuth()`.
+- Un solo componente compartido, `SignOutControl` (nuevo, propuesta `app/src/screens/session-ui.tsx`), con dos presentaciones: `variant="icon"` (encabezado de Mis cuentas) y `variant="button"` (usa el `Button` secundario existente, con el texto «Cerrar sesión», en `ProfileSheet`, en la sección SESIÓN de Más y en `SessionBanner`). Todas llaman a `signOut()` de `useAuth()` y comparten: etiqueta «Cerrar sesión», protección contra doble toque y estados. No se duplica lógica ni se agrega confirmación en ninguna.
+- Estados:
+  - Normal: activo.
+  - En curso: al tocar queda `disabled` + `busy` hasta que la sesión cambie (la app pasa a Login); un segundo toque no repite `signOut`. Si `useAuth().busy` no cubre el cierre, la protección es un `useRef` local del componente.
+  - Sesión no disponible (`status === 'unavailable'`): el control sigue visible y activo (es la salida cuando no hay conexión); `SessionBanner` mantiene además su botón, que usa el mismo componente. Con sesión degradada también está disponible.
+  - Resultado: al volver a Login se muestran, si corresponden, los avisos `LOGOUT_NOTICE_MESSAGES` (EXISTENTE).
+- `ProfileSheet` conserva su botón «Cerrar sesión» y «Cerrar»; el avatar sigue abriéndola (nombre y correo del usuario). El encabezado no cambia en nada más.
+
+#### D. Ícono de categoría en crear/editar categoría
+
+Archivos: `app/src/lib/category-appearance.ts` (catálogo), formulario compartido nuevo `app/src/screens/category-form.tsx` (extraído de `CategoryFormCard`, que usa también la hoja de F), `CategoriesScreen.tsx`.
+
+Catálogo cerrado (D9 de R5.1): 30 íconos, emoji de Unicode 11 o anterior; ya existentes los 11 de `categoryGlyphs` más `tag`. Un slug desconocido se dibuja como 🏷️ (EXISTENTE). Los slugs cumplen `^[a-z0-9_-]{1,40}$`. Etiqueta accesible = «Ícono {nombre}».
+
+| Slug | Glifo | Nombre accesible | Slug | Glifo | Nombre accesible |
+| --- | --- | --- | --- | --- | --- |
+| `utensils` | 🍽️ | Comida | `gift` | 🎁 | Regalos |
+| `shopping-cart` | 🛒 | Supermercado | `paw` | 🐾 | Mascotas |
+| `coffee` | ☕ | Café | `shirt` | 👕 | Ropa |
+| `bus` | 🚌 | Transporte público | `phone` | 📱 | Teléfono |
+| `car` | 🚗 | Auto | `wifi` | 📶 | Internet |
+| `fuel` | ⛽ | Combustible | `plane` | ✈️ | Viajes |
+| `lightbulb` | 💡 | Servicios básicos | `gamepad` | 🎮 | Juegos |
+| `home` | 🏠 | Hogar | `music` | 🎵 | Música |
+| `heart-pulse` | 🩺 | Salud | `film` | 🎬 | Cine |
+| `pill` | 💊 | Medicinas | `wrench` | 🔧 | Reparaciones |
+| `graduation-cap` | 🎓 | Educación | `dumbbell` | 🏋️ | Deporte |
+| `book` | 📚 | Libros | `trending-up` | 📈 | Inversiones |
+| `briefcase` | 💼 | Trabajo | `money-bag` | 💰 | Ahorros |
+| `shopping-bag` | 🛍️ | Compras | `plus-circle` | ＋ (texto) | Ingreso extra |
+| `ellipsis` | ⋯ (texto) | Otros | `tag` | 🏷️ | Etiqueta |
+
+Selector (después de «Color», antes de «Vista previa»; mismo patrón que el selector de color):
+
+- Etiqueta de sección «Ícono» (`styles.label` de la pantalla) y línea de resumen `small` `text2`: «Ícono: {nombre}» o «Ícono: sin elegir (se usa la etiqueta)».
+- Rejilla `accessibilityRole="radiogroup"` con `accessibilityLabel="Ícono"`. Cada celda: `radio`, zona táctil 48 × 48 dp mínimo, cuadro visual de 40 dp, radio 10, glifo 22 dp. Número de columnas = `floor((ancho disponible + 8) / 56)`, con mínimo 4 y máximo 6: a 360 dp son 5 columnas × 6 filas, a 320 dp 4 columnas; con fuente ≥ 1.75 el cuadro crece en alto pero la rejilla se mantiene. Separación 8 dp. Sin scroll interno: la rejilla crece y desplaza el formulario.
+- Reposo: `surface`, borde 1.5 `border`. Elegido: fondo `brand100`, borde 3 `text` (`colors.text`) y una marca «✓» pequeña en la esquina (decorativa), `accessibilityState {selected: true}`; la selección no depende solo del color. Deshabilitado (`busy`): opacidad 0.5.
+- Vista previa: `CategoryIcon` recibe el ícono elegido (hoy recibe `icono=""` fijo) con el color elegido, más el nombre.
+- Crear: ningún ícono preseleccionado; si no se elige, la petición NO envía `icono` y la API usa `tag` (D2). Vista previa 🏷️.
+- Editar: se preselecciona el ícono de la categoría si está en el catálogo. Las categorías por defecto de la API usan slugs del catálogo. Una categoría antigua con slug fuera del catálogo queda sin selección, con vista previa 🏷️ y resumen «Ícono: sin elegir»; si el usuario no toca el selector no se envía nada de ícono.
+- Enviar solo si cambió: en Editar, `icono` entra en `UpdateCategoryInput` solo si hay selección y es distinta de `existing.icono` (mismo criterio que `color`). Si no cambió ningún campo, el PATCH sale vacío como hoy (comportamiento EXISTENTE; no se cambia).
+- Descarte: cambiar el ícono cuenta como cambio para `dirty` (hoy cuentan nombre, descripción, tipo y color). Etiquetas de descarte sin cambios: «¿Descartar esta categoría?» / «¿Descartar los cambios?» (EXISTENTES).
+- Las filas de la lista y la rejilla de Nuevo movimiento ya usan `CategoryIcon`, así que muestran el ícono nuevo sin más cambios. Apps ya instaladas degradan a 🏷️.
+
+#### E. «+ Crear categoría» dentro de Nuevo movimiento (D8 de R5.1; sustituye UXQA-R3-03)
+
+Archivos: `TransactionFormScreen.tsx`, `category-form.tsx` (reutilizado), `MainNavigator.tsx`, `CategoriesScreen.tsx`, `navigation.ts`.
+
+Ubicación y texto:
+
+- Solo al crear un movimiento (en Editar la categoría es de solo lectura y no hay botón), con las categorías cargadas con éxito (no en cargando ni en error).
+- Es la última celda de la rejilla de categorías: misma anchura y alto mínimo 56 dp que una opción; si la última fila tiene una sola opción ocupa el hueco vacío, si no abre una fila nueva a todo el ancho. Aspecto: `surface`, borde 2 punteado `borderStrong`, texto `brand700` 14/700, sin ícono de categoría. Texto visible EXACTO «+ Crear categoría»; `accessibilityRole="button"`, `accessibilityLabel="Crear categoría"`; deshabilitado con `busy` (guardando el movimiento). No es un `radio`: queda fuera del conteo de la selección.
+- Sin categorías activas del tipo: el aviso de vacío cambia a «No tienes categorías de gasto activas. Crea una para anotar este movimiento.» (o «de ingreso»), seguido del mismo botón «+ Crear categoría» a todo el ancho (variante `primary`, 48 dp). Se retira el texto «Crea una en Más > Categorías.» y el botón «Ir a Categorías».
+- Se retiran: el botón «Ir a Categorías» y su prop `onOpenCategories` en `TransactionFormScreen`; la función `replaceTopWithCategories` y la ruta `categories` con `fromForm` (`navigation.ts`, `MainNavigator.tsx`, textos «‹ Volver»/«Volver» solo de esa ruta); la prop `fromForm` y la frase «Crea una categoría y vuelve para anotar tu movimiento.» (`FROM_FORM_HELP`) de `CategoriesScreen`. La entrada normal a Categorías desde Más no cambia. Retirar la variante `fromForm` del tipo de ruta es limpieza de código que ya no puede alcanzarse; si se prefiere no tocar `navigation.ts`, se deja el tipo y solo se elimina su uso (decisión 6).
+
+Hoja «Nueva categoría» (`Sheet` existente montada dentro de `TransactionFormScreen`, de modo que el estado del formulario no se pierde):
+
+- Contenido: título `h2` «Nueva categoría» (rol `header`); un único indicador de tipo, la píldora no interactiva «Tipo: Gasto» o «Tipo: Ingreso» junto al título (es el del movimiento; no se puede cambiar, no es un control y no se repite en otra línea); «Nombre» (`FormTextInput`, etiqueta accesible «Nombre de la categoría», `autoFocus` no: el teclado no debe saltar al abrir); «Color» (misma paleta `CATEGORY_COLORS`, resumen «Color: …»); «Ícono» (D); «Vista previa». No lleva «Descripción» (el campo es opcional en la API y se omite para mantener la hoja corta; sigue en la pantalla Categorías).
+- Altura y scroll: el cuerpo (nombre, color, ícono, vista previa) va en un `ScrollView` con `keyboardShouldPersistTaps="handled"` y altura máxima 75 % del alto de ventana menos el margen superior del sistema; el pie (Guardar y Cancelar) queda fijo bajo el scroll, dentro de la hoja y sobre el margen inferior del sistema que ya aplica `Sheet`. `Sheet` no se modifica.
+- Teclado: con el campo de nombre enfocado el pie y el campo deben seguir visibles sobre el teclado (comprobación en dispositivo, pruebas D6 y D7). Si en la Development Build el teclado tapa el pie, se resuelve en la implementación sin dependencias nuevas y se registra.
+- Guardar: botón `primary` + `tall` «Guardar categoría» (cargando: «Guardando…», `busy`, etiqueta accesible «Guardar categoría»). Valida «Escribe un nombre.» (mismo texto EXISTENTE, bajo el campo, rol `alert`). Llama a `createCategory` con `{ nombre, tipo, color?, icono? }` (`tipo` = `egreso` para Gasto, `ingreso` para Ingreso; solo se incluyen `color` e `icono` si se eligieron). Protección contra doble envío con `useMutation` (EXISTENTE).
+- Cancelar: botón `ghost` «Cancelar». También cierran: tocar el velo, Atrás del sistema y `onRequestClose` del `Modal`; todos pasan por `requestLeave` del guard propio de la hoja. Mientras se guarda, todos se ignoran.
+- Descartar: la hoja tiene su propio `useDiscardGuard` (`title` «¿Descartar esta categoría?», `message` «Lo que escribiste se perderá.», botones «Seguir editando» y «Descartar»). Hay cambios si el nombre recortado no está vacío o se eligió un color o un ícono. Sin cambios, cierra sin preguntar. Con la hoja abierta, Atrás nunca llega al guard del formulario de movimiento (la hoja consume `hardwareBackPress`); descartar cierra solo la hoja y el movimiento conserva todo lo escrito.
+- Conservación del movimiento: monto, fecha, detalle, tipo y categoría elegida previamente permanecen intactos al abrir, cancelar, descartar y guardar. Abrir la hoja no cuenta como cambio del movimiento.
+
+Éxito:
+
+- La hoja se cierra; la categoría nueva se agrega a la lista local y a la rejilla (y se relee la lista en segundo plano), queda seleccionada (`setCategoryId(nueva.id)`), se borra el error «Elige una categoría.» si había, y debajo de la rejilla aparece una línea `small` `incomeText`/`text` con rol `status` y `accessibilityLiveRegion="polite"`: «Categoría «{nombre}» creada y seleccionada.». Permanece hasta que el usuario elija otra categoría o cambie el tipo.
+- El formulario de movimiento queda como estaba; el cursor/foco de TalkBack pasa al aviso. Crear la categoría completa la acción de la guía `categorias` (R5 D3), así que se llama a `dismiss('categorias')` como ya hace Categorías.
+- Esto no cuenta como "guardar el movimiento": no se llama a `onDone` y el movimiento no se registra.
+
+Errores (se muestran dentro de la hoja, bajo el campo o sobre el pie, rol `alert`; la hoja no se cierra y lo escrito se conserva):
+
+| Caso | Texto | Comportamiento |
+| --- | --- | --- |
+| 409 `CATEGORY_NAME_TAKEN` | «Ya existe una categoría de ese tipo con ese nombre.» (EXISTENTE) | Bajo el campo Nombre, borde de error; se borra al editar el nombre. |
+| 409 `LIMIT_REACHED` | «Llegaste al máximo de categorías de esta cuenta. Archiva alguna en Más > Categorías para crear otra.» (texto NUEVO solo para este caso; el genérico de `resources-messages.ts` no explica qué hacer aquí) | Sobre el pie. Guardar sigue disponible, pero el usuario debe cancelar para resolverlo. |
+| 409 `ACCOUNT_ARCHIVED` | «La cuenta está archivada. Desarchívala para modificarla.» (EXISTENTE) | Se llama a `onAccountArchived(account.id)` y se activa `archivedBlocked` del formulario (flujo EXISTENTE «Volver a la cuenta»); la hoja se cierra sin preguntar. |
+| Sin sesión / `network` / `server` / 5xx (fallo incierto, `isUncertainWriteFailure`) | «No pudimos confirmar si se creó. Revisa la lista de categorías antes de volver a intentar.» (texto NUEVO, mismo patrón que `LOST_RESPONSE_*`) | No se invita a reintentar a ciegas: Guardar queda deshabilitado y aparece el botón «Revisar la lista». Al tocarlo se relee la lista de categorías; si existe una del mismo tipo con ese nombre (sin distinguir mayúsculas) se cierra la hoja, se selecciona y se muestra «Categoría «{nombre}» creada y seleccionada.»; si no existe, se muestra «No se creó. Puedes intentarlo de nuevo.» y Guardar vuelve a estar activo. Si la relectura también falla se muestra el error de carga EXISTENTE y Guardar sigue deshabilitado. |
+| Otro 4xx (p. ej. `INVALID_REQUEST`) | `resourceErrorMessage` EXISTENTE | Sobre el pie; Guardar activo. |
+
+#### F. Barra de estado Android (punto 8; mitigación provisional)
+
+Estado de la hipótesis (D5): la altura superior es un respaldo de 24 dp que puede quedar corto en teléfonos con recorte. La corrección exacta con `react-native-safe-area-context` está BLOQUEADA (ver G). Comportamiento visual esperado de la mitigación, sea cual sea la técnica que elija `mobile-engineer` sin dependencias nuevas:
+
+- Ninguna pantalla muestra texto, botones o el encabezado bajo la barra de estado: el espacio superior reservado es ≥ la altura real de la barra (reloj, íconos y recorte de cámara) en el teléfono de prueba, con un margen visual razonable. Es preferible reservar unos dp de más que tapar contenido.
+- Las zonas superiores (`screen-top-inset` de `Screen`) tienen el mismo color que el fondo de la pantalla (`bg` o `surface`, EXISTENTE), así que no se ve una franja distinta.
+- Aplica a: Login (A), Mis cuentas y todas las pantallas con `Screen`, Nuevo movimiento y las hojas. Las hojas (`Sheet`) usan `statusBarTranslucent`: su velo cubre también la barra, sin contenido propio debajo.
+- No aparece un hueco exagerado en teléfonos sin recorte: tolerancia visual de unos 8 dp respecto de la barra.
+- Sigue siendo mejor esfuerzo: la mitigación no sustituye a la corrección exacta (G), y la validación es solo en dispositivo.
+- Se prohíbe tocar `app.json`, `package.json` y los módulos nativos.
+
+Casos de prueba en dispositivo: D1 a D5 de la lista de criterios (sección H).
+
+#### G. Bloqueado (NO se implementa ni cuenta en los criterios de R5.1; diseño propuesto para cuando se autorice)
+
+1. Color e ícono de cuenta (D1.4 y D3 de R5.1). Bloqueado por backend: migración D1 0004, `AccountDto`, Zod de POST/PATCH, pruebas y despliegue, con el orden migración, Worker, app. Diseño propuesto: en «Nueva cuenta» y en renombrar, bajo el nombre, una sección «Aspecto» con (a) «Color», la misma paleta de siete colores de `CATEGORY_COLORS` con nombres en español (el color por hash `accountColors(id)` sigue como valor para cuentas sin elegir, `NULL`), y (b) «Ícono», rejilla de 12 íconos propios de cuenta (👛 Billetera, 💳 Tarjeta, 🏦 Banco, 💵 Efectivo, 🐷 Ahorro, 💰 Ahorros, 🏠 Casa, 🚗 Auto, 🎓 Estudios, 💼 Trabajo, ✈️ Viajes, 🎁 Regalos) con la misma mecánica de D (radiogroup, 48 dp, resumen, «enviar solo si cambió», vista previa). Las cuentas antiguas conservan su aspecto derivado (`accountIcon(nombre)`). Revierte lo decidido en §14.18 (color por hash). Hasta entonces no se muestra ninguna interfaz ni se simula con almacenamiento local.
+2. Barra de navegación inferior del sistema (D1.7 y D4). No se implementa: exige `expo-navigation-bar`, contradice la opción A aprobada de §9 y empeoraría Atrás con gestos, teclado y TalkBack. Alternativa recomendada: corrección de insets (siguiente punto). Si el usuario autorizara el modo inmersivo, diseño propuesto: barra oculta solo en las pantallas de lectura (Reportes y Calendario), nunca en formularios ni con el teclado abierto, restaurada al abrir una hoja, sin quitar el respaldo de 48 dp de `useSystemInsets`, y probada con navegación por gestos, por 3 botones y con TalkBack.
+3. Corrección exacta de insets (D5). Con `react-native-safe-area-context`: un `SafeAreaProvider` en la raíz y `useSafeAreaInsets()` reemplazando la aproximación de `useSystemInsets` (mismo contrato `{top, bottom}`), de modo que Login, `Screen`, `Sheet` y el pie del formulario usen valores reales y `FALLBACK_TOP_DP`/`FALLBACK_BOTTOM_DP` solo queden como respaldo de pruebas. Exige nueva Development Build y autorización de dependencias nativas.
+
+#### H. Criterios de aceptación de R5.1
+
+Automáticos (Jest + Testing Library; sin cambiar las pruebas de otras etapas salvo las que mencionan «Ir a Categorías», `fromForm` o «Ingresar con Google»):
+
+Login
+- R51-01. `LoginScreen` muestra el nombre «CuidaTuBilletera» con rol `header`, el mensaje de beneficio de la variante aprobada y la nota «Usamos tu cuenta de Google solo para identificarte. No vemos tu contraseña.».
+- R51-02. El botón se llama «Continuar con Google» (por etiqueta y rol `button`); ya no existe «Ingresar con Google».
+- R51-03. El botón contiene la imagen del logotipo de Google, oculta a los lectores de pantalla (la etiqueta accesible no la menciona).
+- R51-04. Con `busy` el botón muestra `login-loading` y el texto «Ingresando…», con `accessibilityState {disabled: true, busy: true}`, y un segundo toque no llama a `signIn`; sin `busy` un toque llama a `signIn` una vez.
+- R51-05. Con `error` se muestra `AUTH_ERROR_MESSAGES[error]` con rol `alert` sobre el botón; con `notice` o `signedOutReason` se muestran los textos EXISTENTES, con la prioridad error > aviso > motivo.
+- R51-06. El botón mide al menos 48 dp de alto (`minHeight`) y el contenido está en un `ScrollView`.
+
+Cerrar sesión
+- R51-07. `AccountsScreen` muestra un control con etiqueta «Cerrar sesión» y rol `button` junto al avatar («Tu perfil y sesión»); ambos con zona táctil de 48 × 48 dp como mínimo y separados.
+- R51-08. Tocar el control del encabezado llama a `signOut` una vez y sin diálogo de confirmación (`Alert.alert` no se llama); un segundo toque durante el cierre no vuelve a llamarlo.
+- R51-09. El control del encabezado, el botón de `ProfileSheet`, el de `MoreScreen` y el de `SessionBanner` usan el mismo componente compartido y la misma etiqueta; cada uno llama a `signOut` del `useAuth`.
+- R51-10. Con `status === 'unavailable'` y con sesión degradada el control del encabezado sigue visible y activo; el avatar sigue abriendo `ProfileSheet`.
+- R51-11. Cerrar sesión no llama a `clearAll` de guías ni borra preferencias (las ayudas siguen descartadas).
+
+Ícono de categoría
+- R51-12. `category-appearance` expone exactamente 30 íconos con slug válido (`^[a-z0-9_-]{1,40}$`), glifo y nombre en español sin repetidos; incluye los 11 slugs actuales y `tag`; un slug desconocido sigue dando 🏷️.
+- R51-13. El formulario de categoría muestra «Ícono» con un `radiogroup` de 30 `radio`, cada uno con etiqueta «Ícono {nombre}», zona táctil ≥ 48 dp y `accessibilityState.selected` solo en el elegido; columnas entre 4 y 6.
+- R51-14. Crear sin elegir ícono llama a `createCategory` sin `icono`; elegir uno envía su slug. La vista previa refleja el ícono y el color elegidos.
+- R51-15. Editar una categoría con ícono del catálogo lo muestra seleccionado; con ícono fuera del catálogo no hay selección y la vista previa es 🏷️.
+- R51-16. Editar sin tocar el ícono no incluye `icono` en `updateCategory`; cambiarlo lo incluye solo si es distinto del actual.
+- R51-17. Cambiar solo el ícono vuelve el formulario «sucio» (Cancelar/Atrás piden confirmar) y volver al ícono inicial lo limpia.
+
+Crear categoría en Nuevo movimiento
+- R51-18. Al crear un movimiento con categorías cargadas, la rejilla termina con «+ Crear categoría» (rol `button`, etiqueta «Crear categoría»), que no cuenta entre los `radio`; en Editar no existe. No existen «Ir a Categorías», la prop `onOpenCategories`, `FROM_FORM_HELP` ni la ruta `fromForm`.
+- R51-19. Sin categorías del tipo elegido se muestra «No tienes categorías de gasto activas. Crea una para anotar este movimiento.» (o «de ingreso») y el botón «+ Crear categoría»; ya no aparece «Crea una en Más > Categorías.».
+- R51-20. Tocar el botón abre la hoja «Nueva categoría» con «Tipo: Gasto» (o «Tipo: Ingreso») sin control para cambiarlo, nombre, color, ícono y vista previa; sin campo de descripción.
+- R51-21. Abrir, cancelar o descartar la hoja no altera monto, fecha, detalle, tipo ni categoría elegida del movimiento, ni llama a `onDone`.
+- R51-22. Guardar con nombre vacío muestra «Escribe un nombre.» y no llama a `createCategory`. Guardar válido llama una sola vez a `createCategory(token, account.id, {nombre, tipo: 'egreso'|'ingreso', …})` según el tipo del movimiento, aunque se toque dos veces.
+- R51-23. Tras el éxito la hoja se cierra, la categoría nueva aparece en la rejilla y queda seleccionada, se muestra «Categoría «{nombre}» creada y seleccionada.» con rol `status`, se borra el error «Elige una categoría.» y el movimiento aún no se envía; el siguiente Guardar envía su `categoryId`.
+- R51-24. Con la hoja abierta y cambios, Cancelar, el velo y Atrás muestran «¿Descartar esta categoría?» con «Seguir editando» y «Descartar»; sin cambios cierran directo; con `busy` se ignoran. Atrás nunca dispara el descarte del formulario de movimiento mientras la hoja está abierta; «Descartar» cierra solo la hoja.
+- R51-25. Errores: `CATEGORY_NAME_TAKEN` muestra «Ya existe una categoría de ese tipo con ese nombre.» bajo el nombre; `LIMIT_REACHED` muestra el texto específico de E; `ACCOUNT_ARCHIVED` llama a `onAccountArchived` y bloquea el formulario; en todos la hoja conserva lo escrito (salvo el último, que cierra).
+- R51-26. Fallo incierto (red, `server`, 5xx): se muestra «No pudimos confirmar si se creó. Revisa la lista de categorías antes de volver a intentar.», Guardar queda deshabilitado y «Revisar la lista» relee la lista: si la categoría existe se selecciona y cierra; si no, se muestra «No se creó. Puedes intentarlo de nuevo.» y Guardar vuelve a estar activo. Ningún toque repite `createCategory` automáticamente.
+- R51-27. Con `fontScale` 2 la hoja es desplazable, Guardar y Cancelar siguen alcanzables y todos los controles conservan su zona de 48 dp.
+- R51-28. Alcance: no hay cambios en `api/`, `lib/auth-service.ts`, `lib/session-storage.ts`, `app.json` ni `package.json`; las pruebas de reportes, calendario, historial y guías R5 pasan sin modificarlas; `npm run test`, `typecheck` y `lint` pasan en `app/`.
+
+En dispositivo (Android real con la Development Build y `npx expo start --dev-client --tunnel`, D10; ninguno se da por realizado sin captura o nota):
+- D1. Barra de estado, Login: reloj, íconos y recorte de cámara no tapan «CuidaTuBilletera» ni el botón, en vertical.
+- D2. Barra de estado, Mis cuentas: el encabezado (marca, 🚪 y avatar) queda completamente bajo la barra; igual en Más, Reportes, Calendario y Nuevo movimiento.
+- D3. Barra de estado, hojas: el velo cubre la barra sin dejar franja clara; al abrir y cerrar una hoja el contenido no salta.
+- D4. Barra de estado, teléfono sin recorte y con recorte (al menos uno de cada uno si se dispone de ambos): sin tapar contenido y sin hueco de más de 8 dp aproximadamente respecto de la barra real. Anotar el modelo y la altura real de la barra.
+- D5. Barra de estado, rotación o fuente grande: la reserva superior no cambia ni duplica espacio.
+- D6. Hoja «Nueva categoría» con el teclado abierto: el campo de nombre, la vista previa y el pie (Guardar/Cancelar) siguen visibles o alcanzables con scroll; no se pierde lo escrito al ocultar el teclado.
+- D7. Hoja a fuente 200 %: se desplaza; los 30 íconos son tocables; Guardar y Cancelar siguen accesibles.
+- D8. TalkBack: el control «Cerrar sesión» se anuncia como botón con ese nombre; los íconos se anuncian «Ícono {nombre}, botón de opción, seleccionado/no seleccionado»; «+ Crear categoría» como botón; el aviso de éxito se anuncia sin mover el foco de forma confusa; el logotipo de Google no se lee dos veces.
+- D9. Pulgar a una mano en 360 dp: «Continuar con Google» y «Cerrar sesión» se alcanzan; separación entre 🚪 y avatar suficiente para no tocar el equivocado (probar 10 toques a cada uno).
+- D10. Logotipo de Google nítido (no pixelado, sin distorsión) en pantalla de densidad alta y media.
+- D11. Crear una categoría desde Nuevo movimiento con red lenta o en modo avión al guardar: aparece el mensaje de fallo incierto y se comprueba que «Revisar la lista» se comporta como en R51-26.
+- D12. Cerrar sesión desde el encabezado y volver a iniciar con otra cuenta de Google: datos separados, ayudas conservadas por usuario (R5 D2 y D4).
+
+#### I. Decisiones que requieren al usuario (no decididas aquí)
+
+1. Texto del mensaje del Login: variante A («Anota lo que entra y lo que sale, y mira cómo está tu dinero.», recomendada) o B («Sabe en qué gastas y cuánto te queda, todo en un solo lugar.»).
+2. Botón de Google: aprobar el estilo claro de la guía de marca con sus dos colores de marca (`#FFFFFF`, `#747775`, texto `#1F1F1F`) como excepción a los tokens del proyecto, y los 52 dp de alto; confirmar el emoji 👛 como marca del Login mientras no exista ilustración (la alcancía sigue diferida a R6).
+3. Catálogo de 30 íconos y sus nombres (D): aprobar, quitar o cambiar elementos. Algunos emojis pueden verse distinto según el teléfono (🏋️, ＋ y ⋯ son glifos de texto o variantes); se valida en dispositivo.
+4. Descripción de la categoría: omitida en la hoja de Nuevo movimiento; confirmar o pedir que se incluya.
+5. Forma del control «Cerrar sesión» del encabezado: 🚪 sin texto (propuesto) o con la palabra «Salir» visible. Posición a la izquierda del avatar y separación de 8 dp.
+6. Retirar del tipo de ruta `categories` la variante `fromForm` (limpieza en `navigation.ts`) o solo dejar de usarla; toca la navegación aprobada, por lo que se pregunta.
+7. Mitigación provisional de la barra de estado (F): aprobar que `mobile-engineer` ajuste el respaldo superior de `useSystemInsets` (p. ej. de 24 a 32 dp o usar el mayor de la altura informada y el respaldo) con riesgo de unos dp de más en teléfonos sin recorte. Esa cifra es una hipótesis hasta medirla en el teléfono.
+8. Texto nuevo específico para `LIMIT_REACHED` y para el fallo incierto de categorías (E): aprobar o cambiar. El número exacto de categorías por cuenta (60 en la API) no se escribe en pantalla para no desincronizarse.
+9. Autorizaciones pendientes (G): migración 0004 y API para color/ícono de cuenta, `react-native-safe-area-context` y modo inmersivo (no recomendado).
+
+#### J. Archivos que tocaría R5.1 (PROPUESTA; implementa `mobile-engineer`)
+
+`app/src/screens/LoginScreen.tsx`; `app/assets/brand/google-g.png` (recurso ya descargado por el usuario; ruta a confirmar); `app/src/screens/session-ui.tsx` (nuevo, `SignOutControl`); `AccountsScreen.tsx`, `sheets.tsx` (solo `ProfileSheet`), `MoreScreen.tsx`, `SessionBanner.tsx`; `app/src/lib/category-appearance.ts`; `app/src/screens/category-form.tsx` (nuevo, formulario compartido); `CategoriesScreen.tsx`; `TransactionFormScreen.tsx`; `MainNavigator.tsx` y `navigation.ts` (solo retirar la ruta `fromForm`); `app/src/theme/useSystemInsets.ts` (solo mitigación provisional); y las pruebas de cada uno (`LoginScreen` no tiene prueba propia hoy: se agrega `LoginScreen.test.tsx`). No se tocan `/api`, `lib/auth-service.ts`, `lib/session-storage.ts`, `app.json`, `package.json` ni reportes, calendario, historial o guías.
+
 ## 6. Mis cuentas: renombrar, archivar y «solicitar eliminación»
 
 Hechos de contrato (verificados): no existe `DELETE /accounts`; `PATCH /accounts/:id` admite solo `nombre` y `archivada`; docs/001 §5: «Las cuentas se archivan, no se eliminan físicamente» y CLAUDE.md: «La información histórica no se elimina, se archiva».

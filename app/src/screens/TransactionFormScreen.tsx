@@ -36,11 +36,14 @@ import {
 } from '../lib/resources-api';
 import { colors, radii, shadows, sizes, typography } from '../theme/tokens';
 import { useSystemInsets } from '../theme/useSystemInsets';
+import CategoryCreateSheet from './category-create-sheet';
+import { toCategoryType } from './category-form';
 import DatePickerSheet from './DatePickerSheet';
 import {
   AmountField,
   CategoryIcon,
   CategoryOption,
+  CreateCategoryOption,
   FieldError,
   FormTextInput,
   formStyles,
@@ -72,7 +75,6 @@ export default function TransactionFormScreen({
   initialFecha,
   onDone,
   onAccountArchived,
-  onOpenCategories,
 }: {
   account: Account;
   api: ResourcesApi;
@@ -84,8 +86,6 @@ export default function TransactionFormScreen({
   onDone: (changed: boolean, message?: string) => void;
   // 409 ACCOUNT_ARCHIVED al crear: el servidor confirma que la cuenta está archivada.
   onAccountArchived?: (accountId: string) => void;
-  // «Ir a Categorías» cuando no hay categorías activas del tipo elegido.
-  onOpenCategories?: () => void;
 }) {
   const { authorizedCall } = useAuth();
   const { dismiss } = useGuides();
@@ -103,6 +103,11 @@ export default function TransactionFormScreen({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
   const [archivedBlocked, setArchivedBlocked] = useState(false);
+  // Hoja «Nueva categoría» (R5.1): montada aquí para no perder el estado del movimiento.
+  const [createOpen, setCreateOpen] = useState(false);
+  // Categoría creada desde la hoja: se fusiona en la rejilla hasta que la relectura la incluya.
+  const [createdCategories, setCreatedCategories] = useState<Category[]>([]);
+  const [createdNotice, setCreatedNotice] = useState<string | null>(null);
   // La creación falló sin certeza de si el servidor la grabó (red o 5xx): no se invita a reintentar.
   const [lostResponse, setLostResponse] = useState(false);
   const [focusRequest, setFocusRequest] = useState<{
@@ -144,6 +149,7 @@ export default function TransactionFormScreen({
   const categoryErrorRef = useRef<Text>(null);
   const dateErrorRef = useRef<Text>(null);
   const submitErrorRef = useRef<Text>(null);
+  const createdNoticeRef = useRef<Text>(null);
   const sectionY = useRef<Partial<Record<FieldName, number>>>({});
 
   // Foco y anuncio del primer error tras un intento fallido (un solo anuncio por intento).
@@ -201,8 +207,28 @@ export default function TransactionFormScreen({
     if (next === tipo) return;
     setTipo(next);
     setCategoryId(null);
+    setCreatedNotice(null);
     clearError('categoria');
   }
+
+  // La hoja creó (o confirmó) la categoría: se cierra, se selecciona y se relee la lista.
+  function handleCreated(category: Category) {
+    setCreatedCategories((current) =>
+      current.some((item) => item.id === category.id) ? current : [...current, category],
+    );
+    setCategoryId(category.id);
+    clearError('categoria');
+    setCreatedNotice(`Categoría «${category.nombre}» creada y seleccionada.`);
+    setCreateOpen(false);
+    refresh();
+  }
+
+  // Foco de TalkBack en el aviso de éxito.
+  useEffect(() => {
+    if (!createdNotice) return;
+    const node = findNodeHandle(createdNoticeRef.current);
+    if (node !== null) AccessibilityInfo.setAccessibilityFocus?.(node);
+  }, [createdNotice]);
 
   function validate() {
     const next: FieldErrors = {};
@@ -329,8 +355,16 @@ export default function TransactionFormScreen({
     ]);
   }
 
-  const options =
+  const loadedOptions =
     categories.status === 'ready' ? categories.data.items.filter((c) => !c.archivada) : [];
+  // Las creadas desde la hoja se muestran aunque la relectura aún no las incluya (solo del tipo actual).
+  const options = [
+    ...loadedOptions,
+    ...createdCategories.filter(
+      (c) => c.tipo === toCategoryType(tipo) && !loadedOptions.some((o) => o.id === c.id),
+    ),
+  ];
+  const canCreateCategory = !editing && !account.archivada && !archivedBlocked;
   const currentCategory =
     categories.status === 'ready'
       ? categories.data.items.find((c) => c.id === transaction?.categoryId)
@@ -347,8 +381,10 @@ export default function TransactionFormScreen({
       : tipo === 'gasto'
         ? 'Guardar gasto'
         : 'Guardar ingreso';
-  const rows: Category[][] = [];
-  for (let i = 0; i < options.length; i += 2) rows.push(options.slice(i, i + 2));
+  // La última celda de la rejilla es «+ Crear categoría» (solo al crear con la cuenta activa).
+  const cells: (Category | 'create')[] = canCreateCategory ? [...options, 'create'] : options;
+  const rows: (Category | 'create')[][] = [];
+  for (let i = 0; i < cells.length; i += 2) rows.push(cells.slice(i, i + 2));
 
   const markSection = (field: FieldName) => ({
     onLayout: (event: { nativeEvent: { layout: { y: number } } }) => {
@@ -428,35 +464,46 @@ export default function TransactionFormScreen({
           ) : options.length === 0 ? (
             <View style={styles.emptyCategories}>
               <Text style={styles.emptyText}>
-                {`No tienes categorías de ${tipo === 'gasto' ? 'gasto' : 'ingreso'} activas. Crea una en Más > Categorías.`}
+                {`No tienes categorías de ${tipo === 'gasto' ? 'gasto' : 'ingreso'} activas. ${canCreateCategory ? 'Crea una para anotar este movimiento.' : ''}`.trim()}
               </Text>
-              {onOpenCategories ? (
+              {canCreateCategory ? (
                 <Button
-                  label="Ir a Categorías"
+                  label="+ Crear categoría"
+                  accessibilityLabel="Crear categoría"
+                  variant="primary"
                   disabled={busy}
-                  onPress={() => requestLeave(onOpenCategories)}
+                  onPress={() => setCreateOpen(true)}
                 />
               ) : null}
             </View>
           ) : (
             <View accessibilityRole="radiogroup" accessibilityLabel="Categoría" style={styles.grid}>
               {rows.map((row) => (
-                <View key={row[0]!.id} style={styles.gridRow}>
-                  {row.map((category) => (
-                    <CategoryOption
-                      key={category.id}
-                      nombre={category.nombre}
-                      icono={category.icono}
-                      color={category.color}
-                      tipo={tipo}
-                      selected={categoryId === category.id}
-                      disabled={busy}
-                      onPress={() => {
-                        setCategoryId(category.id);
-                        clearError('categoria');
-                      }}
-                    />
-                  ))}
+                <View key={row[0] === 'create' ? 'create' : row[0]!.id} style={styles.gridRow}>
+                  {row.map((category) =>
+                    category === 'create' ? (
+                      <CreateCategoryOption
+                        key="create"
+                        disabled={busy}
+                        onPress={() => setCreateOpen(true)}
+                      />
+                    ) : (
+                      <CategoryOption
+                        key={category.id}
+                        nombre={category.nombre}
+                        icono={category.icono}
+                        color={category.color}
+                        tipo={tipo}
+                        selected={categoryId === category.id}
+                        disabled={busy}
+                        onPress={() => {
+                          setCategoryId(category.id);
+                          setCreatedNotice(null);
+                          clearError('categoria');
+                        }}
+                      />
+                    ),
+                  )}
                   {row.length === 1 ? <View style={styles.gridSpacer} /> : null}
                 </View>
               ))}
@@ -464,6 +511,16 @@ export default function TransactionFormScreen({
           )}
           {errors.categoria ? (
             <FieldError ref={categoryErrorRef} message={errors.categoria} />
+          ) : null}
+          {createdNotice ? (
+            <Text
+              ref={createdNoticeRef}
+              role="status"
+              accessibilityLiveRegion="polite"
+              style={styles.createdNotice}
+            >
+              {createdNotice}
+            </Text>
           ) : null}
         </View>
 
@@ -585,6 +642,21 @@ export default function TransactionFormScreen({
         )}
       </View>
 
+      {canCreateCategory ? (
+        <CategoryCreateSheet
+          visible={createOpen}
+          onClose={() => setCreateOpen(false)}
+          tipo={toCategoryType(tipo)}
+          account={account}
+          api={api}
+          onCreated={handleCreated}
+          onAccountArchived={() => {
+            setArchivedBlocked(true);
+            onAccountArchived?.(account.id);
+          }}
+        />
+      ) : null}
+
       <DatePickerSheet
         visible={dateSheetOpen}
         value={fecha}
@@ -629,6 +701,7 @@ const styles = StyleSheet.create({
   grid: { gap: 8 },
   gridRow: { flexDirection: 'row', gap: 8 },
   gridSpacer: { flex: 1 },
+  createdNotice: { ...typography.small, fontWeight: '700', color: colors.incomeText, marginTop: 8 },
   dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   counter: { ...typography.small, color: colors.text3, textAlign: 'right', marginTop: 4 },
   counterNear: { color: colors.text, fontWeight: '700' },

@@ -315,15 +315,16 @@ describe('Screen', () => {
     (StatusBar as { currentHeight?: number }).currentHeight = original;
   });
 
+  // R5.1: la barra informada manda solo si supera el respaldo de 32 dp (mitigación provisional).
   it('relleno superior con la altura de la barra de estado en Android', async () => {
-    (StatusBar as { currentHeight?: number }).currentHeight = 30;
+    (StatusBar as { currentHeight?: number }).currentHeight = 40;
     await render(
       <Screen>
         <Text>Hola</Text>
       </Screen>,
     );
     expect(screen.getByTestId('screen-top-inset')).toHaveStyle({
-      height: 30,
+      height: 40,
       backgroundColor: colors.bg,
     });
     expect(screen.getByText('Hola')).toBeTruthy();
