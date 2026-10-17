@@ -44,6 +44,17 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [tabsHeight, setTabsHeight] = useState<number | null>(null);
+  // Soporte de color e ícono de cuenta (docs/003 D12), solo en memoria: una vez true no vuelve a
+  // false por una lista vacía o sin claves; solo un rechazo 400 de la API lo apaga y ya no se reactiva.
+  const [appearanceSupported, setAppearanceSupported] = useState(false);
+  const appearanceRejected = useRef(false);
+  const noteAppearanceSupport = (supported: boolean | null) => {
+    if (supported === true && !appearanceRejected.current) setAppearanceSupported(true);
+  };
+  const rejectAppearance = () => {
+    appearanceRejected.current = true;
+    setAppearanceSupported(false);
+  };
 
   const navRef = useRef(nav);
   navRef.current = nav;
@@ -138,6 +149,8 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
       <Screen>
         <NewAccountScreen
           api={api}
+          appearanceSupported={appearanceSupported}
+          onAppearanceRejected={rejectAppearance}
           onBack={pop}
           onCreated={(account) => {
             setNav({
@@ -157,6 +170,7 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
           onOpenAccount={openAccount}
           onCreateAccount={() => push({ name: 'newAccount' })}
           onNotify={setSnack}
+          onAppearanceSupport={noteAppearanceSupport}
           initialArchivedOpen={archivedOpen}
         />
       </Screen>
@@ -219,6 +233,7 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
               AccessibilityInfo.announceForAccessibility?.(`Ahora estás en ${next.nombre}`);
             }}
             onSeeAll={goToAccounts}
+            onAppearanceSupport={noteAppearanceSupport}
           />
         </Screen>
       );
@@ -359,10 +374,12 @@ export default function MainNavigator({ api }: { api: ResourcesApi }) {
             <MoreScreen
               api={api}
               account={active}
+              appearanceSupported={appearanceSupported}
+              onAppearanceRejected={rejectAppearance}
               onAccountUpdated={(updated) => {
                 if (!isActive(updated.id)) return;
                 updateDetail(updated.id, (d) => ({ ...d, account: updated }));
-                setSnack('Nombre actualizado');
+                setSnack('Cuenta actualizada');
               }}
               onArchived={(archived) => {
                 if (!isActive(archived.id)) return;

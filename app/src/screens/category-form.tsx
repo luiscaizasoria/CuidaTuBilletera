@@ -52,16 +52,39 @@ export function iconColumns(availableWidth: number, fontScale: number): number {
 
 const GAP = 8;
 
-function IconPicker({
+export interface IconPickerOption {
+  key: string;
+  name: string;
+  glyph: string;
+  // true: glifo de texto que se dibuja en el color de texto (los emojis llevan su propio color).
+  text?: boolean;
+}
+
+const CATEGORY_PICKER_OPTIONS: readonly IconPickerOption[] = CATEGORY_ICON_OPTIONS.map(
+  (option) => ({
+    key: option.slug,
+    name: option.name,
+    glyph: option.glyph,
+    ...(option.text ? { text: true } : {}),
+  }),
+);
+
+// Rejilla de íconos compartida por categorías y cuentas (docs/008 §6.15.4 y §6.16.3). Sin `options`
+// muestra el catálogo de categorías con el nombre de grupo «Ícono».
+export function IconPicker({
   value,
   onChange,
   disabled,
   availableWidth,
+  options = CATEGORY_PICKER_OPTIONS,
+  groupLabel = 'Ícono',
 }: {
   value: string | null;
-  onChange: (slug: string) => void;
+  onChange: (key: string) => void;
   disabled: boolean;
   availableWidth: number;
+  options?: readonly IconPickerOption[];
+  groupLabel?: string;
 }) {
   const { fontScale } = useWindowDimensions();
   const columns = iconColumns(availableWidth, fontScale);
@@ -69,20 +92,20 @@ function IconPicker({
   return (
     <View
       accessibilityRole="radiogroup"
-      accessibilityLabel="Ícono"
+      accessibilityLabel={groupLabel}
       testID="icon-grid"
       style={styles.iconGrid}
     >
-      {CATEGORY_ICON_OPTIONS.map((option) => {
-        const selected = value === option.slug;
+      {options.map((option) => {
+        const selected = value === option.key;
         return (
           <Pressable
-            key={option.slug}
+            key={option.key}
             accessibilityRole="radio"
             accessibilityLabel={`Ícono ${option.name}`}
             accessibilityState={{ selected, disabled }}
             disabled={disabled}
-            onPress={() => onChange(option.slug)}
+            onPress={() => onChange(option.key)}
             style={({ pressed }) => [
               styles.iconCell,
               { width: cell },

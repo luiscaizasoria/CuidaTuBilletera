@@ -6,27 +6,47 @@ import { useAuth } from '../hooks/use-auth';
 import { useDiscardGuard } from '../hooks/use-discard-guard';
 import { useGuide, useGuides } from '../hooks/use-guides';
 import { useMutation } from '../hooks/use-loader';
+import {
+  buildCreateAppearance,
+  DEFAULT_APPEARANCE,
+  isAppearanceRejection,
+  type AppearanceDraft,
+} from '../lib/account-appearance';
 import { isAccountFormDirty } from '../lib/form-dirty';
 import { AMOUNT_REJECTION_MESSAGES, validateAmountText } from '../lib/money';
-import type { Account, ResourcesApi } from '../lib/resources-api';
-import { isUncertainWriteFailure, LOST_RESPONSE_ACCOUNT } from '../lib/resources-messages';
+import type { Account, AccountInput, ResourcesApi } from '../lib/resources-api';
+import {
+  APPEARANCE_SAVE_ERROR,
+  isUncertainWriteFailure,
+  LOST_RESPONSE_ACCOUNT,
+} from '../lib/resources-messages';
 import { colors, typography } from '../theme/tokens';
+import { AppearancePicker } from './account-appearance';
 import { AmountField, CheckboxChip, FieldError, FormTextInput } from './form-ui';
-import { Button, GuideCard } from './ui';
+import { Button, Card, GuideCard } from './ui';
 
 export const BALANCE_TOO_BIG_ERROR = 'El saldo inicial es demasiado grande. Revisa la cifra.';
 export const NEGATIVE_BALANCE_LABEL = 'Es un saldo en contra (debo dinero)';
 // El campo conserva lo pegado (con margen para separadores) y la validación lo rechaza al guardar.
 const BALANCE_MAX_LENGTH = 24;
+// Relleno de la tarjeta de Apariencia: define el ancho útil de la rejilla (5 columnas a 360 dp).
+const APPEARANCE_CARD_PADDING = 16;
 
 export default function NewAccountScreen({
   api,
   onBack,
   onCreated,
+  appearanceSupported = false,
+  onAppearanceRejected,
 }: {
   api: ResourcesApi;
   onBack: () => void;
   onCreated: (account: Account) => void;
+  // La API soporta color e ícono (se detecta en el navegador). Sin soporte el bloque no se muestra
+  // y el cuerpo no lleva esos campos.
+  appearanceSupported?: boolean;
+  // La API rechazó la apariencia (400): el navegador deja de ofrecerla.
+  onAppearanceRejected?: () => void;
 }) {
   const { authorizedCall } = useAuth();
   const { dismiss } = useGuides();
@@ -34,6 +54,9 @@ export default function NewAccountScreen({
   const [nombre, setNombre] = useState('');
   const [saldo, setSaldo] = useState('');
   const [enContra, setEnContra] = useState(false);
+  const [appearance, setAppearance] = useState<AppearanceDraft>(DEFAULT_APPEARANCE);
+  const [appearanceRejected, setAppearanceRejected] = useState(false);
+  const showAppearance = appearanceSupported && !appearanceRejected;
   const [errors, setErrors] = useState<{ nombre?: string; saldo?: string }>({});
   const mutation = useMutation();
   const busy = mutation.pending;
@@ -42,9 +65,15 @@ export default function NewAccountScreen({
   const created = useRef<Account | null>(null);
   const uncertain = useRef(false);
   const [lostResponse, setLostResponse] = useState(false);
+  const [appearanceFailed, setAppearanceFailed] = useState(false);
 
   const { requestLeave } = useDiscardGuard({
-    dirty: isAccountFormDirty({ nombre, saldo, enContra }),
+    dirty: isAccountFormDirty({
+      nombre,
+      saldo,
+      enContra,
+      ...(showAppearance ? { appearance } : {}),
+    }),
     busy,
     onLeave: onBack,
     title: '¿Descartar esta cuenta?',
@@ -78,16 +107,24 @@ export default function NewAccountScreen({
     created.current = null;
     uncertain.current = false;
     setLostResponse(false);
+    // Sin soporte el cuerpo no lleva color ni ícono (ni undefined ni null).
+    const body: AccountInput = {
+      nombre: name,
+      ...(saldoInicial !== undefined ? { saldoInicial } : {}),
+      ...(showAppearance ? buildCreateAppearance(appearance) : {}),
+    };
+    setAppearanceFailed(false);
     const ok = await mutation.run(async () => {
       try {
-        const result = await authorizedCall((token) =>
-          api.createAccount(token, {
-            nombre: name,
-            ...(saldoInicial !== undefined ? { saldoInicial } : {}),
-          }),
-        );
+        const result = await authorizedCall((token) => api.createAccount(token, body));
         created.current = result.account;
       } catch (error) {
+        if (isAppearanceRejection(error, body)) {
+          // 400 con apariencia: sin reintento automático; se oculta el bloque y se avisa.
+          setAppearanceRejected(true);
+          setAppearanceFailed(true);
+          onAppearanceRejected?.();
+        }
         uncertain.current = isUncertainWriteFailure(error);
         throw error;
       }
@@ -162,9 +199,26 @@ export default function NewAccountScreen({
         puede cambiar; lo demás lo registras con movimientos.
       </Text>
 
+      {showAppearance ? (
+        <Card style={styles.appearanceCard}>
+          <AppearancePicker
+            nombre={nombre}
+            draft={appearance}
+            onChange={(patch) => setAppearance((current) => ({ ...current, ...patch }))}
+            busy={busy}
+            accountId={null}
+            inset={APPEARANCE_CARD_PADDING}
+          />
+        </Card>
+      ) : null}
+
       {lostResponse || mutation.error ? (
         <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.error}>
-          {lostResponse ? LOST_RESPONSE_ACCOUNT : mutation.error}
+          {lostResponse
+            ? LOST_RESPONSE_ACCOUNT
+            : appearanceFailed
+              ? APPEARANCE_SAVE_ERROR
+              : mutation.error}
         </Text>
       ) : null}
 
@@ -185,7 +239,8 @@ const styles = StyleSheet.create({
   backText: { fontSize: 28, fontWeight: '800', color: colors.brand700 },
   title: { ...typography.title, color: colors.text },
   label: { ...typography.brandLabel, color: colors.text, marginTop: 16, marginBottom: 8 },
+  appearanceCard: { padding: APPEARANCE_CARD_PADDING, marginBottom: 8 },
   checkWrap: { marginTop: 8 },
   help: { ...typography.small, color: colors.text2, marginTop: 8, marginBottom: 16 },
-  error: { ...typography.body, color: colors.expenseText, marginBottom: 8 },
+  error: { ...typography.body, color: colors.expenseText, marginTop: 8, marginBottom: 8 },
 });

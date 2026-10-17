@@ -3,7 +3,9 @@ import { account } from '../resources-test-utils';
 import {
   accountColorIndex,
   accountColors,
+  accountColorsFor,
   accountIcon,
+  accountIconFor,
   activeAccountsTotal,
   avatarInitial,
   firstName,
@@ -99,5 +101,25 @@ describe('accountIcon', () => {
     expect(accountIcon('Tarjeta Visa')).toBe('💳');
     expect(accountIcon('BANCO del Pichincha')).toBe('🏦');
     expect(accountIcon('Efectivo')).toBe('👛');
+  });
+});
+
+describe('accountColorsFor y accountIconFor', () => {
+  it('con apariencia guardada usan el color y el glifo elegidos', () => {
+    const acc = account({ id: 'acc-1', nombre: 'Banco', color: 'limon', icono: 'plane' });
+    expect(accountColorsFor(acc)).toMatchObject({ card: '#FFF6D6', tile: '#FFE58A' });
+    expect(accountIconFor(acc)).toBe('✈\uFE0F');
+  });
+
+  it('con null o claves desconocidas conservan el hash del id y el ícono por nombre', () => {
+    for (const [color, icono] of [
+      [null, null],
+      ['nuevo', 'cohete'],
+    ] as const) {
+      const acc = account({ id: 'acc-1', nombre: 'Banco', color, icono });
+      expect(accountColorsFor(acc)).toBe(accountColors('acc-1'));
+      expect(accountIconFor(acc)).toBe('🏦');
+    }
+    expect(accountIconFor(account({ nombre: 'Efectivo', icono: null }))).toBe('👛');
   });
 });

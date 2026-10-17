@@ -15,8 +15,17 @@ import {
 import { useAuth } from '../hooks/use-auth';
 import { useGuides } from '../hooks/use-guides';
 import { useMutation } from '../hooks/use-loader';
-import type { Account, ResourcesApi } from '../lib/resources-api';
+import {
+  appearanceOf,
+  buildAppearancePatch,
+  isAppearanceRejection,
+  type AppearanceDraft,
+} from '../lib/account-appearance';
+import { AuthError } from '../lib/auth-types';
+import { APPEARANCE_SAVE_ERROR } from '../lib/resources-messages';
+import type { Account, AccountPatch, ResourcesApi } from '../lib/resources-api';
 import { colors, moduleColors, radii, shadows, typography } from '../theme/tokens';
+import { AppearancePicker } from './account-appearance';
 import { ArchivedNotice } from './account-ui';
 import SessionBanner from './SessionBanner';
 import { SignOutControl } from './session-ui';
@@ -36,6 +45,8 @@ export default function MoreScreen({
   onOpenExport,
   onNotify,
   bottomInset = 0,
+  appearanceSupported = false,
+  onAppearanceRejected,
 }: {
   api: ResourcesApi;
   account: Account;
@@ -46,6 +57,11 @@ export default function MoreScreen({
   // Aviso breve (Snackbar del navegador).
   onNotify?: (message: string) => void;
   bottomInset?: number;
+  // La API soporta color e ícono (se detecta en el navegador). Sin soporte el bloque no se muestra
+  // y el PATCH no lleva esos campos.
+  appearanceSupported?: boolean;
+  // La API rechazó la apariencia (400): el navegador deja de ofrecerla.
+  onAppearanceRejected?: () => void;
 }) {
   const { authorizedCall, user } = useAuth();
   const margin = useScreenMargin();
@@ -56,6 +72,10 @@ export default function MoreScreen({
   const [editing, setEditing] = useState(false);
   const [nombre, setNombre] = useState(account.nombre);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [appearance, setAppearance] = useState<AppearanceDraft>(() => appearanceOf(account));
+  const [appearanceRejected, setAppearanceRejected] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const showAppearance = appearanceSupported && !appearanceRejected;
   const [advanced, setAdvanced] = useState(false);
   const rename = useMutation();
   const archive = useMutation();
@@ -64,7 +84,9 @@ export default function MoreScreen({
   function toggleEditing() {
     setEditing((open) => !open);
     setNombre(account.nombre);
+    setAppearance(appearanceOf(account));
     setNameError(null);
+    setSaveError(null);
     rename.clearError();
   }
 
@@ -75,11 +97,39 @@ export default function MoreScreen({
       return;
     }
     setNameError(null);
+    setSaveError(null);
+    // Solo las diferencias; sin apariencia soportada el PATCH no lleva color ni ícono.
+    const patch: AccountPatch = {
+      ...(name !== account.nombre ? { nombre: name } : {}),
+      ...(showAppearance ? buildAppearancePatch(account, appearance) : {}),
+    };
+    if (Object.keys(patch).length === 0) {
+      // Sin cambios: no hay petición ni aviso; solo se pliega el editor.
+      setEditing(false);
+      rename.clearError();
+      return;
+    }
     result.current = null;
     const ok = await rename.run(async () => {
-      result.current = await authorizedCall((token) =>
-        api.updateAccount(token, account.id, { nombre: name }),
-      );
+      try {
+        result.current = await authorizedCall((token) =>
+          api.updateAccount(token, account.id, patch),
+        );
+      } catch (error) {
+        if (isAppearanceRejection(error, patch)) {
+          // 400 con apariencia: sin reintento automático; se oculta el bloque y se avisa.
+          setAppearanceRejected(true);
+          setSaveError(APPEARANCE_SAVE_ERROR);
+          onAppearanceRejected?.();
+        } else if (
+          showAppearance &&
+          error instanceof AuthError &&
+          (error.kind === 'network' || error.kind === 'server')
+        ) {
+          setSaveError(APPEARANCE_SAVE_ERROR);
+        }
+        throw error;
+      }
     });
     if (ok && result.current) {
       setEditing(false);
@@ -164,9 +214,19 @@ export default function MoreScreen({
                 {nameError}
               </Text>
             ) : null}
-            {rename.error ? (
+            {showAppearance ? (
+              <AppearancePicker
+                nombre={nombre}
+                draft={appearance}
+                onChange={(patch) => setAppearance((current) => ({ ...current, ...patch }))}
+                busy={rename.pending}
+                accountId={account.id}
+                inset={16}
+              />
+            ) : null}
+            {saveError || rename.error ? (
               <Text accessibilityRole="alert" style={styles.error}>
-                {rename.error}
+                {saveError ?? rename.error}
               </Text>
             ) : null}
             <Button

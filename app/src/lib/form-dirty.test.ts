@@ -58,3 +58,14 @@ describe('isAccountFormDirty', () => {
     expect(isAccountFormDirty({ nombre: '', saldo: '', enContra: true })).toBe(true);
   });
 });
+
+describe('isAccountFormDirty con apariencia', () => {
+  const base = { nombre: '', saldo: '', enContra: false };
+  it('elegir solo un color o un ícono cuenta como cambio', () => {
+    expect(isAccountFormDirty({ ...base, appearance: { color: 'rosa', icono: null } })).toBe(true);
+    expect(isAccountFormDirty({ ...base, appearance: { color: null, icono: 'bank' } })).toBe(true);
+  });
+  it('Predeterminado sin otros datos no es cambio', () => {
+    expect(isAccountFormDirty({ ...base, appearance: { color: null, icono: null } })).toBe(false);
+  });
+});

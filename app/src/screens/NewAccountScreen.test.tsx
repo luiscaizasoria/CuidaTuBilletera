@@ -1,7 +1,8 @@
 // Crear cuenta (R2). Incluye los casos de creación que antes estaban en AccountsScreen.test.
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { AccessibilityInfo, Alert, BackHandler, StyleSheet, TextInput } from 'react-native';
 import { ApiRequestError } from '../lib/resources-api';
+import { APPEARANCE_SAVE_ERROR } from '../lib/resources-messages';
 import { account, fakeResourcesApi } from '../resources-test-utils';
 import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import NewAccountScreen, {
@@ -19,6 +20,16 @@ const onBack = jest.fn();
 const onCreated = jest.fn();
 const renderScreen = (api = fakeResourcesApi()) =>
   render(<NewAccountScreen api={api} onBack={onBack} onCreated={onCreated} />);
+const renderWithAppearance = (api = fakeResourcesApi(), onAppearanceRejected = jest.fn()) =>
+  render(
+    <NewAccountScreen
+      api={api}
+      onBack={onBack}
+      onCreated={onCreated}
+      appearanceSupported
+      onAppearanceRejected={onAppearanceRejected}
+    />,
+  );
 const type = (label: string, value: string) =>
   fireEvent.changeText(screen.getByLabelText(label), value);
 
@@ -420,5 +431,186 @@ describe('NewAccountScreen', () => {
     await fireEvent.press(screen.getByText('Crear cuenta'));
     const message = await screen.findByText(/Alcanzaste el límite permitido/);
     expect(message.props.accessibilityLiveRegion).toBe('polite');
+  });
+});
+
+describe('NewAccountScreen: apariencia (docs/007 §5.14, CTA-01..13)', () => {
+  const pick = (name: string) => fireEvent.press(screen.getByRole('radio', { name }));
+  const create = async (name = 'Banco') => {
+    await type('Nombre de la cuenta', name);
+    await fireEvent.press(screen.getByText('Crear cuenta'));
+  };
+
+  it('CTA-01: con soporte se muestra Apariencia después de la ayuda del saldo y antes de Crear', async () => {
+    await renderWithAppearance();
+    expect(screen.getByRole('header', { name: 'Apariencia' })).toBeTruthy();
+    expect(screen.getByTestId('account-preview')).toBeTruthy();
+    const text = JSON.stringify(screen.toJSON());
+    expect(text.indexOf('Después no se puede cambiar')).toBeLessThan(text.indexOf('Apariencia'));
+    expect(text.indexOf('Apariencia')).toBeLessThan(text.indexOf('Crear cuenta'));
+  });
+
+  it('CTA-02/03: sin soporte (o lista vacía) el bloque no existe y el POST no lleva color ni ícono', async () => {
+    const api = fakeResourcesApi();
+    await renderScreen(api);
+    expect(screen.queryByText('Apariencia')).toBeNull();
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+    await create();
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    const body = api.createAccount.mock.calls[0]![1];
+    expect(body).toEqual({ nombre: 'Banco' });
+    expect('color' in body).toBe(false);
+    expect('icono' in body).toBe(false);
+  });
+
+  it('CTA-04: elegir «limón» envía la clave `limon` sin tilde', async () => {
+    const api = fakeResourcesApi();
+    await renderWithAppearance(api);
+    await pick('Color limón');
+    expect(screen.getByText('Color: Limón')).toBeTruthy();
+    await create();
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(api.createAccount).toHaveBeenCalledWith('tok', { nombre: 'Banco', color: 'limon' });
+    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ color: 'limon' }));
+  });
+
+  it('elegir color e ícono los envía junto con el saldo', async () => {
+    const api = fakeResourcesApi();
+    await renderWithAppearance(api);
+    await pick('Color rosa');
+    await pick('Ícono Viajes');
+    await type('Saldo inicial', '10');
+    await create('Viaje');
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(api.createAccount).toHaveBeenCalledWith('tok', {
+      nombre: 'Viaje',
+      saldoInicial: 1000,
+      color: 'rosa',
+      icono: 'plane',
+    });
+  });
+
+  it('CTA-05: sin tocar Apariencia no se envía color ni ícono; volver a Predeterminado tampoco', async () => {
+    const api = fakeResourcesApi();
+    await renderWithAppearance(api);
+    await pick('Color rosa');
+    await pick('Color predeterminado');
+    await create();
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    const body = api.createAccount.mock.calls[0]![1];
+    expect(body).toEqual({ nombre: 'Banco' });
+    expect('color' in body || 'icono' in body).toBe(false);
+  });
+
+  it('CTA-09: la vista previa sigue al nombre, color e ícono al instante', async () => {
+    await renderWithAppearance();
+    expect(screen.getByText('El color se asigna al crear la cuenta')).toBeTruthy();
+    await type('Nombre de la cuenta', 'Tarjeta Visa');
+    expect(screen.getByTestId('account-preview').props.accessibilityLabel).toBe(
+      'Vista previa de la cuenta Tarjeta Visa, color predeterminado, ícono predeterminado',
+    );
+    expect(
+      within(screen.getByTestId('account-preview')).getByText('💳', {
+        includeHiddenElements: true,
+      }),
+    ).toBeTruthy();
+    await pick('Color celeste');
+    await pick('Ícono Banco');
+    expect(screen.getByTestId('account-preview').props.accessibilityLabel).toBe(
+      'Vista previa de la cuenta Tarjeta Visa, color celeste, ícono Banco',
+    );
+    expect(screen.queryByText('El color se asigna al crear la cuenta')).toBeNull();
+  });
+
+  it('CTA-11: elegir solo un color activa el aviso de descarte; con Predeterminado no', async () => {
+    await renderWithAppearance();
+    await pick('Color lavanda');
+    await fireEvent.press(screen.getByRole('button', { name: 'Volver' }));
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '¿Descartar esta cuenta?',
+      'Lo que escribiste se perderá.',
+      expect.any(Array),
+      expect.anything(),
+    );
+    expect(onBack).not.toHaveBeenCalled();
+    (Alert.alert as jest.Mock).mockClear();
+    await pick('Color predeterminado');
+    await fireEvent.press(screen.getByRole('button', { name: 'Volver' }));
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('elegir solo un ícono también activa el aviso de descarte (Atrás)', async () => {
+    await renderWithAppearance();
+    await pick('Ícono Hogar');
+    expect(pressBack()).toBe(true);
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it('CTA-12: mientras se guarda las opciones quedan inertes y hay un solo envío', async () => {
+    const gate = controlledPromise<{ account: ReturnType<typeof account>; categories: [] }>();
+    const api = fakeResourcesApi({ createAccount: jest.fn(() => gate.promise) });
+    await renderWithAppearance(api);
+    await pick('Color rosa');
+    await create();
+    for (const radio of screen.getAllByRole('radio', { hidden: true })) {
+      expect(radio.props.accessibilityState.disabled).toBe(true);
+    }
+    await fireEvent.press(screen.getByRole('radio', { name: 'Color limón', hidden: true }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Creando…' }));
+    expect(api.createAccount).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Color: Rosa')).toBeTruthy();
+    await act(async () => gate.resolve({ account: account({ id: 'n' }), categories: [] }));
+  });
+
+  it('CTA-13: un fallo de red al crear conserva la selección y no reenvía a ciegas', async () => {
+    const { AuthError } = jest.requireActual('../lib/auth-types');
+    const api = fakeResourcesApi({
+      createAccount: jest.fn().mockRejectedValue(new AuthError('network')),
+    });
+    await renderWithAppearance(api);
+    await pick('Color rosa');
+    await pick('Ícono Regalos');
+    await create();
+    expect(await screen.findByText(/No pudimos confirmar si se creó/)).toBeTruthy();
+    expect(screen.getByText('Color: Rosa')).toBeTruthy();
+    expect(screen.getByText('Ícono: Regalos')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Crear cuenta' }).props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: false }),
+    );
+    expect(api.createAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('400 de validación con apariencia: no reintenta, oculta el bloque, avisa y notifica al navegador', async () => {
+    const rejected = jest.fn();
+    const api = fakeResourcesApi({
+      createAccount: jest
+        .fn()
+        .mockRejectedValueOnce(new ApiRequestError(400, 'VALIDATION_ERROR'))
+        .mockResolvedValue({ account: account({ id: 'n' }), categories: [] }),
+    });
+    await renderWithAppearance(api, rejected);
+    await pick('Color rosa');
+    await create();
+    expect(await screen.findByText(APPEARANCE_SAVE_ERROR)).toBeTruthy();
+    expect(api.createAccount).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+    expect(rejected).toHaveBeenCalledTimes(1);
+    expect(onCreated).not.toHaveBeenCalled();
+    // El siguiente intento manual ya no lleva apariencia.
+    await fireEvent.press(screen.getByText('Crear cuenta'));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(api.createAccount).toHaveBeenLastCalledWith('tok', { nombre: 'Banco' });
+    // Sin apariencia visible Atrás ya no la cuenta como cambio.
+  });
+
+  it('un 400 sin apariencia en el cuerpo conserva el mensaje y el bloque', async () => {
+    const api = fakeResourcesApi({
+      createAccount: jest.fn().mockRejectedValue(new ApiRequestError(400, 'VALIDATION_ERROR')),
+    });
+    await renderWithAppearance(api);
+    await create();
+    expect(await screen.findByText(/Los datos enviados|inesperado/)).toBeTruthy();
+    expect(screen.getByTestId('appearance-block')).toBeTruthy();
   });
 });

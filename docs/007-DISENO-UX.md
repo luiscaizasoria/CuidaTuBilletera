@@ -1443,6 +1443,91 @@ En dispositivo (Android real con la Development Build y `npx expo start --dev-cl
 
 `app/src/screens/LoginScreen.tsx`; `app/assets/brand/google-g.png` (recurso ya descargado por el usuario; ruta a confirmar); `app/src/screens/session-ui.tsx` (nuevo, `SignOutControl`); `AccountsScreen.tsx`, `sheets.tsx` (solo `ProfileSheet`), `MoreScreen.tsx`, `SessionBanner.tsx`; `app/src/lib/category-appearance.ts`; `app/src/screens/category-form.tsx` (nuevo, formulario compartido); `CategoriesScreen.tsx`; `TransactionFormScreen.tsx`; `MainNavigator.tsx` y `navigation.ts` (solo retirar la ruta `fromForm`); `app/src/theme/useSystemInsets.ts` (solo mitigación provisional); y las pruebas de cada uno (`LoginScreen` no tiene prueba propia hoy: se agrega `LoginScreen.test.tsx`). No se tocan `/api`, `lib/auth-service.ts`, `lib/session-storage.ts`, `app.json`, `package.json` ni reportes, calendario, historial o guías.
 
+### 5.14 Color e ícono de la cuenta en Crear y Editar cuenta (especificación; PROPUESTA salvo lo marcado)
+
+Parte de decisiones de arquitectura YA APROBADAS (color = clave de `accountPalette`; ícono = clave de un catálogo de 12; NULL = predeterminado; PATCH: ausente = sin cambio, `null` = volver al predeterminado; soporte de la API detectado por la presencia de las claves `color` e `icono` en `GET /accounts`). Reutiliza el patrón del selector de categoría (§5.13.D, `category-form.tsx`). Sustituye la opción (c) «elegido por el usuario» de 14.18 y la de 14.19 en lo que contradiga esto: lo automático queda como valor «Predeterminado».
+
+**Pantallas.** «Crear cuenta» (`NewAccountScreen.tsx`) y «Editar cuenta» = editor «Datos de cuenta» de Más (`MoreScreen.tsx`, EXISTENTE: hoy solo nombre).
+
+#### A. Cuándo se muestra
+- Con soporte (al menos una cuenta de la lista tiene la clave `color` o `icono`, aunque valga `null`): se muestra el bloque «Apariencia».
+- Sin soporte (API actual sin las claves) o lista vacía (no se puede detectar): el bloque NO se muestra, sin texto de reemplazo ni espacio vacío, y la petición NO envía `color` ni `icono`. En lista vacía Crear envía solo `nombre` (y el saldo como hoy). Se elige ocultar y no deshabilitar: un control inerte con explicación técnica confunde y no hay nada que el usuario pueda hacer.
+- Estado «deshabilitado» solo existe mientras se guarda (`busy`): opacidad 0.5, sin respuesta al toque, `accessibilityState.disabled`.
+- Aviso para el implementador: la clave de paleta enviada es `limon` (sin tilde); el nombre visible y accesible es «limón». `accountPalette` hoy tiene `name: 'limón'`: la clave de API debe salir de una constante propia sin tilde y no de ese nombre.
+
+#### B. Ubicación y orden de campos
+- Crear: Nombre, Saldo inicial, casilla «Es un saldo en contra», **Apariencia**, error del formulario, Guardar, Cancelar. La apariencia va después de los datos obligatorios para no retrasar la tarea principal; está colapsada visualmente por ser opcional (no hay acordeón: es un bloque corto con título).
+- Editar (Más > Datos de cuenta): Nombre de la cuenta, aviso del saldo inicial (EXISTENTE), **Apariencia**, errores, «Guardar cambios».
+- Dentro de Apariencia: título «Apariencia» (`header`), línea `small` «Opcional. Te ayuda a reconocer la cuenta de un vistazo.», **Vista previa**, **Color**, **Ícono**. La vista previa va arriba (a diferencia de categorías) para verse mientras se elige, sin desplazarse.
+
+#### C. Vista previa de la tarjeta
+- Una tarjeta reducida con el aspecto real de `AccountCard`: mosaico de 52 dp con el glifo a 28 dp sobre `tile`, fondo `card` del color y el nombre (una línea, elipsis). Sin saldo ni cifras inventadas. Etiqueta pequeña «Vista previa» (`small`, `text2`). `accessible` con `accessibilityLabel="Vista previa de la cuenta {nombre o 'sin nombre'}, color {color}, ícono {ícono}"`; es informativa, no tocable. Se actualiza al instante.
+- Nombre vacío: «Nombre de la cuenta» en `text3`.
+- Color Predeterminado: en Editar, el color por hash del id (el real). En Crear no hay id aún: mosaico y fondo neutros (`segBg`) y, bajo la vista previa, «El color se asigna al crear la cuenta».
+- Ícono Predeterminado: `accountIcon(nombre)` en vivo (en Crear y Editar); sin nombre, 👛.
+
+#### D. Selector de color
+- Etiqueta «Color» y resumen `small`: «Color: {nombre}» o «Color: predeterminado». Primera opción **«Predeterminado»** (chip de texto de 48 dp de alto, ancho de contenido, mínimo 48), seguida de 6 muestras (aguamarina, lavanda, albaricoque, celeste, rosa, limón) con el mismo molde de `category-form.tsx` (anillo de 44 dp, relleno de 34 dp con `tile`, nombre bajo la muestra, celda 76 × 72 dp mínimo, separación 8 dp). Fila que se ajusta a varias líneas.
+- Seleccionado: anillo 3 dp `colors.text`, «✓» decorativo en la muestra; en «Predeterminado», borde 3 dp `text`, fondo `brand100` y «✓» antes del texto. No depende solo del color.
+- Foco (teclado externo/TalkBack): contorno 2 dp visible en la opción enfocada.
+- Edición: preselecciona el color guardado; si es `null`, «Predeterminado».
+
+#### E. Selector de ícono
+- Etiqueta «Ícono» y resumen «Ícono: {nombre}» o «Ícono: predeterminado». Primera opción «Predeterminado» (chip de texto, igual que en color) y la rejilla de los 12: wallet 👛 Billetera, card 💳 Tarjeta, bank 🏦 Banco, piggy-bank 🐷 Alcancía, cash 💵 Efectivo, trending-up 📈 Inversiones, briefcase 💼 Trabajo, home 🏠 Hogar, plane ✈️ Viajes, gift 🎁 Regalos, shopping-bag 🛍️ Compras, money-bag 💰 Ahorros.
+- Mismo `IconPicker` que categorías (celda ≥ 48 × 48 dp, cuadro 40 dp, glifo 22 dp, separación 8 dp, columnas = `floor((ancho + 8) / 56)` entre 4 y 6): a 360 dp 5 columnas (3 filas), a 320 dp 4 columnas. Sin scroll interno. Estados como §5.13.D (reposo, seleccionado con borde 3 dp y «✓», `busy` 0.5).
+- Edición: preselecciona el ícono guardado; `null` o clave desconocida = «Predeterminado» (se dibuja `accountIcon(nombre)`).
+
+#### F. Accesibilidad (español)
+| Elemento | Rol | Etiqueta | Estado |
+| --- | --- | --- | --- |
+| Grupo de color | `radiogroup` | «Color de la cuenta» | - |
+| Muestra | `radio` | «Color aguamarina» (lavanda, albaricoque, celeste, rosa, limón) | `selected`, `disabled` si `busy` |
+| Predeterminado (color) | `radio` | «Color predeterminado» | ídem |
+| Grupo de ícono | `radiogroup` | «Ícono de la cuenta» | - |
+| Celda | `radio` | «Ícono Billetera» (nombre de E) | `selected`, `disabled` |
+| Predeterminado (ícono) | `radio` | «Ícono predeterminado» | ídem |
+| Vista previa | `image`/texto accesible | ver C | - |
+- Todas las zonas táctiles ≥ 48 × 48 dp con fuente del sistema hasta 200 % (las celdas crecen en alto; los nombres de color pasan a 2 líneas, sin recortarse). Glifos y marcas «✓» decorativos (`importantForAccessibility="no"`).
+- Cambiar la selección no mueve el foco; TalkBack lee el nuevo estado «seleccionado».
+
+#### G. Teclado, safe areas y desplazamiento
+- Pantalla con `ScrollView` y `keyboardShouldPersistTaps="handled"` (como el resto): tocar una opción con el teclado abierto selecciona sin cerrarlo antes. Al enfocar Nombre o Saldo, el campo se mantiene visible sobre el teclado; Apariencia queda debajo y se alcanza desplazando.
+- El pie (Guardar, Cancelar / «Guardar cambios») queda en el flujo del contenido con `paddingBottom = margen + inset inferior`; ninguna opción ni botón queda bajo la barra de navegación del sistema o el gesto de Android. Nada depende de la barra de estado.
+- Crear, a 360 × 640 con teclado cerrado: se llega a Guardar desplazando; el botón no se oculta bajo el teclado al escribir el nombre.
+
+#### H. Descarte de cambios (`use-discard-guard`)
+- Crear: `dirty` hoy = nombre, saldo o casilla; se añade «color o ícono distinto de Predeterminado». Elegir solo un color ya cuenta: Atrás y «Cancelar» muestran «¿Descartar esta cuenta?» / «Lo que escribiste se perderá.» (EXISTENTES; texto sin cambio). Volver a «Predeterminado» sin otros datos deja `dirty = false`.
+- Editar (inline en Más): hoy no hay guard (el editor solo se pliega). Se mantiene ese comportamiento; plegar el editor descarta lo no guardado, incluida la apariencia, igual que hoy con el nombre. Se registra como pendiente que el implementador confirme con el usuario si Editar necesita guard (no se decide aquí).
+- Durante `busy` Atrás, «Cancelar» y las opciones se ignoran (EXISTENTE).
+
+#### I. Guardar y errores
+- Crear con soporte: envía `nombre`, saldo y, solo si el usuario eligió algo distinto de Predeterminado, `color` y/o `icono`. Predeterminado en Crear = no se envía el campo.
+- Editar: envía solo lo que cambió. Elegir «Predeterminado» partiendo de un valor guardado envía `null`; partiendo de `null` no envía nada. Sin cambios, no hay petición y se pliega el editor (comportamiento actual; no se avisa).
+- Protección contra doble envío (EXISTENTE: `busy`, «Guardando…»). Éxito: aviso breve «Cuenta creada» (EXISTENTE) / «Cuenta actualizada» (EXISTENTE) y la lista refleja de inmediato color e ícono.
+- Error de red o del servidor: el formulario se conserva con toda la selección, `alert` bajo Guardar con el texto «No pudimos guardar los cambios. Revisa tu conexión e inténtalo de nuevo.»; el botón vuelve a estar activo. Respuesta perdida al crear: se mantiene el mensaje existente (`LOST_RESPONSE_ACCOUNT`) y no se reenvía a ciegas. Si la API rechaza `color`/`icono` por 400: mismo texto de error, sin vaciar la selección.
+
+#### J. Textos (resumen)
+«Apariencia» · «Opcional. Te ayuda a reconocer la cuenta de un vistazo.» · «Vista previa» · «Nombre de la cuenta» · «Color» · «Color: {nombre}» · «Color: predeterminado» · «Ícono» · «Ícono: {nombre}» · «Ícono: predeterminado» · «Predeterminado» · «El color se asigna al crear la cuenta» · «No pudimos guardar los cambios. Revisa tu conexión e inténtalo de nuevo.»
+
+#### K. Criterios de aceptación (verificables)
+1. Con API que devuelve `color`/`icono` en `GET /accounts`, Crear y Editar muestran Apariencia; sin las claves o con lista vacía no se muestra y el POST/PATCH no contiene `color` ni `icono`.
+2. Orden de campos de B y vista previa visible sin desplazarse a 360 × 640 al abrir Apariencia.
+3. Primera opción de cada selector «Predeterminado»; seleccionado exclusivo (radio); Editar preselecciona lo guardado.
+4. Crear sin tocar Apariencia envía solo nombre/saldo; con color elegido envía `color` con la clave (`limon` sin tilde para «limón»).
+5. Editar: cambiar solo el color envía solo `color`; pasar a Predeterminado envía `null`; sin cambios no hay PATCH.
+6. Etiquetas, roles y estados de F; zonas ≥ 48 dp a 200 % de fuente.
+7. Elegir color o ícono en Crear activa el aviso de descarte; volver a Predeterminado sin otros datos no.
+8. Con `busy` las opciones no responden y no hay doble envío; error de red conserva la selección y muestra el texto de I.
+9. Con teclado abierto se puede seleccionar una opción sin perder lo escrito; nada queda bajo la barra del sistema.
+10. La lista (`AccountCard`), el Detalle y la barra de contexto muestran el color e ícono elegidos tras guardar.
+
+#### L. Archivos que tocaría (PROPUESTA; implementa `mobile-engineer`)
+`app/src/screens/NewAccountScreen.tsx`, `app/src/screens/MoreScreen.tsx`, un componente compartido nuevo (p. ej. `app/src/screens/account-appearance.tsx`, que reutiliza `IconPicker` de `category-form.tsx`), `app/src/lib/accounts.ts`, `app/src/lib/resources-api.ts` (tipos y detección de soporte), `app/src/lib/form-dirty.ts`, `app/src/theme/tokens.ts` (clave sin tilde) y las pruebas respectivas.
+
+#### M. Preguntas para el usuario
+1. ¿Editar (inline en Más) debe tener aviso de descarte? Hoy no lo tiene para el nombre.
+2. Con lista vacía no se puede elegir apariencia al crear la primera cuenta (se puede editar después). ¿Se acepta?
+
 ## 6. Mis cuentas: renombrar, archivar y «solicitar eliminación»
 
 Hechos de contrato (verificados): no existe `DELETE /accounts`; `PATCH /accounts/:id` admite solo `nombre` y `archivada`; docs/001 §5: «Las cuentas se archivan, no se eliminan físicamente» y CLAUDE.md: «La información histórica no se elimina, se archiva».

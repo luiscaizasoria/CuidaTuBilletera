@@ -264,3 +264,38 @@ describe('ArchivedNotice', () => {
     expect(screen.getByText(ARCHIVED_NOTICE)).toBeTruthy();
   });
 });
+
+describe('apariencia elegida en AccountCard y AccountContextBar (CTA-17)', () => {
+  const chosen = account({ id: 'acc-1', nombre: 'Banco', color: 'limon', icono: 'plane' });
+
+  it('AccountCard usa el color y el ícono guardados en lugar del hash y el nombre', async () => {
+    await render(<AccountCard account={chosen} onPress={jest.fn()} />);
+    expect(screen.getByTestId('account-card-acc-1')).toHaveStyle({ backgroundColor: '#FFF6D6' });
+    expect(screen.getByText('✈\uFE0F', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.queryByText('🏦', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('con null o claves desconocidas conserva el color por hash y el ícono por nombre', async () => {
+    const unknown = account({ id: 'acc-1', nombre: 'Banco', color: 'nuevo', icono: 'cohete' });
+    await render(<AccountCard account={unknown} onPress={jest.fn()} />);
+    expect(screen.getByTestId('account-card-acc-1')).toHaveStyle({
+      backgroundColor: accountPalette[accountColorIndex('acc-1')]!.card,
+    });
+    expect(screen.getByText('🏦', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it('la barra de contexto completa muestra el ícono elegido', async () => {
+    await render(
+      <AccountContextBar
+        account={chosen}
+        balance="ok"
+        variant="full"
+        exitLabel="‹ Mis cuentas"
+        exitAccessibilityLabel="Volver a Mis cuentas"
+        onExit={jest.fn()}
+        onOpenSwitcher={jest.fn()}
+      />,
+    );
+    expect(screen.getByText('✈\uFE0F', { includeHiddenElements: true })).toBeTruthy();
+  });
+});

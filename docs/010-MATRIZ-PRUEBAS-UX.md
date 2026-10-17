@@ -1265,3 +1265,27 @@ Todo el nivel D por falta de emulador, dispositivo y TalkBack. No se tomaron cap
 | D12 Cerrar sesión y entrar con otra cuenta de Google | Datos separados y ayudas por usuario | D |
 
 Tampoco se comprobó en dispositivo: la apariencia del emoji 🚪 y de los glifos del catálogo (🍽️, 🏋️, ＋, ⋯) con la fuente de Android, la carga real de los PNG y el Login a 320 × 568 y fuente 175 % (solo cubierto por las ramas `compact` y `showMark` en Jest). Pendiente de otros agentes: `qa-engineer` repite typecheck, lint y regresión con caché fría; la alcancía de Mis cuentas sigue obligatoria en R6.
+
+## 19. Casos de apariencia de cuenta (color e ícono; docs/007 §5.14)
+
+Nivel A salvo indicación; D = dispositivo.
+
+| Caso | Pantalla | Procedimiento | Esperado | Nivel |
+| --- | --- | --- | --- | --- |
+| CTA-01 | Crear/Editar | API con `color`/`icono` en la lista | Se muestra «Apariencia» (vista previa, Color, Ícono) | A |
+| CTA-02 | Crear/Editar | API sin las claves (DEV actual) | Bloque oculto; POST/PATCH sin `color` ni `icono` | A |
+| CTA-03 | Crear | Lista vacía | Bloque oculto; el POST envía solo nombre y saldo | A |
+| CTA-04 | Crear | Elegir «limón» | Se envía `color: "limon"` (sin tilde); etiqueta «Color limón» | A |
+| CTA-05 | Crear | No tocar Apariencia | No se envían color ni ícono | A |
+| CTA-06 | Editar | Cambiar solo el color | PATCH con solo `color` | A |
+| CTA-07 | Editar | Pasar de un color guardado a «Predeterminado» | PATCH con `color: null`; de `null` a Predeterminado no envía nada | A |
+| CTA-08 | Editar | Sin cambios | Sin PATCH | A |
+| CTA-09 | Ambas | Vista previa | Cambia al instante; Crear sin color muestra neutro y «El color se asigna al crear la cuenta»; ícono Predeterminado = `accountIcon(nombre)` | A |
+| CTA-10 | Ambas | Roles, etiquetas y estados | `radiogroup` «Color de la cuenta» / «Ícono de la cuenta»; `radio` con `selected`; «Color predeterminado», «Ícono predeterminado» | A |
+| CTA-11 | Crear | Elegir solo un color y pulsar Atrás o «‹ Volver» | Aviso «¿Descartar esta cuenta?»; con Predeterminado y sin más datos, no hay aviso | A |
+| CTA-12 | Ambas | Guardar con `busy` | Opciones y botones inertes; un solo envío | A |
+| CTA-13 | Ambas | Falla de red o 5xx al guardar | Editar: «No pudimos guardar los cambios. Revisa tu conexión e inténtalo de nuevo.». Crear: se mantiene el aviso de respuesta perdida (docs/007 §5.14.I). En ambas, selección conservada y Guardar reactivado. Un 400 por apariencia oculta el bloque (la API no admite esos campos) y muestra el texto anterior | A |
+| CTA-14 | Ambas | Teclado abierto, tocar una opción | Selecciona sin perder el texto; Guardar alcanzable; nada bajo la barra del sistema | D |
+| CTA-15 | Ambas | Fuente 200 %, 320 y 360 dp | Zonas ≥ 48 dp, nombres de color a 2 líneas sin recorte, 4 y 5 columnas de ícono | D |
+| CTA-16 | Ambas | TalkBack | Lee «Ícono Billetera, botón de opción, seleccionado»; el foco no salta al cambiar | D |
+| CTA-17 | Lista/Detalle | Guardar con color e ícono | `AccountCard`, Detalle y barra de contexto los reflejan | A |

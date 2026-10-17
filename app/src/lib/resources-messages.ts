@@ -72,3 +72,7 @@ export function isUncertainWriteFailure(error: unknown): boolean {
   if (error instanceof AuthError) return error.kind === 'network' || error.kind === 'server';
   return !(error instanceof ExportFileError);
 }
+
+// Falla al guardar una cuenta con el bloque Apariencia visible (docs/007 §5.14.I): red, servidor o 400.
+export const APPEARANCE_SAVE_ERROR =
+  'No pudimos guardar los cambios. Revisa tu conexión e inténtalo de nuevo.';

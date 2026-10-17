@@ -1,4 +1,11 @@
-import type { Account, Category, Page, ResourcesApi, Transaction } from './lib/resources-api';
+import type {
+  Account,
+  AccountPage,
+  Category,
+  Page,
+  ResourcesApi,
+  Transaction,
+} from './lib/resources-api';
 
 export const TS = '2026-10-13T12:00:00.000Z';
 
@@ -9,6 +16,8 @@ export function account(overrides: Partial<Account> = {}): Account {
     saldoInicial: 1250,
     saldo: 1250,
     archivada: false,
+    color: null,
+    icono: null,
     createdAt: TS,
     updatedAt: TS,
     ...overrides,
@@ -53,11 +62,23 @@ export const pageOf = <T>(items: T[]): Page<T> => ({
   total: items.length,
 });
 
+// Página de cuentas como la parsea la app: con las claves color/icono (API nueva), `appearanceSupported`
+// es true; con la lista vacía, null.
+export const accountPageOf = (items: Account[], supported = true): AccountPage => ({
+  ...pageOf(items),
+  appearanceSupported: items.length === 0 ? null : supported,
+});
+
 export function fakeResourcesApi(overrides: Partial<ResourcesApi> = {}): jest.Mocked<ResourcesApi> {
   return {
-    listAccounts: jest.fn(async () => pageOf([account()])),
+    listAccounts: jest.fn(async () => accountPageOf([account()])),
     createAccount: jest.fn(async (_t, input) => ({
-      account: account({ id: 'acc-new', nombre: input.nombre }),
+      account: account({
+        id: 'acc-new',
+        nombre: input.nombre,
+        color: input.color ?? null,
+        icono: input.icono ?? null,
+      }),
       categories: [],
     })),
     updateAccount: jest.fn(async (_t, id, input) => account({ id, ...input })),

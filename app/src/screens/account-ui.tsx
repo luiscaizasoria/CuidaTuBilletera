@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
-import { accountColors, accountIcon } from '../lib/accounts';
+import { accountColorsFor, accountIconFor } from '../lib/accounts';
 import { formatCents } from '../lib/money';
 import type { Account } from '../lib/resources-api';
 import {
@@ -56,7 +56,7 @@ export function AccountCard({
   hint?: string;
 }) {
   const { width } = useWindowDimensions();
-  const palette = accountColors(account.id);
+  const palette = accountColorsFor(account);
   const saldo = balanceText(account.saldo);
   return (
     <Pressable
@@ -76,7 +76,7 @@ export function AccountCard({
     >
       <View pointerEvents="none" style={styles.cardCircle} {...hidden} />
       <View style={[styles.cardTile, { backgroundColor: palette.tile }]} {...hidden}>
-        <Text style={styles.cardTileEmoji}>{accountIcon(account.nombre)}</Text>
+        <Text style={styles.cardTileEmoji}>{accountIconFor(account)}</Text>
       </View>
       <View style={styles.cardBody}>
         <Text numberOfLines={1} ellipsizeMode="tail" style={styles.cardName}>
@@ -131,7 +131,7 @@ export function AccountContextBar({
   const { width, fontScale } = useWindowDimensions();
   // Pantalla estrecha o fuente grande: dos filas para no truncar la salida ni el saldo.
   const twoRows = width <= NARROW || fontScale >= LARGE_FONT;
-  const palette = accountColors(account.id);
+  const palette = accountColorsFor(account);
 
   if (variant === 'compact') {
     return (
@@ -153,7 +153,7 @@ export function AccountContextBar({
   const identity = (
     <>
       <View style={[styles.barTile, { backgroundColor: palette.tile }]} {...hidden}>
-        <Text style={styles.barTileEmoji}>{accountIcon(account.nombre)}</Text>
+        <Text style={styles.barTileEmoji}>{accountIconFor(account)}</Text>
       </View>
       <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.barName, styles.name]}>
         {account.nombre}

@@ -118,6 +118,8 @@ describe('POST /accounts', () => {
       saldoInicial: 12_345,
       saldo: 12_345,
       archivada: false,
+      color: null,
+      icono: null,
       createdAt: iso(NOW),
       updatedAt: iso(NOW),
     });
@@ -263,6 +265,8 @@ describe('atomicidad de la creación', () => {
         userId,
         nombre: 'Rota',
         saldoInicial: 0,
+        color: null,
+        icono: null,
         now: NOW,
       }),
       ...DEFAULT_CATEGORIES.map((category, index) =>
@@ -344,6 +348,8 @@ describe('GET /accounts', () => {
       saldoInicial: 0,
       saldo: 0,
       archivada: true,
+      color: null,
+      icono: null,
       createdAt: iso(plusMs(NOW, 1000)),
       updatedAt: iso(NOW),
     });

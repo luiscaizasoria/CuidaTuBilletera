@@ -535,6 +535,72 @@ Valor recomendado: **respaldo superior de 32 dp** y forma `top = Math.max(Status
 El resto reutiliza tokens: `sizes.touchMin` (48), `sizes.avatar` (40), `sizes.primaryTall` (52), `sizes.categoryOptionMin` (56), `spacing.*`, `radii.*`, `typography.*`, `depth.blobs`, `depth.scrim`. Sustituir en `LoginScreen.tsx` todos los colores crudos (`#ffffff`, `#444444`, `#b00020`, `#8a6d00`, `#1a73e8`) por tokens.
 
 
+### 6.16 Apariencia de la cuenta: color e ícono (PROPUESTA; implementa docs/007 §5.14; archivo destino `app/src/lib/account-appearance.ts`)
+
+Solo especificación: no cambia `accountPalette` ni ningún token activo. Ratios calculados con la misma fórmula WCAG de `contrast.js` (script de la sesión en el scratchpad, no incorporado al repositorio).
+
+**6.16.1 Paleta (claves ASCII).** Valores `card` y `tile` idénticos a `accountPalette` (2.4). La clave de API es una constante propia sin tilde; el nombre visible y accesible sale de la columna Etiqueta (`accountPalette.name` `'limón'` no se usa como clave).
+
+| Clave | Etiqueta | `card` | `tile` |
+| --- | --- | --- | --- |
+| `aguamarina` | Aguamarina | `#E3F6F8` | `#BDE9EF` |
+| `lavanda` | Lavanda | `#F0EBFF` | `#D9CCFF` |
+| `albaricoque` | Albaricoque | `#FFF0E0` | `#FFD6A8` |
+| `celeste` | Celeste | `#E7F1FF` | `#C5DBFF` |
+| `rosa` | Rosa | `#FDEAF2` | `#F8CADD` |
+| `limon` | Limón | `#FFF6D6` | `#FFE58A` |
+
+**6.16.2 Contraste.** Molde de muestra de `category-form.tsx`: anillo 44 dp (borde 3 dp), relleno 34 dp con `tile`, «✓» dentro, sobre la pantalla `bg` `#FFFBF5` o tarjeta `surface` `#FFFFFF`.
+
+| Clave | `text` sobre card | `text` sobre tile | `text2` sobre tile | Blanco sobre tile («✓» blanco) | Anillo 3 dp `text` sobre tile | `tile` sobre `surface` / `bg` (objeto, 3:1) |
+| --- | --- | --- | --- | --- | --- | --- |
+| aguamarina | 14.76 | 12.61 | 5.83 | **1.31 FALLA** | 12.61 | 1.31 / 1.27 **FALLA** |
+| lavanda | 14.16 | 11.02 | 5.09 | **1.50 FALLA** | 11.02 | 1.50 / 1.45 **FALLA** |
+| albaricoque | 14.75 | 12.12 | 5.60 | **1.36 FALLA** | 12.12 | 1.36 / 1.32 **FALLA** |
+| celeste | 14.46 | 11.74 | 5.43 | **1.40 FALLA** | 11.74 | 1.40 / 1.36 **FALLA** |
+| rosa | 14.31 | 11.37 | 5.26 | **1.45 FALLA** | 11.37 | 1.45 / 1.41 **FALLA** |
+| limon | 15.23 | 13.21 | 6.11 | **1.25 FALLA** | 13.21 | 1.25 / 1.21 **FALLA** |
+
+Anillo `text` sobre `surface` 16.49:1 y sobre `bg` 15.99:1 (cumple 3:1); texto de nombre y saldo sobre `card` ya verificados en 3.1 (mínimo 5.48:1 el saldo negativo). Texto y anillo cumplen en las seis; **fallan dos cosas** que el molde de categorías no resuelve porque sus colores son oscuros:
+
+1. **«✓» blanco sobre `tile` pastel (1.25 a 1.50:1)**. Corrección: «✓» en `colors.text` 800 (11.02 a 13.21:1), no blanco. En «Predeterminado» (fondo `brand100`) el «✓» ya es `text` (13.28:1).
+2. **Muestra sin seleccionar contra el fondo (1.21 a 1.50:1, exige 3:1)**. Corrección: la muestra en reposo lleva anillo de 1.5 dp `borderStrong` `#7E8A86` (3.58:1 sobre `surface`, 3.47:1 sobre `bg`) en lugar de anillo transparente; al seleccionarla el anillo pasa a 3 dp `text`. El nombre bajo la muestra (12 sp `text2`, 7.62:1 sobre `surface`) sigue siendo obligatorio: identifica la opción sin depender del color.
+
+Selección por tres señales: anillo 3 dp, «✓» y `accessibilityState.selected`. El `card` solo se muestra en la vista previa (fondo de la tarjeta), no en la muestra.
+
+**6.16.3 Catálogo de 12 íconos.** Glifo = emoji (mismo criterio que 7). Los 6 últimos usan exactamente el glifo de `app/src/lib/category-appearance.ts` (leído: 💼 `briefcase`, 🏠 `home`, ✈️ `plane`, 🎁 `gift`, 🛍️ `shopping-bag`, 💰 `money-bag`; `plane` y `shopping-bag` incluyen el selector de variación U+FE0F, hay que copiarlo).
+
+Tamaños: en la vista previa y en `AccountCard` el glifo mide 28 dp sobre mosaico de 52 dp; en la rejilla del selector, celda ≥ 48 × 48 dp con glifo de **24 sp** y `maxFontSizeMultiplier={1.5}` como el `IconPicker` actual (6.15.4). Aviso: docs/007 §5.14.E dice 22 sp y cuadro de 40 dp; para reutilizar el `IconPicker` sin bifurcarlo se prefiere 24 sp (decisión menor, el implementador no debe crear un segundo tamaño).
+
+Compatibilidad (decisión R5.1 D9, Unicode ≤ 11), por conocimiento del estándar, **sin prueba en dispositivo** (docs/010 nivel D pendiente): 👛 U+1F45B (Unicode 6.0), 💳 1F4B3 (6.0), 🏦 1F3E6 (6.0), 🐷 1F437 (6.0), 💵 1F4B5 (6.0), 📈 1F4C8 (6.0), 💼 1F4BC (6.0), 🏠 1F3E0 (6.0), ✈ 2708+FE0F (1.1), 🎁 1F381 (6.0), 🛍 1F6CD+FE0F (7.0), 💰 1F4B0 (6.0). **Ninguno incumple**. Observación (no incumplimiento): 💵 y 📈 son verdes y 💰 amarillo en muchas fuentes; sobre el mosaico pastel y con la etiqueta no se leen como «ingreso» (el color semántico de importes sigue solo en `income`/`expense`).
+
+**6.16.4 Predeterminado (valor `null`).** Color: `accountColors(id)` (hash 31 sin signo `mod 6`, tal como hoy). Ícono: `accountIcon(nombre)` (tarjeta → 💳, banco → 🏦, resto → 👛); la alcancía «ahorro» de 2.4 queda como hoy donde exista. Una clave desconocida equivale a `null`. En Crear, sin id: mosaico y fondo `segBg` (docs/007 §5.14.C).
+
+**6.16.5 Tabla para implementar.**
+
+| Tipo | Clave | Etiqueta (accesible) | Valor |
+| --- | --- | --- | --- |
+| color | `aguamarina` | Aguamarina | card `#E3F6F8`, tile `#BDE9EF` |
+| color | `lavanda` | Lavanda | card `#F0EBFF`, tile `#D9CCFF` |
+| color | `albaricoque` | Albaricoque | card `#FFF0E0`, tile `#FFD6A8` |
+| color | `celeste` | Celeste | card `#E7F1FF`, tile `#C5DBFF` |
+| color | `rosa` | Rosa | card `#FDEAF2`, tile `#F8CADD` |
+| color | `limon` | Limón | card `#FFF6D6`, tile `#FFE58A` |
+| ícono | `wallet` | Billetera | 👛 |
+| ícono | `card` | Tarjeta | 💳 |
+| ícono | `bank` | Banco | 🏦 |
+| ícono | `piggy-bank` | Alcancía | 🐷 |
+| ícono | `cash` | Efectivo | 💵 |
+| ícono | `trending-up` | Inversiones | 📈 |
+| ícono | `briefcase` | Trabajo | 💼 |
+| ícono | `home` | Hogar | 🏠 |
+| ícono | `plane` | Viajes | ✈️ |
+| ícono | `gift` | Regalos | 🎁 |
+| ícono | `shopping-bag` | Compras | 🛍️ |
+| ícono | `money-bag` | Ahorros | 💰 |
+
+Etiquetas accesibles: «Color {Etiqueta en minúscula}» e «Ícono {Etiqueta}» (docs/007 §5.14.F). El orden de las filas es el orden de la rejilla.
+
 ## 7. Iconografía de categorías
 
 Las categorías ya guardan `icono` (clave tipo Lucide) y `color`. Comparación:

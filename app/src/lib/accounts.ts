@@ -1,5 +1,6 @@
 // Cálculos puros de Mis cuentas (docs/007 §5.2; docs/003, Decisión R0 D6 y D11).
 import { accountPalette } from '../theme/tokens';
+import { accountColorOption, accountIconOption } from './account-appearance';
 import type { Account } from './resources-api';
 
 // Hash estable del id (multiplicador 31, aritmética de 32 bits sin signo).
@@ -19,6 +20,19 @@ export function accountIcon(name: string): string {
   if (lower.includes('tarjeta')) return '💳';
   if (lower.includes('banco')) return '🏦';
   return '👛';
+}
+
+// Color de la cuenta: el elegido (apariencia guardada) o, si no hay o es desconocido, el del hash del id.
+export function accountColorsFor(account: Pick<Account, 'id' | 'color'>): {
+  card: string;
+  tile: string;
+} {
+  return accountColorOption(account.color) ?? accountColors(account.id);
+}
+
+// Ícono de la cuenta: el elegido o, si no hay o es desconocido, el que sale del nombre.
+export function accountIconFor(account: Pick<Account, 'nombre' | 'icono'>): string {
+  return accountIconOption(account.icono)?.glyph ?? accountIcon(account.nombre);
 }
 
 export interface AccountsTotal {

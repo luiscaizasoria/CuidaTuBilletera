@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { Alert } from 'react-native';
 import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type ResourcesApi } from '../lib/resources-api';
+import { APPEARANCE_SAVE_ERROR } from '../lib/resources-messages';
 import { account, fakeResourcesApi } from '../resources-test-utils';
 import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import MoreScreen from './MoreScreen';
@@ -203,5 +204,212 @@ describe('MoreScreen: opciones avanzadas (archivar)', () => {
     await openAdvanced();
     expect(screen.getByText(/Esta cuenta ya está archivada/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Archivar cuenta' })).toBeNull();
+  });
+});
+
+describe('MoreScreen: apariencia en Datos de cuenta (docs/007 §5.14, CTA-01..13)', () => {
+  const rejected = jest.fn();
+  const renderSupported = (api: ResourcesApi = fakeResourcesApi(), acc = account()) =>
+    render(
+      <MoreScreen
+        api={api}
+        account={acc}
+        appearanceSupported
+        onAppearanceRejected={rejected}
+        {...handlers}
+      />,
+    );
+  const openEditor = () => fireEvent.press(screen.getByRole('button', { name: 'Datos de cuenta' }));
+  const pick = (name: string) => fireEvent.press(screen.getByRole('radio', { name }));
+  const save = () => fireEvent.press(screen.getByText('Guardar cambios'));
+  const saved = (nombre = 'Efectivo') => account({ nombre, color: 'rosa', icono: 'bank' });
+
+  beforeEach(() => rejected.mockClear());
+
+  it('CTA-01: con soporte muestra Apariencia después del aviso del saldo y la vista previa con el color real', async () => {
+    await renderSupported();
+    expect(screen.queryByText('Apariencia')).toBeNull();
+    await openEditor();
+    expect(screen.getByRole('header', { name: 'Apariencia' })).toBeTruthy();
+    const json = JSON.stringify(screen.toJSON());
+    expect(json.indexOf('El saldo inicial no se puede cambiar')).toBeLessThan(
+      json.indexOf('Apariencia'),
+    );
+    expect(screen.queryByText('El color se asigna al crear la cuenta')).toBeNull();
+  });
+
+  it('CTA-02: sin soporte no hay bloque y el PATCH solo lleva el nombre', async () => {
+    const api = fakeResourcesApi();
+    await renderMore(api, account({ color: 'rosa' }));
+    await openEditor();
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la cuenta'), 'Otra');
+    await save();
+    await waitFor(() => expect(api.updateAccount).toHaveBeenCalled());
+    const body = api.updateAccount.mock.calls[0]![2];
+    expect(body).toEqual({ nombre: 'Otra' });
+    expect('color' in body || 'icono' in body).toBe(false);
+  });
+
+  it('preselecciona lo guardado; null es Predeterminado y una clave desconocida también', async () => {
+    await renderSupported(fakeResourcesApi(), saved());
+    await openEditor();
+    expect(
+      screen.getByRole('radio', { name: 'Color rosa' }).props.accessibilityState.selected,
+    ).toBe(true);
+    expect(
+      screen.getByRole('radio', { name: 'Ícono Banco' }).props.accessibilityState.selected,
+    ).toBe(true);
+    screen.unmount();
+  });
+
+  it('clave guardada desconocida: se ve Predeterminado', async () => {
+    await renderSupported(fakeResourcesApi(), account({ color: 'nuevo', icono: 'cohete' }));
+    await openEditor();
+    expect(
+      screen.getByRole('radio', { name: 'Color predeterminado' }).props.accessibilityState.selected,
+    ).toBe(true);
+    expect(
+      screen.getByRole('radio', { name: 'Ícono predeterminado' }).props.accessibilityState.selected,
+    ).toBe(true);
+  });
+
+  it('CTA-06: cambiar solo el color envía solo `color`', async () => {
+    const api = fakeResourcesApi();
+    await renderSupported(api, saved());
+    await openEditor();
+    await pick('Color limón');
+    await save();
+    await waitFor(() => expect(handlers.onAccountUpdated).toHaveBeenCalledTimes(1));
+    expect(api.updateAccount).toHaveBeenCalledWith('tok', 'acc-1', { color: 'limon' });
+  });
+
+  it('cambiar nombre e ícono envía ambos y nada más', async () => {
+    const api = fakeResourcesApi();
+    await renderSupported(api, saved());
+    await openEditor();
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la cuenta'), ' Ahorros ');
+    await pick('Ícono Ahorros');
+    await save();
+    await waitFor(() => expect(api.updateAccount).toHaveBeenCalled());
+    expect(api.updateAccount).toHaveBeenCalledWith('tok', 'acc-1', {
+      nombre: 'Ahorros',
+      icono: 'money-bag',
+    });
+  });
+
+  it('CTA-07: de un valor guardado a Predeterminado envía null', async () => {
+    const api = fakeResourcesApi();
+    await renderSupported(api, saved());
+    await openEditor();
+    await pick('Color predeterminado');
+    await pick('Ícono predeterminado');
+    await save();
+    await waitFor(() => expect(api.updateAccount).toHaveBeenCalled());
+    expect(api.updateAccount).toHaveBeenCalledWith('tok', 'acc-1', { color: null, icono: null });
+  });
+
+  it('CTA-07/08: de null a Predeterminado no envía nada: sin PATCH y el editor se pliega', async () => {
+    const api = fakeResourcesApi();
+    await renderSupported(api);
+    await openEditor();
+    await pick('Color rosa');
+    await pick('Color predeterminado');
+    await save();
+    expect(api.updateAccount).not.toHaveBeenCalled();
+    expect(handlers.onAccountUpdated).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Datos de cuenta' }).props.accessibilityState.expanded,
+    ).toBe(false);
+  });
+
+  it('CTA-08: sin cambios (ni nombre ni apariencia) no hay PATCH ni aviso', async () => {
+    const api = fakeResourcesApi();
+    await renderSupported(api, saved());
+    await openEditor();
+    await save();
+    expect(api.updateAccount).not.toHaveBeenCalled();
+    expect(handlers.onAccountUpdated).not.toHaveBeenCalled();
+  });
+
+  it('sin soporte y sin cambios de nombre tampoco hay PATCH', async () => {
+    const api = fakeResourcesApi();
+    await renderMore(api);
+    await openEditor();
+    await save();
+    expect(api.updateAccount).not.toHaveBeenCalled();
+  });
+
+  it('CTA-09: la vista previa usa el color real de la cuenta y cambia al instante', async () => {
+    await renderSupported(fakeResourcesApi(), account({ id: 'acc-1', nombre: 'Banco' }));
+    await openEditor();
+    const label = () => screen.getByTestId('account-preview').props.accessibilityLabel;
+    expect(label()).toBe(
+      'Vista previa de la cuenta Banco, color predeterminado, ícono predeterminado',
+    );
+    await pick('Color celeste');
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la cuenta'), 'Banco Pichincha');
+    expect(label()).toBe(
+      'Vista previa de la cuenta Banco Pichincha, color celeste, ícono predeterminado',
+    );
+  });
+
+  it('plegar el editor descarta lo no guardado, sin aviso de descarte', async () => {
+    await renderSupported(fakeResourcesApi(), saved());
+    await openEditor();
+    await pick('Color limón');
+    await openEditor();
+    await openEditor();
+    expect(
+      screen.getByRole('radio', { name: 'Color rosa' }).props.accessibilityState.selected,
+    ).toBe(true);
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('CTA-12: mientras guarda las opciones quedan inertes y hay un solo PATCH', async () => {
+    const gate = controlledPromise<ReturnType<typeof account>>();
+    const api = fakeResourcesApi({ updateAccount: jest.fn(() => gate.promise) });
+    await renderSupported(api, saved());
+    await openEditor();
+    await pick('Color limón');
+    await save();
+    for (const radio of screen.getAllByRole('radio', { hidden: true })) {
+      expect(radio.props.accessibilityState.disabled).toBe(true);
+    }
+    await fireEvent.press(screen.getByRole('radio', { name: 'Color celeste', hidden: true }));
+    await save();
+    expect(api.updateAccount).toHaveBeenCalledTimes(1);
+    await act(async () => gate.resolve(saved()));
+  });
+
+  it('CTA-13: fallo de red conserva la selección y muestra el texto de la especificación', async () => {
+    const api = fakeResourcesApi({
+      updateAccount: jest.fn().mockRejectedValue(new AuthError('network')),
+    });
+    await renderSupported(api, saved());
+    await openEditor();
+    await pick('Color limón');
+    await save();
+    expect(await screen.findByText(APPEARANCE_SAVE_ERROR)).toBeTruthy();
+    expect(screen.getByText('Color: Limón')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Guardar cambios' }).props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: false }));
+    expect(handlers.onAccountUpdated).not.toHaveBeenCalled();
+  });
+
+  it('400 de validación con apariencia: no reintenta, oculta el bloque y avisa', async () => {
+    const api = fakeResourcesApi({
+      updateAccount: jest.fn().mockRejectedValue(new ApiRequestError(400, 'INVALID_REQUEST')),
+    });
+    await renderSupported(api, saved());
+    await openEditor();
+    await pick('Color limón');
+    await save();
+    expect(await screen.findByText(APPEARANCE_SAVE_ERROR)).toBeTruthy();
+    expect(api.updateAccount).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+    expect(rejected).toHaveBeenCalledTimes(1);
   });
 });

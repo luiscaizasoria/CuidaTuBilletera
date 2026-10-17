@@ -2,11 +2,18 @@
 // no existen. Se conservan como regresión la limpieza de exportaciones, la retirada del listener,
 // Atrás en la raíz, la vista del Calendario tras editar, la de Reportes tras el Historial filtrado y
 // el remontaje con otro usuario sin rastro.
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { AccessibilityInfo, Alert, BackHandler } from 'react-native';
 import { clearExports } from '../lib/export-files';
 import { ApiRequestError, type AccountBalance, type ResourcesApi } from '../lib/resources-api';
-import { account, category, fakeResourcesApi, pageOf, transaction } from '../resources-test-utils';
+import {
+  account,
+  accountPageOf,
+  category,
+  fakeResourcesApi,
+  pageOf,
+  transaction,
+} from '../resources-test-utils';
 import { controlledPromise, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import MainNavigator from './MainNavigator';
 
@@ -641,7 +648,7 @@ describe('MainNavigator: Más (renombrar y archivar)', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Datos de cuenta' }));
     await fireEvent.changeText(screen.getByLabelText('Nombre de la cuenta'), 'Billetera');
     await fireEvent.press(screen.getByText('Guardar cambios'));
-    expect(await screen.findByText('Nombre actualizado')).toBeTruthy();
+    expect(await screen.findByText('Cuenta actualizada')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cuenta Billetera, saldo $12.50' })).toBeTruthy();
     expect(api.getAccountBalance).not.toHaveBeenCalled();
   });
@@ -967,5 +974,100 @@ describe('MainNavigator: R3 confirmación de descarte con Atrás', () => {
     await openForm();
     expect(screen.queryByTestId('screen-bottom-inset')).toBeNull();
     expect(screen.getByTestId('transaction-form-footer')).toBeTruthy();
+  });
+});
+
+describe('MainNavigator: apariencia de cuenta (docs/003 D12, CTA-01..03 y CTA-17)', () => {
+  const openNew = async () => {
+    await fireEvent.press(await screen.findByRole('button', { name: 'Nueva cuenta' }));
+    await screen.findByRole('header', { name: 'Nueva cuenta' });
+  };
+
+  it('API con las claves: Crear y Editar muestran Apariencia', async () => {
+    const api = makeApi({ listAccounts: jest.fn(async () => accountPageOf([efectivo, banco])) });
+    await render(<MainNavigator api={api} />);
+    await openNew();
+    expect(screen.getByRole('header', { name: 'Apariencia' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Volver' }));
+    await openEfectivo();
+    await goTab('Más');
+    await fireEvent.press(screen.getByRole('button', { name: 'Datos de cuenta' }));
+    expect(screen.getByRole('header', { name: 'Apariencia' })).toBeTruthy();
+  });
+
+  it('API sin las claves: Crear y Editar no muestran el bloque y los cuerpos no llevan apariencia', async () => {
+    const api = makeApi({
+      listAccounts: jest.fn(async () => accountPageOf([efectivo, banco], false)),
+    });
+    await render(<MainNavigator api={api} />);
+    await openNew();
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la cuenta'), 'Nueva');
+    await fireEvent.press(screen.getByText('Crear cuenta'));
+    await screen.findByLabelText('Secciones de la cuenta');
+    expect(api.createAccount).toHaveBeenCalledWith('tok', { nombre: 'Nueva' });
+    await goTab('Más');
+    await fireEvent.press(screen.getByRole('button', { name: 'Datos de cuenta' }));
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+  });
+
+  it('lista vacía: Crear no muestra el bloque (no se puede detectar)', async () => {
+    const api = makeApi({ listAccounts: jest.fn(async () => accountPageOf([])) });
+    await render(<MainNavigator api={api} />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Crear mi primera cuenta' }));
+    await screen.findByRole('header', { name: 'Nueva cuenta' });
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+  });
+
+  it('CTA-17: guardar color e ícono en Más actualiza la barra de contexto y avisa «Cuenta actualizada»', async () => {
+    const api = makeApi({
+      listAccounts: jest.fn(async () => accountPageOf([efectivo, banco])),
+      updateAccount: jest.fn(async (_t, id, input) =>
+        account({ ...efectivo, id, ...(input as object) }),
+      ),
+    });
+    await render(<MainNavigator api={api} />);
+    await openEfectivo();
+    await goTab('Más');
+    await fireEvent.press(screen.getByRole('button', { name: 'Datos de cuenta' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Ícono Viajes' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Color limón' }));
+    await fireEvent.press(screen.getByText('Guardar cambios'));
+    expect(await screen.findByText('Cuenta actualizada')).toBeTruthy();
+    expect(api.updateAccount).toHaveBeenCalledWith('tok', 'acc-1', {
+      color: 'limon',
+      icono: 'plane',
+    });
+    expect(
+      within(screen.getByRole('button', { name: /^Cuenta Efectivo/ })).getByText('✈\uFE0F', {
+        includeHiddenElements: true,
+      }),
+    ).toBeTruthy();
+  });
+
+  it('un rechazo 400 con apariencia apaga el bloque en Crear y Editar durante la sesión', async () => {
+    const api = makeApi({
+      listAccounts: jest.fn(async () => accountPageOf([efectivo, banco])),
+      createAccount: jest.fn().mockRejectedValue(new ApiRequestError(400, 'VALIDATION_ERROR')),
+    });
+    await render(<MainNavigator api={api} />);
+    await openNew();
+    await fireEvent.press(screen.getByRole('radio', { name: 'Color rosa' }));
+    await fireEvent.changeText(screen.getByLabelText('Nombre de la cuenta'), 'Nueva');
+    await fireEvent.press(screen.getByText('Crear cuenta'));
+    expect(
+      await screen.findByText(
+        'No pudimos guardar los cambios. Revisa tu conexión e inténtalo de nuevo.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
+    // Aunque la lista siga trayendo las claves, no se reactiva.
+    await fireEvent.press(screen.getByRole('button', { name: 'Volver' }));
+    await act(async () => {
+      (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2]?.[1]?.onPress?.();
+    });
+    await screen.findByText('Banco');
+    await openNew();
+    expect(screen.queryByTestId('appearance-block')).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 // Detección de cambios sin guardar de los formularios (docs/003 Rediseño R3 D4, docs/007 §5.5.1 B).
 // «Cambio» = el estado actual difiere de la instantánea inicial tomada al montar. Los valores
 // prefijados (fecha de hoy o la elegida en el calendario) no cuentan.
+import type { AppearanceDraft } from './account-appearance';
 import { parseCentsFromInput, trimTrailingSeparator } from './money';
 
 export interface TransactionFormValues {
@@ -31,10 +32,19 @@ export function isFormDirty(
   );
 }
 
+// Crear cuenta: hay algo escrito, la casilla marcada o un color/ícono distinto de Predeterminado.
+// Volver a Predeterminado sin otros datos deja el formulario sin cambios.
 export function isAccountFormDirty(values: {
   nombre: string;
   saldo: string;
   enContra: boolean;
+  appearance?: AppearanceDraft;
 }): boolean {
-  return values.nombre.trim() !== '' || values.saldo.trim() !== '' || values.enContra;
+  return (
+    values.nombre.trim() !== '' ||
+    values.saldo.trim() !== '' ||
+    values.enContra ||
+    (values.appearance !== undefined &&
+      (values.appearance.color !== null || values.appearance.icono !== null))
+  );
 }

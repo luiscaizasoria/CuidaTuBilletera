@@ -175,6 +175,8 @@ describe('computeBalance (fail-closed)', () => {
     nombre: 'C',
     saldo_inicial: saldoInicial,
     archivada: 0,
+    color: null,
+    icono: null,
     created_at: iso(NOW),
     updated_at: iso(NOW),
     ingresos,

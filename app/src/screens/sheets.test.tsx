@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { AuthError } from '../lib/auth-types';
 import type { Page } from '../lib/resources-api';
-import { account, fakeResourcesApi, pageOf } from '../resources-test-utils';
+import { account, accountPageOf, fakeResourcesApi, pageOf } from '../resources-test-utils';
 import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import { AccountSwitcherSheet } from './sheets';
 
@@ -82,5 +82,30 @@ describe('AccountSwitcherSheet', () => {
     expect(props.onSeeAll).toHaveBeenCalled();
     await fireEvent(screen.getByTestId('account-switcher'), 'requestClose');
     expect(props.onClose).toHaveBeenCalled();
+  });
+});
+
+describe('AccountSwitcherSheet: apariencia', () => {
+  it('muestra el color y el ícono guardados de cada cuenta (CTA-17)', async () => {
+    const items = [account({ id: 'acc-1', nombre: 'Viaje', color: 'limon', icono: 'plane' })];
+    const api = fakeResourcesApi({ listAccounts: jest.fn(async () => accountPageOf(items)) });
+    await render(<AccountSwitcherSheet visible api={api} currentId="acc-1" {...props} />);
+    expect(await screen.findByText('✈\uFE0F', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it('informa si la lista trae las claves, no al fallar', async () => {
+    const onSupport = jest.fn();
+    const api = fakeResourcesApi({ listAccounts: jest.fn(async () => accountPageOf(accounts)) });
+    await render(
+      <AccountSwitcherSheet
+        visible
+        api={api}
+        currentId="acc-1"
+        {...props}
+        onAppearanceSupport={onSupport}
+      />,
+    );
+    await screen.findAllByRole('radio');
+    expect(onSupport).toHaveBeenCalledWith(true);
   });
 });

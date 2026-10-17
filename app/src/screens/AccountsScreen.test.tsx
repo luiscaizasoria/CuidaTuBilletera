@@ -3,10 +3,10 @@
 // MoreScreen.test (la lista ya no tiene acciones internas). Se trasladan aquí los casos útiles del
 // antiguo HomeScreen.test (sesión degradada y no disponible, error con reintento, desmontaje, vacío).
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type Page, type ResourcesApi } from '../lib/resources-api';
-import { account, fakeResourcesApi, pageOf } from '../resources-test-utils';
+import { account, accountPageOf, fakeResourcesApi, pageOf } from '../resources-test-utils';
 import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
 import AccountsScreen, { ACCOUNTS_ERROR } from './AccountsScreen';
 
@@ -343,5 +343,51 @@ describe('AccountsScreen: encabezado, perfil y sesión', () => {
     expect(mockAuthState.signOut).toHaveBeenCalled();
     expect(api.listAccounts).not.toHaveBeenCalled();
     expect(screen.queryByTestId('accounts-loading')).toBeNull();
+  });
+});
+
+describe('AccountsScreen: detección de apariencia', () => {
+  const renderWithSupport = (api: ResourcesApi, onAppearanceSupport = jest.fn()) =>
+    render(
+      <AccountsScreen
+        api={api}
+        onOpenAccount={open}
+        onCreateAccount={create}
+        onAppearanceSupport={onAppearanceSupport}
+      />,
+    );
+
+  it.each([
+    ['con las claves', accountPageOf(two), true],
+    ['sin las claves', accountPageOf(two, false), false],
+    ['con la lista vacía', accountPageOf([]), null],
+    ['sin dato (cliente sin la propiedad)', pageOf(two), null],
+  ])('informa el soporte %s', async (_label, page, expected) => {
+    const onSupport = jest.fn();
+    await renderWithSupport(
+      fakeResourcesApi({ listAccounts: jest.fn(async () => page) }),
+      onSupport,
+    );
+    await waitFor(() => expect(onSupport).toHaveBeenCalledWith(expected));
+  });
+
+  it('no informa mientras carga ni si la carga falla', async () => {
+    const onSupport = jest.fn();
+    await renderWithSupport(
+      fakeResourcesApi({ listAccounts: jest.fn().mockRejectedValue(new AuthError('network')) }),
+      onSupport,
+    );
+    await screen.findByText(ACCOUNTS_ERROR);
+    expect(onSupport).not.toHaveBeenCalled();
+  });
+
+  it('la tarjeta refleja el color e ícono guardados (CTA-17)', async () => {
+    const items = [account({ id: 'acc-1', nombre: 'Viaje', color: 'limon', icono: 'plane' })];
+    await renderWithSupport(
+      fakeResourcesApi({ listAccounts: jest.fn(async () => accountPageOf(items)) }),
+    );
+    const card = await screen.findByTestId('account-card-acc-1');
+    expect(StyleSheet.flatten(card.props.style).backgroundColor).toBe('#FFF6D6');
+    expect(within(card).getByText('✈\uFE0F', { includeHiddenElements: true })).toBeTruthy();
   });
 });

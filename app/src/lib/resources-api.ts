@@ -9,8 +9,34 @@ export interface Account {
   saldoInicial: number; // centavos
   saldo: number; // centavos; calculado por la API (saldoInicial + ingresos - gastos)
   archivada: boolean;
+  // Apariencia (docs/003 D12): claves de la paleta y del catálogo de la API, o null (predeterminado).
+  // Tras parseAccount siempre son string o null; una API antigua que no las envía queda en null.
+  color: string | null;
+  icono: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Cuerpo de POST /accounts: la apariencia solo se incluye si el usuario eligió algo (nunca null).
+export interface AccountInput {
+  nombre: string;
+  saldoInicial?: number;
+  color?: string;
+  icono?: string;
+}
+
+// Cuerpo de PATCH /accounts/:id: ausente = sin cambio, null = volver al predeterminado.
+export interface AccountPatch {
+  nombre?: string;
+  archivada?: boolean;
+  color?: string | null;
+  icono?: string | null;
+}
+
+// true si el objeto trae la clave `color` o `icono`, aunque valga null o undefined. Detecta el soporte
+// de la API en las respuestas y si un cuerpo enviado llevaba apariencia.
+export function hasAppearanceKeys(value: object): boolean {
+  return 'color' in value || 'icono' in value;
 }
 
 // Saldo de una cuenta (`GET /accounts/:id/balance`): saldo = saldoInicial + ingresos - gastos.
@@ -174,6 +200,12 @@ export interface Page<T> {
   total: number;
 }
 
+export interface AccountPage extends Page<Account> {
+  // La respuesta trae las claves color/icono: true; no las trae: false; lista vacía: null (no se
+  // puede saber). Ausente (mocks o clientes antiguos) equivale a null.
+  appearanceSupported?: boolean | null;
+}
+
 export interface ListOptions {
   page?: number;
   pageSize?: number;
@@ -213,16 +245,12 @@ export class ApiRequestError extends Error {
 }
 
 export interface ResourcesApi {
-  listAccounts(accessToken: string, options?: ListOptions): Promise<Page<Account>>;
+  listAccounts(accessToken: string, options?: ListOptions): Promise<AccountPage>;
   createAccount(
     accessToken: string,
-    input: { nombre: string; saldoInicial?: number },
+    input: AccountInput,
   ): Promise<{ account: Account; categories: Category[] }>;
-  updateAccount(
-    accessToken: string,
-    id: string,
-    input: { nombre?: string; archivada?: boolean },
-  ): Promise<Account>;
+  updateAccount(accessToken: string, id: string, input: AccountPatch): Promise<Account>;
   // Relectura del saldo tras crear, editar o anular un movimiento (docs/003, Decisión R2 D2).
   getAccountBalance(accessToken: string, accountId: string): Promise<AccountBalance>;
   listCategories(
@@ -303,7 +331,17 @@ function parseAccount(value: unknown): Account {
   ) {
     return invalid();
   }
-  return { id, nombre, saldoInicial, saldo, archivada, createdAt, updatedAt };
+  return {
+    id,
+    nombre,
+    saldoInicial,
+    saldo,
+    archivada,
+    color: typeof value.color === 'string' ? value.color : null,
+    icono: typeof value.icono === 'string' ? value.icono : null,
+    createdAt,
+    updatedAt,
+  };
 }
 
 function parseCategory(value: unknown): Category {
@@ -603,7 +641,13 @@ export function createResourcesApi(baseUrl: string, fetchImpl: typeof fetch = fe
         })}`,
         'GET',
       );
-      return parsePage(await readJson(response), parseAccount);
+      const data = await readJson(response);
+      const page: AccountPage = parsePage(data, parseAccount);
+      // parsePage ya validó que `items` es un arreglo.
+      const raw = data.items as unknown[];
+      page.appearanceSupported =
+        raw.length === 0 ? null : raw.some((item) => isRecord(item) && hasAppearanceKeys(item));
+      return page;
     },
 
     async createAccount(accessToken, input) {

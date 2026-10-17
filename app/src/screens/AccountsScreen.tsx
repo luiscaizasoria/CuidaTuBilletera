@@ -1,5 +1,5 @@
 // Mis cuentas: pantalla inicial autenticada (docs/007 §5.2; docs/003, Decisiones R0 D1 y R2).
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useGuide, useGuides } from '../hooks/use-guides';
@@ -26,6 +26,7 @@ export default function AccountsScreen({
   onCreateAccount,
   onNotify,
   initialArchivedOpen = false,
+  onAppearanceSupport,
 }: {
   api: ResourcesApi;
   // Abre el Detalle de la cuenta (también una archivada, en modo consulta).
@@ -33,6 +34,8 @@ export default function AccountsScreen({
   onCreateAccount: () => void;
   onNotify?: (message: string) => void;
   initialArchivedOpen?: boolean;
+  // Informa si la lista trae las claves color/icono (true/false; null si la lista está vacía).
+  onAppearanceSupport?: (supported: boolean | null) => void;
 }) {
   const { status, user } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -77,6 +80,7 @@ export default function AccountsScreen({
           onCreateAccount={onCreateAccount}
           onNotify={onNotify}
           initialArchivedOpen={initialArchivedOpen}
+          onAppearanceSupport={onAppearanceSupport}
         />
       )}
 
@@ -91,12 +95,14 @@ function AccountsList({
   onCreateAccount,
   onNotify,
   initialArchivedOpen,
+  onAppearanceSupport,
 }: {
   api: ResourcesApi;
   onOpenAccount: (account: Account) => void;
   onCreateAccount: () => void;
   onNotify?: (message: string) => void;
   initialArchivedOpen: boolean;
+  onAppearanceSupport?: (supported: boolean | null) => void;
 }) {
   const { authorizedCall } = useAuth();
   const [archivedOpen, setArchivedOpen] = useState(initialArchivedOpen);
@@ -110,6 +116,12 @@ function AccountsList({
       ),
     'accounts',
   );
+
+  const supportRef = useRef(onAppearanceSupport);
+  supportRef.current = onAppearanceSupport;
+  useEffect(() => {
+    if (state.status === 'ready') supportRef.current?.(state.data.appearanceSupported ?? null);
+  }, [state]);
 
   // Guías (docs/007 §5.12.C): solo con la lista cargada. Con una sola cuenta la pista fija de la
   // tarjeta ya orienta (docs/003, R5 D5), por eso `cuentas-lista` pide dos o más cuentas activas.

@@ -1,6 +1,6 @@
 // Hojas inferiores con `Modal` de React Native (docs/003, Decisión R2 D1): Atrás o tocar fuera las
 // cierran antes que cualquier otra navegación.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useLoader } from '../hooks/use-loader';
-import { accountColors, accountIcon, avatarInitial } from '../lib/accounts';
+import { accountColorsFor, accountIconFor, avatarInitial } from '../lib/accounts';
 import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, depth, radii, shadows, tabularNums, typography } from '../theme/tokens';
 import { useSystemInsets } from '../theme/useSystemInsets';
@@ -133,6 +133,7 @@ export function AccountSwitcherSheet({
   currentId,
   onSelect,
   onSeeAll,
+  onAppearanceSupport,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -141,6 +142,8 @@ export function AccountSwitcherSheet({
   currentId: string | null;
   onSelect: (account: Account) => void;
   onSeeAll: () => void;
+  // Informa si la lista trae las claves color/icono (true/false; null si la lista está vacía).
+  onAppearanceSupport?: (supported: boolean | null) => void;
 }) {
   return (
     <Sheet
@@ -152,7 +155,14 @@ export function AccountSwitcherSheet({
       <Text accessibilityRole="header" style={styles.title}>
         Cambiar de cuenta
       </Text>
-      {visible ? <SwitcherList api={api} currentId={currentId} onSelect={onSelect} /> : null}
+      {visible ? (
+        <SwitcherList
+          api={api}
+          currentId={currentId}
+          onSelect={onSelect}
+          onAppearanceSupport={onAppearanceSupport}
+        />
+      ) : null}
       <Button label="Ver todas mis cuentas" variant="link" onPress={onSeeAll} />
     </Sheet>
   );
@@ -162,16 +172,23 @@ function SwitcherList({
   api,
   currentId,
   onSelect,
+  onAppearanceSupport,
 }: {
   api: ResourcesApi;
   currentId: string | null;
   onSelect: (account: Account) => void;
+  onAppearanceSupport?: (supported: boolean | null) => void;
 }) {
   const { authorizedCall } = useAuth();
   const { state, reload } = useLoader(
     () => authorizedCall((token) => api.listAccounts(token, { pageSize: 100 })),
     'switcher',
   );
+  const supportRef = useRef(onAppearanceSupport);
+  supportRef.current = onAppearanceSupport;
+  useEffect(() => {
+    if (state.status === 'ready') supportRef.current?.(state.data.appearanceSupported ?? null);
+  }, [state]);
   if (state.status === 'loading') {
     return (
       <View style={styles.status}>
@@ -208,10 +225,10 @@ function SwitcherList({
             style={styles.row}
           >
             <View
-              style={[styles.rowTile, { backgroundColor: accountColors(account.id).tile }]}
+              style={[styles.rowTile, { backgroundColor: accountColorsFor(account).tile }]}
               {...hidden}
             >
-              <Text>{accountIcon(account.nombre)}</Text>
+              <Text>{accountIconFor(account)}</Text>
             </View>
             <Text numberOfLines={1} ellipsizeMode="tail" style={styles.rowName}>
               {account.nombre}
