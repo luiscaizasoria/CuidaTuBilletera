@@ -382,6 +382,150 @@ describe('hoja: accesibilidad y áreas táctiles', () => {
   });
 });
 
+describe('hoja: flechas de la barra de grupos (docs/007 §5.15.1; Jest no mide layout real)', () => {
+  const strip = () => screen.getByTestId('icon-picker-groups');
+  const right = () => screen.queryByRole('button', { name: 'Ver más grupos' });
+  const left = () => screen.queryByRole('button', { name: 'Ver grupos anteriores' });
+  const measure = async (viewport: number, content: number) => {
+    await fireEvent(strip(), 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width: viewport, height: 48 } },
+    });
+    await fireEvent(strip(), 'contentSizeChange', content, 48);
+  };
+  const scrollBy = (x: number) =>
+    fireEvent.scroll(strip(), { nativeEvent: { contentOffset: { x, y: 0 } } });
+  let scrollTo: jest.SpyInstance;
+  beforeEach(() => {
+    scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo').mockImplementation(() => undefined);
+    jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+  });
+  const xCalls = () => scrollTo.mock.calls.map((call) => call[0]).filter((a) => 'x' in a);
+
+  it('si todo cabe no hay flechas ni huecos', async () => {
+    await renderSheet(null);
+    await measure(312, 300);
+    expect(right()).toBeNull();
+    expect(left()).toBeNull();
+    expect(screen.queryByTestId('group-arrow-right')).toBeNull();
+  });
+
+  it('posición inicial (solo derecha), intermedia (ambas) y final (solo izquierda)', async () => {
+    await renderSheet(null);
+    expect(right()).toBeNull();
+    await measure(216, 900);
+    expect(right()).toBeTruthy();
+    expect(left()).toBeNull();
+    // Hueco reservado: la izquierda existe pero no está disponible.
+    expect(screen.getByTestId('group-arrow-left', { hidden: true })).toBeTruthy();
+    await scrollBy(300);
+    expect(right()).toBeTruthy();
+    expect(left()).toBeTruthy();
+    await scrollBy(684);
+    expect(right()).toBeNull();
+    expect(left()).toBeTruthy();
+  });
+
+  it('la flecha no disponible conserva el hueco, es invisible, deshabilitada y sale de TalkBack', async () => {
+    await renderSheet(null);
+    await measure(216, 900);
+    const gone = screen.getByTestId('group-arrow-left', { hidden: true });
+    expect(flat(gone).opacity).toBe(0);
+    expect(flat(gone).width).toBe(48);
+    expect(gone.props.accessibilityState.disabled).toBe(true);
+    expect(gone.props.importantForAccessibility).toBe('no-hide-descendants');
+    expect(gone.props.accessibilityElementsHidden).toBe(true);
+  });
+
+  it('etiquetas exactas, rol botón y área de al menos 48 dp con círculo de 40 dp', async () => {
+    await renderSheet(null);
+    await measure(216, 900);
+    await scrollBy(300);
+    for (const arrow of [left()!, right()!]) {
+      expect(arrow.props.accessibilityRole).toBe('button');
+      expect(flat(arrow).width).toBeGreaterThanOrEqual(48);
+      expect(flat(arrow).height).toBeGreaterThanOrEqual(48);
+    }
+    expect(screen.queryByText('‹')).toBeNull();
+    expect(screen.queryByText('›')).toBeNull();
+  });
+
+  it('tocar desplaza 0,8 × ancho visible, acota a los extremos y no cambia el grupo', async () => {
+    await renderSheet(null);
+    await measure(200, 900);
+    scrollTo.mockClear();
+    await fireEvent.press(right()!);
+    expect(xCalls().at(-1)).toEqual({ x: 160, animated: true });
+    // Toques rápidos: parte del último destino pedido.
+    await fireEvent.press(right()!);
+    expect(xCalls().at(-1)).toEqual({ x: 320, animated: true });
+    for (let i = 0; i < 6 && right(); i++) await fireEvent.press(right()!);
+    expect(xCalls().at(-1)).toEqual({ x: 700, animated: true });
+    expect(right()).toBeNull();
+    expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith('Último grupo');
+    await fireEvent.press(left()!);
+    expect(xCalls().at(-1)).toEqual({ x: 540, animated: true });
+    expect(chip('Dinero y ahorro').props.accessibilityState.selected).toBe(true);
+  });
+
+  it('hacia la izquierda se acota a 0 y anuncia «Primer grupo»', async () => {
+    await renderSheet(null);
+    await measure(200, 900);
+    await scrollBy(100);
+    await fireEvent.press(left()!);
+    expect(xCalls().at(-1)).toEqual({ x: 0, animated: true });
+    expect(AccessibilityInfo.announceForAccessibility).toHaveBeenCalledWith('Primer grupo');
+  });
+
+  it('un gesto de desplazamiento actualiza las flechas', async () => {
+    await renderSheet(null);
+    await measure(216, 900);
+    expect(left()).toBeNull();
+    await scrollBy(120);
+    expect(left()).toBeTruthy();
+    await scrollBy(0);
+    expect(left()).toBeNull();
+    expect(strip().props.scrollEventThrottle).toBe(16);
+  });
+
+  it('con reducir movimiento activo el desplazamiento es sin animación', async () => {
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+    await renderSheet(null);
+    await measure(200, 900);
+    scrollTo.mockClear();
+    await fireEvent.press(right()!);
+    expect(xCalls().at(-1)).toEqual({ x: 160, animated: false });
+  });
+
+  it('seleccionar el último grupo mantiene la selección y lo centra', async () => {
+    const last = ICON_GROUPS.at(-1)!;
+    const entry = entriesOfGroup(CATEGORY, last)[0]!;
+    await renderSheet(entry.key);
+    expect(chip(last).props.accessibilityState.selected).toBe(true);
+    await measure(216, 1000);
+    scrollTo.mockClear();
+    await fireEvent(chip(last), 'layout', {
+      nativeEvent: { layout: { x: 900, y: 0, width: 100, height: 48 } },
+    });
+    expect(xCalls().at(-1)).toEqual({ x: 900 + 50 - 108, animated: false });
+    expect(chip(last).props.accessibilityState.selected).toBe(true);
+  });
+
+  it('tras buscar y borrar, el grupo activo vuelve a quedar visible', async () => {
+    const last = ICON_GROUPS.at(-1)!;
+    await renderSheet(entriesOfGroup(CATEGORY, last)[0]!.key);
+    await measure(216, 1000);
+    await fireEvent.changeText(screen.getByLabelText('Buscar ícono'), 'bus');
+    expect(screen.queryAllByRole('radio', { name: /^Grupo / })).toHaveLength(0);
+    await fireEvent.changeText(screen.getByLabelText('Buscar ícono'), '');
+    scrollTo.mockClear();
+    await measure(216, 1000);
+    await fireEvent(chip(last), 'layout', {
+      nativeEvent: { layout: { x: 900, y: 0, width: 100, height: 48 } },
+    });
+    expect(xCalls().at(-1)).toEqual({ x: 842, animated: false });
+  });
+});
+
 describe('IconField (fila del formulario)', () => {
   const onChange = jest.fn();
   const renderField = (value: string | null, disabled = false) =>

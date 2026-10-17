@@ -964,7 +964,7 @@ Todo reutiliza tokens existentes (`colors`, `spacing`, `radii`, `typography`, `s
 | Reposo | Fondo `surface`, borde 1.5 `border` (decorativo; el glifo y el nombre identifican la celda). Presionado: opacidad 0.85. |
 | Seleccionado (3 señales, no solo color) | Fondo `brand100` + borde 3 dp `colors.text` + insignia «✓» (círculo `colors.text` de 16 dp en la esquina superior derecha, «✓» blanco 11 sp 800; decorativa) + `accessibilityState {selected: true}` + línea «Seleccionado: {nombre}» bajo la rejilla (`typography.small`, `text2`). El borde se pinta dentro de la caja: el tamaño no cambia al elegir. |
 | Foco (TalkBack/teclado) | Anillo de 2 dp `colors.text`, como `useFocus`. |
-| Chips de grupo | Fila de scroll horizontal, 17 chips; alto 48 dp, relleno horizontal 16, separación 8, radio `radii.pill`, texto `typography.brandLabel` (14/800) `colors.text`, una línea. Reposo: `surface` + borde 1.5 `border`. Activo: `brand100` + borde 3 dp `colors.text` + «✓ » antes del texto (la señal no es solo el color). Los chips no llevan emoji (evita ruido y duplicar glifos). Indicio de desplazamiento: el primer chip oculto asoma parcialmente en el borde; al abrir se desplaza hasta dejar el activo visible y centrado. Sin degradados ni sombras (barato de renderizar). Se ocultan mientras hay búsqueda. |
+| Chips de grupo | Fila de scroll horizontal, 17 chips; alto 48 dp, relleno horizontal 16, separación 8, radio `radii.pill`, texto `typography.brandLabel` (14/800) `colors.text`, una línea. Reposo: `surface` + borde 1.5 `border`. Activo: `brand100` + borde 3 dp `colors.text` + «✓ » antes del texto (la señal no es solo el color). Los chips no llevan emoji (evita ruido y duplicar glifos). Indicio de desplazamiento: dos flechas de 48 dp a los extremos de la fila (6.17.5; el chip parcial en el borde sigue ocurriendo pero ya no es la única señal); al abrir se desplaza hasta dejar el activo visible y centrado. Sin degradados ni sombras (barato de renderizar). Se ocultan mientras hay búsqueda. |
 | Buscador | `TextInput` 48 dp, fondo `surface`, borde 1.5 `borderStrong` (3.58:1 sobre `surface`), texto `text`, marcador `text2` (7.62:1 sobre `surface`), radio `radii.md`. Botón «Borrar búsqueda» de 48 dp. |
 | Fila «Ícono» del formulario | 56 dp; mosaico de 40 dp con el glifo a 24 sp (fondo `segBg` o el `tile` de la cuenta), texto «Ícono: {nombre}» `text` y «Cambiar» `brand700` (7.49:1 sobre `surface`). |
 | Hoja | `Sheet tall` existente: `surface`, radio superior 24, asa 40 × 4, velo `depth.scrim`. Pie fijo con «Usar este ícono» (`primary`, 48) y «Cancelar» (`ghost`, 48), borde superior 1 `border`. Sin animación nueva. |
@@ -996,6 +996,46 @@ Lectura honesta: los rellenos claros (blanco, amarillo, gris claro) no alcanzan 
 5. El semántico de importes (verde ingreso, coral gasto) no se usa en ningún estado del selector; los emojis verdes o rojos del catálogo (💵 📈 💸 📉) no cambian esa regla: el color de importes sigue viniendo solo de `income` y `expense`.
 
 Texto del título «Elegir ícono», chips y nombres: español, sin emojis en etiquetas del sistema.
+
+#### 6.17.5 Flechas de grupos (PROPUESTA; paso 366; implementa docs/007 §5.15.1; sin cambios de código)
+
+Dos botones, «Ver grupos anteriores» (izquierda) y «Ver más grupos» (derecha), en los extremos de la fila de chips. No se crea ningún token ni color nuevo. Contrastes calculados con la fórmula WCAG y los valores reales de `app/src/theme/tokens.ts` (script del scratchpad `/tmp/claude-1000/-workspaces-ControlGastos/9e6fdd20-d38f-4bb0-872c-8a0c3aad7f0f/scratchpad/c.py`).
+
+**Glifo: figura dibujada, no texto (recomendado).** Comparación:
+
+| Opción | Ventajas | Riesgos | Veredicto |
+| --- | --- | --- | --- |
+| Texto «‹» «›» (U+2039/203A) | Sin código de dibujo | El proyecto no carga Nunito (no hay `fontFamily` ni fuente en `app/`): se usaría la fuente del sistema, cuyo guillemet simple es pequeño, de trazo fino y de posición vertical variable según fabricante; escala con la fuente del sistema (el botón es de 48 dp fijos); en algunos teléfonos cae en una fuente de respaldo distinta. Los emojis de los chips de ícono y los chips (800) piden un trazo firme que ese glifo no garantiza | Descartado |
+| Ícono vectorial (`@expo/vector-icons`, `react-native-svg`) | Calidad máxima | Dependencias no instaladas; decisión pendiente 15.2 | Descartado (no se introducen dependencias) |
+| Figura dibujada con `View` | Idéntica en todo Android, independiente de fuentes y de la escala de fuente, trazo constante de 3 dp (a juego con el borde de 3 dp del chip activo), barata (una `View` sin imágenes ni librerías) | Hay que calibrar el centrado óptico | **Recomendado** |
+
+Construcción del chevron: una `View` de 11 × 11 dp con solo dos bordes visibles de 3 dp `colors.text` y `rotate 45deg`. Flecha derecha «›»: `borderTopWidth: 3`, `borderRightWidth: 3`, `rotate: '45deg'`. Flecha izquierda «‹»: `borderBottomWidth: 3`, `borderLeftWidth: 3`, `rotate: '45deg'`. Otros bordes en 0; fondo transparente; `borderRadius: 1` (esquina apenas redondeada, afín a las esquinas suaves del resto). Tamaño visible resultante ≈ 8 dp de ancho × 16 dp de alto, proporcional al botón de 40 dp. Centrado óptico: `translateX` de -3 dp en «›» y +3 dp en «‹» (la masa de tinta queda en la punta); calibrar ±1 dp en el dispositivo. El glifo es decorativo (`importantForAccessibility="no"`, `accessibilityElementsHidden`); no usa `Text`, así que no crece con la fuente.
+
+**Botón.**
+- Zona táctil: `Pressable` de 48 × 48 dp (`sizes.touchMin`) que ocupa el hueco reservado de 48 dp de docs/007 §5.15.1; con fuente 200 % no cambia de tamaño.
+- Forma visible: círculo de 40 dp centrado en la zona táctil (4 dp de margen a cada lado, dentro de los 48), `radii.pill`, fondo `colors.segBg`, borde 1.5 `colors.border`. Sin sombra ni elevación.
+- Por qué así y no `surface` + `borderStrong` (propuesta inicial de docs/007): un borde `borderStrong` (3.58:1) más oscuro que el de los chips (`border`, 1.23:1) y una forma igual de blanca competirían con los chips y con el chip activo (borde de 3 dp). Un círculo relleno `segBg` se distingue de la píldora blanca de los chips por forma y relleno, y se lee como control (no como grupo) sin llamar más la atención que ellos. El 4 dp de margen añade además respiro frente al chip cortado que asoma junto a la flecha.
+- La identidad de botón la da el glifo (≥ 3:1); el borde y el relleno son decorativos (como el borde de los chips, `segBg` frente a `surface` 1.15:1), igual que en el resto del selector, donde ninguna señal depende de un contraste decorativo.
+- Estados: reposo como arriba; presionado `opacity: 0.85` (como `styles.pressed`; glifo sobre relleno compuestos 9.16:1); foco: `FocusRing` (anillo de 2 dp `colors.text`, `top/right/bottom/left: 2`, `borderRadius` 22, dentro de la zona de 48; envuelve el círculo de 40 sin pisarlo), visible con TalkBack/teclado; no disponible: `opacity: 0` y fuera de la exploración (docs/007), conserva el hueco, sin estado «deshabilitado gris» (no hay botón muerto). Sin animación propia.
+
+**Contraste (valores reales).**
+
+| Par | Relación | Umbral | Resultado |
+| --- | --- | --- | --- |
+| Glifo `text` `#17211F` sobre `segBg` `#F3EEE6` (reposo) | 14.28 | ≥ 3 (gráfico); ≥ 4.5 si se considerara texto | Cumple ambos |
+| Glifo `text` sobre `surface` (si el fondo fuese blanco) | 16.49 | igual | Cumple |
+| Glifo + relleno con opacidad 0.85 (presionado, `#3A4241` sobre `#F5F1EA`) | 9.16 | ≥ 3 | Cumple |
+| Anillo de foco `text` sobre `surface` (hoja) | 16.49 | ≥ 3 | Cumple |
+| `segBg` frente a `surface` (relleno decorativo) | 1.15 | no exigido (decorativo) | Informativo |
+| `border` frente a `surface` / `segBg` | 1.23 / 1.06 | no exigido (decorativo) | Informativo |
+
+Descartados por contraste: `text3` `#5F6B68` y `borderStrong` `#7E8A86` como color de glifo (más tenues; no hay motivo para bajar de `text`); `brand700` (reserva el color de marca para acciones/enlaces).
+
+**Verificación de que no tapan chips.** La geometría es de tres hermanos en fila, no capas: [48][ScrollView `flex: 1`][48]. El círculo de 40 dp está dentro de su zona de 48 y el anillo de foco (≤ 48 dp) también; el contenido del ScrollView se recorta en sus propios bordes, nunca bajo una flecha. Anchos: 360 dp, hoja 312, ventana de chips 216; 412 dp, 268; 320 dp, 176; los 48 dp laterales sumados dejan 96 dp reservados. Un chip cortado por el borde del ScrollView queda a 4 dp (margen del círculo) del círculo y a 0 dp de la zona táctil, sin superponerse. Sin degradados, sombras ni elementos flotantes. La flecha invisible (`opacity: 0`) no se pinta y su hueco queda vacío, así que tampoco aparece un círculo «fantasma».
+
+**Valores para implementar (resumen).** Zona 48 × 48; círculo 40, `radii.pill`, `colors.segBg`, borde 1.5 `colors.border`; chevron 11 × 11, borde 3 `colors.text`, `rotate 45deg`, `borderRadius` 1, `translateX` ∓3; presionado `opacity` 0.85; foco `FocusRing` (inset 2, borde 2 `colors.text`, `borderRadius` 22); no disponible `opacity` 0.
+
+**Nota para coherencia con docs/007 §5.15.1.** Esa subsección fija para el botón fondo `surface`, borde 1.5 `borderStrong` y glifo de texto a 24 sp; esta subsección lo sustituye por círculo `segBg`, borde `border` y chevron dibujado (cierra la pregunta Q5 de docs/007). Debe alinearla `mobile-ux-designer` o quien coordina, junto con la zona de 48 dp (que no cambia).
 
 ## 7. Iconografía de categorías
 

@@ -122,3 +122,10 @@ Paso 342 (agente `mobile-ux-qa`, política de interfaz móvil y matriz docs/010)
 - Safe areas: `useSystemInsets` seguiría siendo el único origen aplicado solo por `Screen`, `MainNavigator`, `Sheet` y `Snackbar`; sin márgenes por modelo.
 - La prueba inmersiva se propone para R6 (requiere aprobación, cambio de docs/001, dependencias nativas y nueva Development Build).
 - Las etapas futuras F-A y F-B se conservan sin cambios.
+
+## 11. R5.1 - Flechas de grupos y plan de barra inferior (paso 366, 2026-10-17)
+
+- Implementado en local: `GroupBar` y `lib/chip-scroll.ts` (docs/003 D15); sin dependencias, API ni D1.
+- Plan nativo (docs/003 D16), en este orden y solo con autorización: (1) cambiar docs/001 línea ~230; (2) `npx expo install expo-navigation-bar react-native-safe-area-context`; (3) plugin `expo-navigation-bar` en `app.json`; (4) `SafeAreaProvider` en `App.tsx` y `useSystemInsets` sobre `useSafeAreaInsets()` conservando `{top, bottom}` (Screen, MainNavigator, Sheet y Snackbar no cambian); (5) componente que llama a `NavigationBar.setHidden(true)` al montar y en `AppState` activo, desactivado con TalkBack y sin reocultar con teclado abierto; (6) Development Build nueva y APK; (7) INM-01 a INM-10 con gestos y tres botones en teléfono real.
+- No se usan `setVisibilityAsync` ni `setBehaviorAsync` (obsoleta/no disponible en SDK 57).
+- Las etapas futuras F-A y F-B se conservan sin cambios.

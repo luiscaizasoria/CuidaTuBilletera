@@ -1624,6 +1624,67 @@ Principio: ninguna pantalla conoce el modelo de teléfono ni suma «márgenes m�
 - P4. ¿«Usar este ícono» (aplicar al confirmar) o aplicar al tocar la celda? Se propone confirmar, para cumplir «cancelar sin guardar».
 - P5. ¿Se aceptan las palabras clave en español como parte del catálogo (contenido que debe revisarse con el usuario)?
 
+#### 5.15.1 Descubrimiento de grupos (paso 366)
+
+Estado: PROPUESTA (especificación; sin cambios de código). Origen: prueba del usuario en Android; el selector funciona, pero a 360 dp solo se ven ~3 de los 17 chips de grupo y no es evidente que la fila se desplaza. EXISTENTE (HEAD aa4187b): en `app/src/screens/icon-picker-sheet.tsx` un `ScrollView horizontal` (`chipsRef`, `chipsWidth`, `styles.chips`) dentro del `radiogroup` «Grupos de íconos»; `onChipLayout` centra el grupo inicial una sola vez (`startGroup`); la fila se desmonta mientras hay búsqueda (`searching ? null`). docs/008 §6.17.3 pedía «indicio de desplazamiento» con el chip parcial; la prueba muestra que no basta. Se conserva todo lo de §5.15 A (17 grupos, búsqueda, chips de 48 dp, fuente sin reducir, gestos de desplazamiento) y NO se crea un carrusel aparte: es la misma fila con dos botones.
+
+**Layout.**
+- La fila de chips pasa a una fila `flexDirection: row` de tres partes: [flecha izquierda 48 dp] [ScrollView de chips, `flex: 1`] [flecha derecha 48 dp]. Las flechas están FUERA del ScrollView, en los extremos: nunca se superponen a un chip ni lo tapan (sin degradados ni capas flotantes).
+- Cada flecha es un `Pressable` de 48 × 48 dp (`sizes.touchMin`), `borderRadius` pill, fondo `surface`, borde 1.5 `borderStrong` (3:1), glifo «‹» / «›» en `colors.text` a 24 sp con `maxFontSizeMultiplier={1.5}` (el glifo es decorativo: `importantForAccessibility="no"`). Presionado: opacidad 0.85. Foco: anillo de 2 dp `colors.text` (como `useFocus`). Sin color de acento ni animación propia.
+- Espacio reservado: cuando la lista desborda (hay algo que desplazar), AMBOS huecos de 48 dp se reservan siempre, aunque una flecha no esté disponible en ese extremo (la flecha no disponible se vuelve invisible, `opacity: 0`, y sale de la exploración; ver abajo). Así los chips no «saltan» de sitio al desplazar y no cambia el ancho visible. Sin separación extra: el `gap` de 8 dp y el relleno del contenido ya separan los chips del botón.
+- Efecto en ancho. Con la hoja a 360 dp el ancho útil es 312 dp (docs/008 §6.17.3): la ventana de chips queda en 312 − 96 = 216 dp (antes 312). Con 412 dp: 364 − 96 = 268 dp. Un chip mide ≥ 48 dp de alto y de ancho de contenido más 32 dp de relleno; a 216 dp caben ~1,5 a 2 chips completos más el siguiente parcial. Es un costo aceptado: a cambio, siempre hay un control explícito y tocable. A 320 dp quedan 176 dp (≥ 1 chip largo completo, p. ej. «Dinero y ahorro»; ningún chip supera la ventana, verificar con fuente 200 %). El texto del chip no se reduce ni se trunca: si un chip es más ancho que la ventana (fuente 200 %), se muestra parcial y se desplaza con la flecha o el gesto.
+- Los gestos de arrastre del ScrollView se mantienen sin cambios; `showsHorizontalScrollIndicator` sigue en `false`.
+- El `radiogroup` «Grupos de íconos» envuelve solo el ScrollView; las flechas son hermanas, no `radio`.
+
+**Estado de las flechas (dinámico).** Se calcula con `onScroll` (`scrollEventThrottle` 16), `onLayout` del ScrollView (ancho visible `viewport`) y `onContentSizeChange` (`content`), con tolerancia de 1 px:
+- `puedeIzquierda = x > 1`.
+- `puedeDerecha = x + viewport < content - 1`.
+- `desborda = content > viewport + 96 + 1` (se compara contra el ancho de la fila completa, para no oscilar al reservar los huecos).
+- Antes de tener las tres medidas, ninguna flecha se muestra ni se reserva (evita parpadeo).
+- Flecha derecha disponible: visible y enfocable cuando `puedeDerecha`. Flecha izquierda: cuando `puedeIzquierda`. Al llegar al extremo, la flecha desaparece (invisible, `disabled`, `importantForAccessibility="no-hide-descendants"`) pero conserva su hueco.
+- Se actualiza durante el arrastre, el desplazamiento por flecha, el centrado inicial y los cambios de ancho (giro, fuente).
+
+**Paso de desplazamiento.** Cada toque desplaza `0,8 × viewport` hacia el lado de la flecha: destino `clamp(x ± 0,8 × viewport, 0, content − viewport)`, con `scrollTo({x, animated: !reducirMovimiento})`. 80 % deja visible el último chip anterior para no perder el hilo. Con toques rápidos el destino se calcula a partir del último destino pedido (se descarta al terminar el desplazamiento), para no estancarse ni retroceder. No hay auto-repetición por mantener pulsado. El paso no cambia el grupo seleccionado ni anuncia grupo.
+
+**Reducir movimiento.** Se lee `AccessibilityInfo.isReduceMotionEnabled()` y se suscribe a `reduceMotionChanged`. Con reducir movimiento activo, el desplazamiento por flecha usa `animated: false` (salto directo). El centrado inicial ya es `animated: false`.
+
+**Cuando todo cabe.** Si `desborda` es falso (por ejemplo, pantallas muy anchas o tablets en el futuro), no se dibuja ninguna flecha ni se reservan los huecos; la fila ocupa el ancho completo. Con 17 chips esto no ocurre en teléfonos, pero la regla es obligatoria para no mostrar controles inútiles.
+
+**Cambio de grupo y búsqueda (no perder el seleccionado).**
+- Al abrir: se mantiene el centrado del grupo activo en `onChipLayout` (una vez, `animated: false`). Seleccionar un grupo del final de la lista sigue funcionando; tras el centrado, `onScroll` actualiza las flechas (a la izquierda disponible; a la derecha solo si quedan grupos).
+- Al tocar un chip parcialmente cortado por un borde: queda seleccionado y se desplaza lo mínimo para que se vea completo (sin centrar, sin saltos). Tocar un chip ya completo no desplaza.
+- Mientras hay texto en el buscador la fila (y sus flechas) se oculta, como hoy. Al borrar la búsqueda, la fila se vuelve a montar con `x = 0`: debe recentrarse el grupo activo (rearmar `startGroup` con el grupo vigente al volver de la búsqueda). Criterio: el grupo activo nunca queda fuera de la vista tras borrar la búsqueda. Esto corrige un hueco de HEAD aa4187b y cae dentro de «no perder el grupo seleccionado».
+- Girar o cambiar el tamaño de fuente conserva el grupo y vuelve a calcular flechas; el grupo activo se mantiene visible.
+
+**TalkBack y foco.**
+- Las etiquetas son EXACTAMENTE «Ver más grupos» (flecha derecha) y «Ver grupos anteriores» (flecha izquierda), rol `button`, sin descripción adicional. Decisión del usuario; se respeta aunque `architect` sugirió ocultarlas del lector de pantalla.
+- Orden de exploración lineal: [Ver grupos anteriores] → chips → [Ver más grupos]. Una flecha no disponible NO se lee (oculta de la exploración), de modo que nunca se anuncia un botón que no hace nada.
+- Al activar una flecha con TalkBack el foco permanece en ella y los chips que quedan a la vista se alcanzan al explorar. Si la flecha activada se vuelve no disponible (llegó al extremo), el foco no debe perderse: se anuncia «Último grupo» o «Primer grupo» (`announceForAccessibility`) y el foco pasa al chip visible más cercano de ese extremo (decisión de implementación: `setAccessibilityFocus` sobre ese chip; alternativa aceptable si falla: dejar el foco al lector, sin anuncio extra, y documentarlo).
+- Cuando TalkBack enfoca un chip fuera de la vista, el ScrollView se desplaza solo; las flechas siguen a `onScroll` y se corrigen sin acción del usuario.
+- El anuncio «{grupo}, {n} íconos» de `chooseGroup` no cambia y no se emite al usar las flechas.
+
+**Archivos que tocaría (PROPUESTA; implementa `mobile-engineer`).** `app/src/screens/icon-picker-sheet.tsx` (fila con flechas, estado `puedeIzquierda`/`puedeDerecha`/`desborda`, paso, reduce-motion, recentrado al salir de la búsqueda) y su prueba en `app/src/screens/__tests__/` (junto a la del selector); si hay función pura para el cálculo del destino y de las flechas, a `app/src/lib/` con prueba propia. Sin cambios en catálogos, API ni dependencias (`AccessibilityInfo` y `Pressable` ya son de React Native).
+
+**Criterios de aceptación (verificables).**
+1. Con el selector abierto en 360 dp y el grupo inicial «Dinero y ahorro», se ve la flecha «Ver más grupos» y NO la de «Ver grupos anteriores». Ambas miden ≥ 48 × 48 dp con fuente al 200 %.
+2. Tocar «Ver más grupos» desplaza la fila ~80 % de su ancho visible (±8 dp, o hasta el final) y aparece «Ver grupos anteriores»; tocarla regresa. El arrastre con el dedo sigue funcionando y actualiza las flechas.
+3. En el último grupo, tras desplazarse al final con flechas o con el dedo, «Ver más grupos» desaparece; en el primero, «Ver grupos anteriores» no aparece. A ±1 px del borde la flecha ya se considera en el extremo, sin parpadeo.
+4. Ninguna flecha se superpone a un chip: las flechas ocupan huecos propios; los nombres de chip no se recortan por la flecha ni cambian de tamaño de fuente; los chips no se mueven cuando una flecha aparece o desaparece.
+5. Funciona a 360 y 412 dp (y 320 dp) con tamaño de fuente 100 % y 200 %: grupo seleccionado siempre alcanzable y visible al abrir; elegir «Transporte» u otro grupo del final conserva el centrado.
+6. Con TalkBack: las etiquetas leídas son exactamente «Ver más grupos» y «Ver grupos anteriores»; una flecha no disponible no es enfocable; al llegar al extremo el foco no se pierde.
+7. Con «Quitar animaciones» activo, las flechas desplazan sin animación; con él apagado, con animación.
+8. Escribir en el buscador oculta chips y flechas; borrar la búsqueda las muestra de nuevo con el grupo activo visible y el estado de las flechas correcto.
+9. Seleccionar un chip parcialmente cortado lo deja completo a la vista; el grupo elegido, el borrador de ícono y la búsqueda no se alteran al usar las flechas.
+
+**Estado de implementación (paso 366, local, sin validar en Android).** Implementada en `icon-picker-sheet.tsx` (`GroupBar`) y `lib/chip-scroll.ts`. **Apariencia: manda docs/008 §6.17.5** (círculo de 40 dp `segBg`, borde 1,5 `border`, chevron dibujado con `View`; no glifo de texto ni borde `borderStrong`), que sustituye lo dicho arriba sobre fondo, borde y glifo. Decisiones tomadas: se reservan ambos huecos cuando la lista desborda (Q1), la flecha no disponible se oculta (Q2), paso de 80 % (Q4) y glifo dibujado (Q5). Q3: se anuncia «Último grupo»/«Primer grupo» sin mover el foco; pendiente de ICO-20.
+
+**Preguntas abiertas (5.15.1).**
+- Q1. ¿Se acepta perder 96 dp de ancho visible (216 dp útiles a 360 dp) por tener siempre ambos huecos reservados? Alternativa: reservar solo el hueco de la flecha derecha al inicio y el izquierdo al final (los chips se moverían 48 dp al aparecer cada flecha; menos estable).
+- Q2. ¿La flecha no disponible se oculta (propuesto) o se muestra deshabilitada (más predecible visualmente, pero «botón muerto» para TalkBack)?
+- Q3. Foco de TalkBack al llegar al extremo: ¿se acepta mover el foco al chip más cercano y anunciar «Último grupo»/«Primer grupo», o basta con dejarlo?
+- Q4. Paso de 80 % vs. «un chip a la vez» (más predecible, costoso de medir). Se propone 80 %.
+- Q5. Texto de los glifos «‹» y «›» (tipografía) o icono vectorial: se propone texto, sin dependencias nuevas; confirmar con `mobile-visual-designer` que quede legible a 24 sp.
+
 ## 6. Mis cuentas: renombrar, archivar y «solicitar eliminación»
 
 Hechos de contrato (verificados): no existe `DELETE /accounts`; `PATCH /accounts/:id` admite solo `nombre` y `archivada`; docs/001 §5: «Las cuentas se archivan, no se eliminan físicamente» y CLAUDE.md: «La información histórica no se elimina, se archiva».

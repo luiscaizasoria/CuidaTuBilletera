@@ -23,6 +23,15 @@ import {
   searchIcons,
   type IconEntry,
 } from '../lib/icon-catalog';
+import {
+  ARROW_SLOT_DP,
+  NO_ARROWS,
+  chipArrows,
+  chipCenterTarget,
+  chipRevealTarget,
+  chipScrollTarget,
+  type ChipArrows,
+} from '../lib/chip-scroll';
 import { colors, radii, sizes, typography } from '../theme/tokens';
 import { useSystemInsets } from '../theme/useSystemInsets';
 import { Sheet } from './sheets';
@@ -128,8 +137,8 @@ function useFocus() {
 
 // Aro de foco de 2 dp `colors.text` (docs/008 §6.17.3) dibujado DENTRO del borde, separado 2 dp: no sustituye
 // el borde de 3 dp del elemento seleccionado.
-function FocusRing() {
-  return <View pointerEvents="none" {...hidden} style={styles.ring} />;
+function FocusRing({ round }: { round?: boolean }) {
+  return <View pointerEvents="none" {...hidden} style={[styles.ring, round && styles.ringRound]} />;
 }
 
 // Fila del formulario: glifo actual, «Ícono: {nombre}» y «Cambiar». Abre la hoja y, al cerrarla, devuelve
@@ -244,9 +253,6 @@ function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps)
   const [query, setQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const confirmed = useRef(false);
-  const chipsRef = useRef<ScrollView>(null);
-  const chipsWidth = useRef(0);
-  const startGroup = useRef(group);
   const initialKey = useRef(findIcon(entries, value)?.key ?? null);
   const titleRef = useRef<Text>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -308,16 +314,6 @@ function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps)
     AccessibilityInfo.announceForAccessibility?.(`${next}, ${count} íconos`);
   }
 
-  // Al abrir, desplaza la fila de chips hasta dejar visible y centrado el grupo activo.
-  function onChipLayout(name: string, x: number, chipWidth: number) {
-    if (name !== startGroup.current) return;
-    startGroup.current = '';
-    chipsRef.current?.scrollTo({
-      x: Math.max(0, x + chipWidth / 2 - chipsWidth.current / 2),
-      animated: false,
-    });
-  }
-
   const controls = (
     <View style={styles.controls}>
       <View style={styles.searchBox}>
@@ -353,30 +349,7 @@ function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps)
         ) : null}
       </View>
 
-      {searching ? null : (
-        <View accessibilityRole="radiogroup" accessibilityLabel="Grupos de íconos">
-          <ScrollView
-            ref={chipsRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            onLayout={(event) => {
-              chipsWidth.current = event.nativeEvent.layout.width;
-            }}
-            contentContainerStyle={styles.chips}
-          >
-            {groups.map((name) => (
-              <GroupChip
-                key={name}
-                name={name}
-                selected={name === group}
-                onPress={() => chooseGroup(name)}
-                onLayout={(x, w) => onChipLayout(name, x, w)}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      )}
+      {searching ? null : <GroupBar groups={groups} group={group} onChoose={chooseGroup} />}
     </View>
   );
 
@@ -496,6 +469,209 @@ function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps)
         </View>
       </View>
     </Sheet>
+  );
+}
+
+// Fila de grupos: [flecha ‹ 48] [ScrollView de chips] [flecha › 48] (docs/007 §5.15.1, docs/008 §6.17.5).
+// Se monta solo cuando no hay búsqueda: al volver de ella arranca con el grupo vigente y lo recentra.
+function GroupBar({
+  groups,
+  group,
+  onChoose,
+}: {
+  groups: readonly string[];
+  group: string;
+  onChoose: (name: string) => void;
+}) {
+  const ref = useRef<ScrollView>(null);
+  const pos = useRef({ x: 0, viewport: 0, content: 0 });
+  const target = useRef<number | null>(null);
+  const chipBox = useRef(new Map<string, { x: number; w: number }>());
+  // Centrado del grupo activo pendiente: se repite si cambia el ancho (al reservar los huecos) y termina
+  // con la primera acción del usuario.
+  const centering = useRef(true);
+  const [arrows, setArrows] = useState<ChipArrows>(NO_ARROWS);
+  const reserved = useRef(false);
+  const reduceMotion = useRef(false);
+
+  useEffect(() => {
+    let alive = true;
+    try {
+      void AccessibilityInfo.isReduceMotionEnabled?.()?.then((value) => {
+        if (alive) reduceMotion.current = value;
+      });
+    } catch {
+      // Mejor esfuerzo: sin dato se anima.
+    }
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (value) => {
+      reduceMotion.current = value;
+    });
+    return () => {
+      alive = false;
+      sub?.remove?.();
+    };
+  }, []);
+
+  function refresh() {
+    const next = chipArrows({ ...pos.current, reserved: reserved.current });
+    reserved.current = next.reserved;
+    setArrows((prev) =>
+      prev.reserved === next.reserved &&
+      prev.canLeft === next.canLeft &&
+      prev.canRight === next.canRight
+        ? prev
+        : next,
+    );
+  }
+
+  function scrollTo(x: number, animated: boolean) {
+    ref.current?.scrollTo({ x, animated });
+    // El evento de scroll llega después; se anticipa para que las flechas sigan al destino.
+    pos.current.x = x;
+  }
+
+  function center() {
+    const box = chipBox.current.get(group);
+    if (!centering.current || !box || pos.current.viewport <= 0) return;
+    scrollTo(chipCenterTarget(pos.current.viewport, box.x, box.w), false);
+    refresh();
+  }
+
+  function step(direction: 'left' | 'right') {
+    centering.current = false;
+    const { viewport, content } = pos.current;
+    const from = target.current ?? pos.current.x;
+    const next = chipScrollTarget(from, direction, viewport, content);
+    target.current = next;
+    scrollTo(next, !reduceMotion.current);
+    refresh();
+    const max = Math.max(0, content - viewport);
+    if (direction === 'right' && next >= max - 1) {
+      AccessibilityInfo.announceForAccessibility?.('Último grupo');
+    } else if (direction === 'left' && next <= 1) {
+      AccessibilityInfo.announceForAccessibility?.('Primer grupo');
+    }
+  }
+
+  function choose(name: string) {
+    centering.current = false;
+    const box = chipBox.current.get(name);
+    if (box && pos.current.viewport > 0) {
+      const reveal = chipRevealTarget(pos.current.x, pos.current.viewport, box.x, box.w);
+      if (reveal !== null) scrollTo(reveal, !reduceMotion.current);
+    }
+    onChoose(name);
+  }
+
+  return (
+    <View style={styles.barRow}>
+      {arrows.reserved ? (
+        <ArrowButton
+          direction="left"
+          available={arrows.canLeft}
+          label="Ver grupos anteriores"
+          onPress={() => step('left')}
+        />
+      ) : null}
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Grupos de íconos"
+        style={styles.barScroll}
+      >
+        <ScrollView
+          ref={ref}
+          testID="icon-picker-groups"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onLayout={(event) => {
+            pos.current.viewport = event.nativeEvent.layout.width;
+            center();
+            refresh();
+          }}
+          onContentSizeChange={(width) => {
+            pos.current.content = width;
+            refresh();
+          }}
+          onScroll={(event) => {
+            pos.current.x = event.nativeEvent.contentOffset.x;
+            if (target.current !== null && Math.abs(pos.current.x - target.current) <= 1) {
+              target.current = null;
+            }
+            refresh();
+          }}
+          onScrollBeginDrag={() => {
+            centering.current = false;
+            target.current = null;
+          }}
+          contentContainerStyle={styles.chips}
+        >
+          {groups.map((name) => (
+            <GroupChip
+              key={name}
+              name={name}
+              selected={name === group}
+              onPress={() => choose(name)}
+              onLayout={(x, w) => {
+                chipBox.current.set(name, { x, w });
+                if (name === group) center();
+              }}
+            />
+          ))}
+        </ScrollView>
+      </View>
+      {arrows.reserved ? (
+        <ArrowButton
+          direction="right"
+          available={arrows.canRight}
+          label="Ver más grupos"
+          onPress={() => step('right')}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+// Flecha de 48 x 48 dp con círculo de 40 dp y chevron dibujado con View (sin texto «‹» «›»). No disponible:
+// invisible, deshabilitada y fuera de TalkBack, pero conserva su hueco.
+function ArrowButton({
+  direction,
+  available,
+  label,
+  onPress,
+}: {
+  direction: 'left' | 'right';
+  available: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  const { focused, focusProps } = useFocus();
+  return (
+    <Pressable
+      testID={`group-arrow-${direction}`}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={!available}
+      accessibilityState={{ disabled: !available }}
+      {...(available ? {} : { importantForAccessibility: 'no-hide-descendants' as const })}
+      accessibilityElementsHidden={!available}
+      onPress={onPress}
+      {...focusProps}
+      style={({ pressed }) => [
+        styles.arrow,
+        !available && styles.arrowGone,
+        pressed && styles.pressed,
+      ]}
+    >
+      {focused && available ? <FocusRing round /> : null}
+      <View {...hidden} style={styles.arrowCircle}>
+        <View
+          {...hidden}
+          style={direction === 'right' ? styles.chevronRight : styles.chevronLeft}
+        />
+      </View>
+    </Pressable>
   );
 }
 
@@ -637,6 +813,44 @@ const styles = StyleSheet.create({
   },
   controls: { gap: GAP },
   chips: { gap: GAP, paddingRight: 16 },
+  barRow: { flexDirection: 'row', alignItems: 'center' },
+  barScroll: { flex: 1, minWidth: 0 },
+  arrow: {
+    width: ARROW_SLOT_DP,
+    height: sizes.touchMin,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowGone: { opacity: 0 },
+  arrowCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.segBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Chevron de 11 x 11 dp con dos bordes de 3 dp girados 45 grados; el desplazamiento centra la punta.
+  chevronRight: {
+    width: 11,
+    height: 11,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderColor: colors.text,
+    borderRadius: 1,
+    transform: [{ translateX: -3 }, { rotate: '45deg' }],
+  },
+  chevronLeft: {
+    width: 11,
+    height: 11,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderColor: colors.text,
+    borderRadius: 1,
+    transform: [{ translateX: 3 }, { rotate: '45deg' }],
+  },
   chip: {
     minHeight: sizes.touchMin,
     paddingHorizontal: 16,
@@ -695,6 +909,7 @@ const styles = StyleSheet.create({
     borderColor: colors.text,
     borderRadius: radii.md - 6,
   },
+  ringRound: { borderRadius: 22 },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.5 },
 });

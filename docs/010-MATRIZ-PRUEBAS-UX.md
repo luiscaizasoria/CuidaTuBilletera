@@ -1353,6 +1353,22 @@ Creados por `mobile-ux-qa` el 2026-10-17. Nivel: A = automática (mock, Jest), D
 | ICO-14 | Foco visible | Navegar con teclado externo o TalkBack por celdas y chips | Aro de 2 dp `colors.text` interior; no sustituye el borde de 3 dp de la selección | A (estilo) + D | pendiente en dispositivo |
 | ICO-15 | Teclado abierto en pantalla pequeña con fuente grande | 360 × 640, fuente 200 %, teclado abierto, hoja compacta | Cálculo de `qa`: el cuerpo desplazable puede quedar sin altura y el pie recortarse; comprobar que el pie sigue alcanzable | D | pendiente en dispositivo |
 
+#### Casos ICO-16 a ICO-24: flechas de la barra de grupos (docs/007 §5.15.1, docs/008 §6.17.5; paso 366)
+
+Todos pendientes en dispositivo: las pruebas Jest (mock) no miden layout, foco de TalkBack ni parpadeo.
+
+| ID | Caso | Pasos | Resultado esperado | Nivel | Estado |
+| --- | --- | --- | --- | --- | --- |
+| ICO-16 | Ancho visible 360 / 412 / 320 dp | Abrir la hoja a cada ancho con fuente 100 % | Ventana de chips ≈ 216 / 268 / 176 dp; flechas de 48 dp en los extremos; ningún chip bajo una flecha; fuente de chips sin reducir | D | pendiente en dispositivo |
+| ICO-17 | Centrado inicial con grupo activo al final | Editar una cuenta o categoría cuyo ícono esté en el último grupo; abrir la hoja | Grupo activo visible y centrado (o pegado al final); solo «Ver grupos anteriores» visible; sin salto visible tras reservar los huecos | D | pendiente en dispositivo |
+| ICO-18 | Parpadeo de flechas | Abrir la hoja, desplazar con dedo y con flechas hasta ambos extremos, ±1 px del borde | Las flechas no parpadean ni oscilan; los chips no se mueven al aparecer o desaparecer una flecha | D | pendiente en dispositivo |
+| ICO-19 | Paso y gesto | Tocar «Ver más grupos» y «Ver grupos anteriores» varias veces seguidas; arrastrar con el dedo | Cada toque desplaza ≈ 80 % del ancho visible, sin estancarse ni retroceder; el arrastre sigue funcionando y actualiza las flechas | D | pendiente en dispositivo |
+| ICO-20 | TalkBack: orden y foco | Explorar con TalkBack; activar flecha hasta el extremo | Orden: «Ver grupos anteriores» → chips → «Ver más grupos»; etiquetas exactas; la flecha no disponible no se lee; al llegar al extremo se anuncia «Último grupo» / «Primer grupo» y el foco no se pierde (la implementación solo anuncia; no mueve el foco a un chip: comprobar en el teléfono) | D | pendiente en dispositivo |
+| ICO-21 | Rotación y fuente 200 % | Girar la pantalla y subir la fuente al 200 % con la hoja abierta | Grupo activo conservado y visible; flechas recalculadas; zonas ≥ 48 dp; un chip más ancho que la ventana se muestra parcial y se alcanza con la flecha; botones del pie alcanzables | D | pendiente en dispositivo |
+| ICO-22 | Calibración del chevron | Observar ambas flechas a 360 dp | Chevron dibujado centrado ópticamente en el círculo de 40 dp (translateX ∓3 dp, ajuste ±1 dp); trazo de 3 dp legible; círculo `segBg` distinguible de los chips | D | pendiente en dispositivo |
+| ICO-23 | Buscar y borrar | Escribir en el buscador y luego borrar con ✕ o «Borrar búsqueda» | Durante la búsqueda no hay chips ni flechas; al borrar vuelven con el grupo activo visible y las flechas correctas; los 17 grupos se conservan | D | pendiente en dispositivo |
+| ICO-24 | Reducir movimiento y chip cortado | Activar «Quitar animaciones» y usar las flechas; tocar un chip parcialmente cortado | Con el ajuste, salto directo; sin él, animado; el chip tocado queda completo y seleccionado; las flechas no alteran grupo, borrador ni búsqueda | D | pendiente en dispositivo |
+
 ### 21.1 Casos INM-01 a INM-10: modo inmersivo (docs/007 §5.15 B) — propuesta, no aprobada
 
 Estos casos **no están aprobados, no cuentan para ningún cierre** y no deben ejecutarse hasta que el usuario apruebe el modo inmersivo. Todos: «propuesta, no aprobada».
