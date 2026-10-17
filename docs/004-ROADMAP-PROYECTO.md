@@ -350,6 +350,8 @@ Actualización 2026-10-17 (paso 362, local, sin commit): el usuario comunicó la
 
 Paso 363 (2026-10-17): catálogo consolidado en un commit local (sin push) tras revisar palabras clave y agrupación y repetir QA (app: 53 suites y 1778 pruebas; API: 28 archivos y 1287 pruebas; tsc, ESLint y Prettier limpios). La prueba de las 246 claves en PATCH recibió un timeout explícito de 120 s (tardaba ~17 s bajo carga y excedía los 5 s por defecto). La prueba inmersiva (docs/003 D14) queda propuesta para R6, sujeta a aprobación; no está implementada. Las etapas F-A y F-B no cambian.
 
+Despliegue DEV del paso 363 (2026-10-17, autorizado, solo DEV, sin migración, sin producción, sin push): commit local `e9dfcaa`. D1 `controlgastos-db-dev`: sin migraciones pendientes (0004 aplicada). Dry-run correcto con el único binding de datos `DB` → `controlgastos-db-dev` (951,37 KiB, gzip 164,62 KiB). `cwrangler deploy --env dev`: Worker `controlgastos-api-dev`, URL https://controlgastos-api-dev.luis-caiza-soria.workers.dev, versionId `7c540b46-2ef0-491e-9292-4d0640023f69`. Smoke tests de solo lectura: `/health` 200; `/accounts`, `/transactions` y `/me` sin JWT 401 con `Cache-Control: no-store`; `/accounts` con JWT inválido 401 con `no-store`. No se crearon registros en D1. **Pendiente: probar en Android real el nuevo selector (ICO-01 a ICO-15, docs/010 §21) y decidir la barra inferior; R5.1 no está completada.**
+
 [ ] R6 - Ícono, splash y nombre (requiere nueva development build y autorización expresa).
 
 Pendiente transversal: validación en Android real (niveles A y D de docs/010) y decisiones abiertas listadas en docs/003 (Decisión R0, «Pendientes»). No se toca la API, D1, sesiones ni dependencias nativas salvo decisión posterior.
