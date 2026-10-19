@@ -174,7 +174,7 @@ Registro de ejecución (al cerrar cada tarea importante):
 
 ## Fase actual
 
-Rediseño UX/UI de la app móvil (R0 a R6, línea de trabajo transversal): R0 (documentación) completada; R1 es la siguiente. La Fase 6 (conciliación manual con categorías predeterminadas «Conciliación», docs/003 Decisión 6.1) está planificada y no iniciada.
+Rediseño UX/UI de la app móvil (R0 a R6, línea de trabajo transversal): R0 (documentación) completada; R1 es la siguiente. La Fase 6 (conciliación manual con categorías predeterminadas «Conciliación», docs/003 Decisión 6.1) está cerrada funcionalmente en la rama `feat/categoria-conciliacion` (pendiente de PR).
 
 Historial:
 
