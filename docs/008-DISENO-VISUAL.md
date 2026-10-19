@@ -1395,7 +1395,7 @@ Limitaciones honestas:
 5. No se probó en un dispositivo ni en un lanzador Android real.
 
 
-### 13.2 Revisión R6 (paso 373, PROPUESTA pendiente de aprobación; corrige §6.1 y §13)
+### 13.2 Revisión R6 (paso 373 propuesta; implementada en el paso 374, sin validación en dispositivo; corrige §6.1 y §13)
 
 Medidas tomadas sobre los recursos actuales y revisadas por `mobile-visual-designer` y `architect`. Vista previa local: `docs/design/prototipo/r6-vista-previa.html` (máscaras aproximadas, no es una captura de dispositivo).
 
@@ -1407,7 +1407,8 @@ Medidas tomadas sobre los recursos actuales y revisadas por `mobile-visual-desig
 - **Alcancía de Mis cuentas:** `vacio-alcancia.png` (360×360; el arte ocupa 336×304) casi no tiene margen transparente, así que **no se aplica la ampliación ×1.4** de §6.1 ni el token `pigZoom: 1.4`: encabezado: oculta con ancho ≤ 340 dp (incluye 320 dp) o fuente ≥ 175 %; 72 dp con ancho de 341 a 399 dp; 96 dp con ancho ≥ 400 dp; 48 dp con fuente ≥ 130 % (y ancho > 340 dp); vacío («Sin cuentas» y «Solo archivadas») 120 dp con 16 dp hasta el título. Siempre decorativa. Una sola alcancía por pantalla (con cuentas: encabezado; sin cuentas: la del vacío). La del vacío también se oculta con fuente ≥ 175 % (como el `EmptyState` actual) y va sin círculo; esto precisa §9.1 y §9.3 («círculo con emoji hasta R6» deja de aplicar al aprobarse R6).
 - **Nombre visible:** se mantiene «CuidaTuBilletera» (16 caracteres; riesgo de recorte en el lanzador, sin verificar). Alternativa si se trunca en el dispositivo: «Cuida tu Billetera». Decisión del usuario tras ver el ícono en el teléfono.
 - **Pruebas:** el splash y el ícono temático no se reflejan fielmente en una Development Build; se validan con una build `preview` en Android 12+ real y en uno anterior.
-- **Contraste:** blanco sobre `#0F5F5A` = 7,49:1. Verificar el amarillo de marca con `docs/design/contrast.js` antes de citarlo; el arte (moneda, destellos) es gráfico decorativo sin texto.
+- **Contraste:** blanco sobre `#0F5F5A` = 7,49:1; amarillo de marca `#FFC93C` sobre `#0F5F5A` = 4,87:1 (calculado en el paso 374 con la fórmula WCAG). El arte (moneda, destellos) es gráfico decorativo sin texto.
+- **Recursos finales (paso 374):** reconstruidos como vectores (`docs/design/assets/r6/src/*.svg`, `generar.mjs`) y exportados a 1024 px: `icon.png` (RGB sin alfa), `adaptive-icon-foreground.png` (arte 588×530, 0 píxeles fuera del círculo de 628 px), `adaptive-icon-monochrome.png` (blanco sobre transparente; sin recorte de oreja; destellos ~26 px), `splash-icon.png` (0 píxeles fuera del círculo de 640 px). Copiados a `app/assets/`; `adaptive-icon-background.png` y `favicon.png` no se usan. Limitación: más planos que el arte 3D original; un ilustrador podría pulirlos antes de Google Play. Sin validar en lanzador ni splash reales.
 
 
 ## 14. Prototipo y verificación visual

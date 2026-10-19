@@ -138,9 +138,10 @@ Paso 342 (agente `mobile-ux-qa`, política de interfaz móvil y matriz docs/010)
 - Sin validación en dispositivo: INM-01 a INM-24 (docs/010 §21.1), con gestos y tres botones. Los APK anteriores no cargan este código.
 - Las etapas futuras F-A y F-B se conservan sin cambios.
 
-## 13. R6 - Preparación (paso 373, propuesta, sin implementar)
+## 13. R6 - Preparación (paso 373) e implementación (paso 374, sin commit de código ni validación en dispositivo)
 
 - Decisiones y recursos en docs/003 «Decisión R6» y docs/008 §13.2; vista previa en `docs/design/prototipo/r6-vista-previa.html`.
 - Secuencia al aprobarse: `mobile-visual-designer` (regenerar primer plano, monocromático y splash) → `mobile-engineer` (copiar recursos, `app.json`, `expo-splash-screen`, alcancía y pruebas) → `mobile-ux-qa` → `qa-engineer` → `devops-engineer` (Development Build nueva, con autorización expresa) → validación en Android real (build `preview` para splash e ícono temático).
 - Archivos previstos: `app/app.json`, `app/package.json`, `package-lock.json`, `app/assets/*`, `app/src/screens/ui.tsx`, `AccountsScreen.tsx`, `app/src/theme/tokens.ts` (retirar `pigZoom`) y sus pruebas.
 - Las etapas futuras F-A y F-B se conservan sin cambios.
+- Paso 374: R6 implementada (docs/003 «Decisión R6», docs/004 paso 374). Development Build `bcc026f3-b895-4a7a-a036-ec173e01c934` (versionCode 2). Pendiente: validar en Android real y, para splash e ícono temático, en una build `preview`; commit y PR del código (con autorización).
