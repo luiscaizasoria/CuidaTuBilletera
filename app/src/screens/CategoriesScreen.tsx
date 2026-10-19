@@ -1,118 +1,144 @@
-import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { useGuide, useGuides } from '../hooks/use-guides';
 import { useLoader, useMutation } from '../hooks/use-loader';
-import type {
-  Account,
-  Category,
-  CategoryType,
-  ResourcesApi,
-  UpdateCategoryInput,
+import {
+  ApiRequestError,
+  type Account,
+  type Category,
+  type CategoryType,
+  type ResourcesApi,
+  type UpdateCategoryInput,
 } from '../lib/resources-api';
-import { Button, ErrorBox, screenStyles as s } from './ui';
+import { colors, radii, shadows, sizes, typography } from '../theme/tokens';
+import { CategoryFormCard, type Form, type FormValues } from './category-form';
+import { CategoryIcon } from './form-ui';
+import { Sheet } from './sheets';
+import {
+  Button,
+  EmptyState,
+  ErrorBox,
+  LoadingState,
+  GuideCard,
+  ScreenTitle,
+  Segmented,
+  useScreenContainerStyle,
+} from './ui';
 
-// Paleta fija de colores (formato #RRGGBB).
-export const CATEGORY_COLORS = [
-  { name: 'Rojo', value: '#E53935' },
-  { name: 'Naranja', value: '#FB8C00' },
-  { name: 'Amarillo', value: '#FDD835' },
-  { name: 'Verde', value: '#43A047' },
-  { name: 'Azul', value: '#1E88E5' },
-  { name: 'Morado', value: '#8E24AA' },
-  { name: 'Gris', value: '#757575' },
-] as const;
+// La paleta vive en el formulario compartido; se reexporta para quien ya la importaba desde aquí.
+export { CATEGORY_COLORS } from './category-form';
 
-type Form = { kind: 'create' } | { kind: 'edit'; category: Category } | null;
+export const IN_USE_NOTICE =
+  'Esta categoría tiene movimientos, por eso no se puede eliminar. Puedes archivarla: no aparecerá al anotar movimientos nuevos, pero tu historial se conserva.';
+
+const isAccountArchived = (error: unknown) =>
+  error instanceof ApiRequestError && error.status === 409 && error.code === 'ACCOUNT_ARCHIVED';
+const isInUse = (error: unknown) =>
+  error instanceof ApiRequestError && error.status === 409 && error.code === 'CATEGORY_IN_USE';
 
 export default function CategoriesScreen({
   account,
   api,
+  onAccountArchived,
 }: {
   account: Account;
   api: ResourcesApi;
+  // 409 ACCOUNT_ARCHIVED al crear o desarchivar: el servidor confirma que la cuenta está archivada.
+  onAccountArchived?: (accountId: string) => void;
 }) {
   const { authorizedCall } = useAuth();
+  const containerStyle = useScreenContainerStyle();
+  const [segment, setSegment] = useState<CategoryType>('egreso');
   const [showArchived, setShowArchived] = useState(false);
-  const [form, setForm] = useState<Form>(null);
-  const [nombre, setNombre] = useState('');
-  const [descripcion, setDescripcion] = useState('');
-  const [tipo, setTipo] = useState<CategoryType>('egreso');
-  const [color, setColor] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [form, setForm] = useState<Form | null>(null);
+  const [menuFor, setMenuFor] = useState<Category | null>(null);
+  const [inUse, setInUse] = useState<Category | null>(null);
   const mutation = useMutation();
+  const { dismiss } = useGuides();
+  const accountArchived = useRef(false);
+
+  // Ejecuta la mutación marcando un 409 ACCOUNT_ARCHIVED para avisar al contenedor.
+  async function runWatchingArchived(action: () => Promise<unknown>) {
+    accountArchived.current = false;
+    const ok = await mutation.run(async () => {
+      try {
+        await action();
+      } catch (error) {
+        if (isAccountArchived(error)) accountArchived.current = true;
+        throw error;
+      }
+    });
+    if (!ok && accountArchived.current) onAccountArchived?.(account.id);
+    return ok;
+  }
 
   const { state, reload, refresh } = useLoader(
     () =>
-      authorizedCall((token) =>
-        api.listCategories(token, account.id, { pageSize: 100, incluirArchivadas: showArchived }),
-      ),
+      authorizedCall(async (token) => ({
+        accountId: account.id,
+        ...(await api.listCategories(token, account.id, {
+          pageSize: 100,
+          incluirArchivadas: showArchived,
+        })),
+      })),
     `${account.id}:${showArchived}`,
   );
 
-  function openForm(next: Form) {
+  function openForm(next: Form | null) {
     setForm(next);
-    setNombre(next?.kind === 'edit' ? next.category.nombre : '');
-    setDescripcion(next?.kind === 'edit' ? (next.category.descripcion ?? '') : '');
-    setTipo(next?.kind === 'edit' ? next.category.tipo : 'egreso');
-    setColor(next?.kind === 'edit' ? next.category.color : null);
-    setFormError(null);
+    setInUse(null);
     mutation.clearError();
   }
 
-  async function submit() {
-    if (!form) return;
-    const name = nombre.trim();
-    if (name === '') {
-      setFormError('Escribe un nombre.');
-      return;
-    }
-    setFormError(null);
-    const desc = descripcion.trim();
-    const ok = await mutation.run(() =>
+  async function submit(current: Form, values: FormValues) {
+    const name = values.nombre.trim();
+    const desc = values.descripcion.trim();
+    const ok = await runWatchingArchived(() =>
       authorizedCall((token) => {
-        if (form.kind === 'create') {
+        if (current.kind === 'create') {
           return api.createCategory(token, account.id, {
             nombre: name,
-            tipo,
+            tipo: values.tipo,
             ...(desc !== '' ? { descripcion: desc } : {}),
-            ...(color !== null ? { color } : {}),
+            ...(values.color !== null ? { color: values.color } : {}),
+            ...(values.icono !== null ? { icono: values.icono } : {}),
           });
         }
-        const current = form.category;
+        const existing = current.category;
         const changes: UpdateCategoryInput = {};
-        if (name !== current.nombre) changes.nombre = name;
-        if (desc !== (current.descripcion ?? '')) changes.descripcion = desc === '' ? null : desc;
-        if (color !== null && color !== current.color) changes.color = color;
-        return api.updateCategory(token, current.id, changes);
+        if (name !== existing.nombre) changes.nombre = name;
+        if (desc !== (existing.descripcion ?? '')) changes.descripcion = desc === '' ? null : desc;
+        if (values.color !== null && values.color !== existing.color) changes.color = values.color;
+        if (values.icono !== null && values.icono !== existing.icono) changes.icono = values.icono;
+        return api.updateCategory(token, existing.id, changes);
       }),
     );
     if (ok) {
+      dismiss('categorias');
       setForm(null);
       refresh();
     }
   }
 
   async function setArchived(category: Category, archivada: boolean) {
-    const ok = await mutation.run(() =>
+    setInUse(null);
+    const ok = await runWatchingArchived(() =>
       authorizedCall((token) => api.updateCategory(token, category.id, { archivada })),
     );
     if (ok) refresh();
   }
 
   async function remove(category: Category) {
-    const ok = await mutation.run(() =>
-      authorizedCall((token) => api.deleteCategory(token, category.id)),
-    );
+    setInUse(null);
+    const ok = await mutation.run(async () => {
+      try {
+        await authorizedCall((token) => api.deleteCategory(token, category.id));
+      } catch (error) {
+        if (isInUse(error)) setInUse(category);
+        throw error;
+      }
+    });
     if (ok) refresh();
   }
 
@@ -128,203 +154,273 @@ export default function CategoriesScreen({
   }
 
   const busy = mutation.pending;
-
-  function renderSection(title: string, items: Category[]) {
-    return (
-      <View key={title}>
-        <Text accessibilityRole="header" style={s.section}>
-          {title}
-        </Text>
-        {items.length === 0 ? <Text style={s.muted}>Sin categorías</Text> : null}
-        {items.map((category) => (
-          <View key={category.id} style={s.row}>
-            <View style={styles.titleLine}>
-              <View style={[styles.swatch, { backgroundColor: category.color }]} />
-              <Text style={s.rowTitle}>{category.nombre}</Text>
-            </View>
-            {category.descripcion ? (
-              <Text style={s.rowSubtitle}>{category.descripcion}</Text>
-            ) : null}
-            {category.archivada ? <Text style={s.badge}>Archivada</Text> : null}
-            <View style={s.actions}>
-              <Button
-                label="Editar"
-                accessibilityLabel={`Editar ${category.nombre}`}
-                disabled={busy}
-                onPress={() => openForm({ kind: 'edit', category })}
-              />
-              <Button
-                label={category.archivada ? 'Desarchivar' : 'Archivar'}
-                accessibilityLabel={`${category.archivada ? 'Desarchivar' : 'Archivar'} ${category.nombre}`}
-                disabled={busy}
-                onPress={() => void setArchived(category, !category.archivada)}
-              />
-              <Button
-                label="Eliminar"
-                variant="danger"
-                accessibilityLabel={`Eliminar ${category.nombre}`}
-                disabled={busy}
-                onPress={() => confirmDelete(category)}
-              />
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  }
+  const loaded = state.status === 'ready' && state.data.accountId === account.id;
+  const items = loaded ? state.data.items.filter((c) => c.tipo === segment) : [];
+  // Guía solo con la lista cargada y la cuenta activa (docs/007 §5.12.C).
+  const { guide, dismissGuide } = useGuide(['categorias'], loaded && !account.archivada);
+  const typeWord = segment === 'egreso' ? 'gasto' : 'ingreso';
 
   return (
-    <ScrollView style={s.container} keyboardShouldPersistTaps="handled">
-      <Text accessibilityRole="header" style={s.title}>
-        Categorías de {account.nombre}
-      </Text>
+    <ScrollView style={containerStyle} keyboardShouldPersistTaps="handled">
+      <ScreenTitle title="Categorías" module="mas" />
+      {guide ? <GuideCard guide={guide} onDismiss={dismissGuide} /> : null}
 
-      <View style={s.switchRow}>
-        <Text>Mostrar archivadas</Text>
+      <Segmented
+        accessibilityLabel="Tipo de categoría"
+        value={segment}
+        onChange={(value) => {
+          setSegment(value);
+          setInUse(null);
+        }}
+        options={[
+          { value: 'egreso', label: 'Gastos' },
+          { value: 'ingreso', label: 'Ingresos' },
+        ]}
+      />
+
+      {account.archivada ? (
+        <Text style={styles.archivedNotice}>
+          Cuenta archivada: no se pueden crear ni desarchivar categorías.
+        </Text>
+      ) : null}
+
+      {form ? (
+        <CategoryFormCard
+          key={form.kind === 'edit' ? form.category.id : 'create'}
+          form={form}
+          segment={segment}
+          busy={busy}
+          error={mutation.error}
+          onSubmit={(values) => void submit(form, values)}
+          onClose={() => openForm(null)}
+        />
+      ) : (
+        <>
+          {!account.archivada ? (
+            <View style={styles.newButton}>
+              <Button
+                label="+ Nueva categoría"
+                accessibilityLabel="Nueva categoría"
+                variant="primary"
+                tall
+                disabled={busy}
+                onPress={() => openForm({ kind: 'create' })}
+              />
+            </View>
+          ) : null}
+          {mutation.error && !inUse ? (
+            <Text accessibilityRole="alert" style={[styles.error, styles.errorGap]}>
+              {mutation.error}
+            </Text>
+          ) : null}
+          {inUse ? (
+            <View style={styles.inUseBox}>
+              <Text accessibilityRole="alert" style={styles.inUseText}>
+                {IN_USE_NOTICE}
+              </Text>
+              <Button
+                label={`Archivar «${inUse.nombre}»`}
+                disabled={busy}
+                onPress={() => void setArchived(inUse, true)}
+              />
+            </View>
+          ) : null}
+        </>
+      )}
+
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel}>Mostrar archivadas</Text>
         <Switch
           accessibilityLabel="Mostrar archivadas"
           value={showArchived}
           onValueChange={setShowArchived}
           disabled={busy}
+          trackColor={{ false: colors.borderStrong, true: colors.brand700 }}
+          thumbColor={colors.white}
         />
       </View>
 
-      {account.archivada ? (
-        <Text style={s.badge}>Cuenta archivada: no se pueden crear ni desarchivar categorías.</Text>
-      ) : null}
-
-      {form ? (
-        <View style={s.form}>
-          <Text style={s.rowTitle}>
-            {form.kind === 'create' ? 'Nueva categoría' : 'Editar categoría'}
-          </Text>
-          <TextInput
-            accessibilityLabel="Nombre de la categoría"
-            placeholder="Nombre"
-            value={nombre}
-            onChangeText={setNombre}
-            style={s.input}
-          />
-          <TextInput
-            accessibilityLabel="Descripción"
-            placeholder="Descripción (opcional)"
-            value={descripcion}
-            onChangeText={setDescripcion}
-            style={s.input}
-          />
-          {form.kind === 'create' ? (
-            <View style={s.actions}>
-              {(['ingreso', 'egreso'] as const).map((value) => (
-                <Pressable
-                  key={value}
-                  accessibilityRole="radio"
-                  accessibilityLabel={`Tipo ${value}`}
-                  accessibilityState={{ selected: tipo === value }}
-                  onPress={() => setTipo(value)}
-                  style={[styles.chip, tipo === value && styles.chipSelected]}
-                >
-                  <Text>{value === 'ingreso' ? 'Ingreso' : 'Egreso'}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-          <Text style={{ marginTop: 8 }}>Color (opcional)</Text>
-          <View style={s.actions}>
-            {CATEGORY_COLORS.map((option) => (
-              <Pressable
-                key={option.value}
-                accessibilityRole="radio"
-                accessibilityLabel={`Color ${option.name}`}
-                accessibilityState={{ selected: color === option.value }}
-                onPress={() => setColor(option.value)}
-                style={[
-                  styles.colorOption,
-                  { backgroundColor: option.value },
-                  color === option.value && styles.colorSelected,
-                ]}
-              />
-            ))}
-          </View>
-          {formError ? (
-            <Text accessibilityRole="alert" style={styles.error}>
-              {formError}
-            </Text>
-          ) : null}
-          {mutation.error ? (
-            <Text accessibilityRole="alert" style={styles.error}>
-              {mutation.error}
-            </Text>
-          ) : null}
-          <View style={s.actions}>
-            <Button
-              label="Guardar"
-              variant="primary"
-              disabled={busy}
-              onPress={() => void submit()}
-            />
-            <Button label="Cancelar" disabled={busy} onPress={() => openForm(null)} />
-          </View>
-        </View>
-      ) : (
-        <>
-          {!account.archivada ? (
-            <Button
-              label="Nueva categoría"
-              variant="primary"
-              disabled={busy}
-              onPress={() => openForm({ kind: 'create' })}
-            />
-          ) : null}
-          {mutation.error ? (
-            <Text accessibilityRole="alert" style={[styles.error, { marginTop: 8 }]}>
-              {mutation.error}
-            </Text>
-          ) : null}
-        </>
-      )}
-
-      {state.status === 'loading' ? (
-        <ActivityIndicator size="large" testID="categories-loading" style={{ marginTop: 16 }} />
+      {!loaded && state.status !== 'error' ? (
+        <LoadingState text="Cargando categorías…" testID="categories-loading" />
       ) : state.status === 'error' ? (
         <ErrorBox message={state.message} onRetry={reload} />
-      ) : state.data.items.length === 0 ? (
-        <Text style={s.muted}>Esta cuenta no tiene categorías</Text>
+      ) : items.length === 0 ? (
+        <EmptyState
+          module="mas"
+          glyph="🏷️"
+          message={
+            account.archivada
+              ? `Aún no tienes categorías de ${typeWord}.`
+              : `Aún no tienes categorías de ${typeWord}. Crea la primera.`
+          }
+        />
       ) : (
-        <>
-          {renderSection(
-            'Ingresos',
-            state.data.items.filter((c) => c.tipo === 'ingreso'),
-          )}
-          {renderSection(
-            'Egresos',
-            state.data.items.filter((c) => c.tipo === 'egreso'),
-          )}
-        </>
+        items.map((category) => (
+          <CategoryRow
+            key={category.id}
+            category={category}
+            busy={busy}
+            onOpenMenu={() => setMenuFor(category)}
+          />
+        ))
       )}
+
+      <Sheet
+        visible={menuFor !== null}
+        onClose={() => setMenuFor(null)}
+        accessibilityLabel={menuFor ? `Acciones de ${menuFor.nombre}` : 'Acciones'}
+        testID="category-menu"
+      >
+        {menuFor ? (
+          <View style={styles.menu}>
+            <Text accessibilityRole="header" style={styles.menuTitle}>
+              {menuFor.nombre}
+            </Text>
+            <Button
+              label="Editar"
+              accessibilityLabel={`Editar ${menuFor.nombre}`}
+              disabled={busy}
+              onPress={() => {
+                const category = menuFor;
+                setMenuFor(null);
+                openForm({ kind: 'edit', category });
+              }}
+            />
+            <Button
+              label={menuFor.archivada ? 'Desarchivar' : 'Archivar'}
+              accessibilityLabel={`${menuFor.archivada ? 'Desarchivar' : 'Archivar'} ${menuFor.nombre}`}
+              disabled={busy}
+              onPress={() => {
+                const category = menuFor;
+                setMenuFor(null);
+                void setArchived(category, !category.archivada);
+              }}
+            />
+            <View style={styles.menuDanger}>
+              <Button
+                label="Eliminar"
+                variant="danger"
+                accessibilityLabel={`Eliminar ${menuFor.nombre}`}
+                disabled={busy}
+                onPress={() => {
+                  const category = menuFor;
+                  setMenuFor(null);
+                  confirmDelete(category);
+                }}
+              />
+            </View>
+            <Button label="Cerrar" variant="ghost" onPress={() => setMenuFor(null)} />
+          </View>
+        ) : null}
+      </Sheet>
     </ScrollView>
   );
 }
 
+function CategoryRow({
+  category,
+  busy,
+  onOpenMenu,
+}: {
+  category: Category;
+  busy: boolean;
+  onOpenMenu: () => void;
+}) {
+  const archived = category.archivada;
+  return (
+    <View
+      testID={`category-row-${category.id}`}
+      style={[styles.row, archived ? styles.rowArchived : shadows.card]}
+    >
+      <CategoryIcon icono={category.icono} color={category.color} size={40} dimmed={archived} />
+      <View style={styles.rowBody}>
+        <Text style={styles.rowName}>{category.nombre}</Text>
+        {category.descripcion ? <Text style={styles.rowDesc}>{category.descripcion}</Text> : null}
+        {archived ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>Archivada</Text>
+          </View>
+        ) : null}
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Acciones de ${category.nombre}`}
+        accessibilityState={{ disabled: busy }}
+        disabled={busy}
+        onPress={onOpenMenu}
+        style={[styles.more, busy && styles.moreDisabled]}
+      >
+        <Text importantForAccessibility="no" accessibilityElementsHidden style={styles.moreGlyph}>
+          ⋮
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  swatch: { width: 16, height: 16, borderRadius: 8 },
-  chip: {
-    minHeight: 44,
-    paddingHorizontal: 16,
+  archivedNotice: {
+    ...typography.small,
+    color: colors.yellowText,
+    backgroundColor: colors.yellowSoft,
+    borderRadius: radii.md,
+    padding: 12,
+    marginTop: 12,
+  },
+  newButton: { marginTop: 12 },
+  error: { ...typography.small, fontWeight: '700', color: colors.expenseText },
+  errorGap: { marginTop: 8 },
+  inUseBox: {
+    marginTop: 12,
+    padding: 12,
+    gap: 12,
+    borderRadius: radii.md,
+    backgroundColor: colors.yellowSoft,
+  },
+  inUseText: { ...typography.small, color: colors.yellowText },
+  switchRow: {
+    minHeight: sizes.touchMin,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  switchLabel: { ...typography.body, color: colors.text, flexShrink: 1 },
+  row: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+  },
+  rowArchived: { backgroundColor: colors.archivedRow },
+  rowBody: { flex: 1, minWidth: 0 },
+  rowName: { fontSize: 16, lineHeight: 22, fontWeight: '700', color: colors.text },
+  rowDesc: { ...typography.small, color: colors.text2 },
+  badge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.yellowBorder,
+    backgroundColor: colors.yellowSoft,
+  },
+  badgeText: { fontSize: 12, lineHeight: 16, fontWeight: '800', color: colors.yellowText },
+  more: {
+    width: sizes.touchMin,
+    height: sizes.touchMin,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#bbbbbb',
   },
-  chipSelected: { borderColor: '#1a73e8', backgroundColor: '#e8f0fe' },
-  colorOption: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  colorSelected: { borderColor: '#000000' },
-  error: { color: '#b3261e' },
+  moreDisabled: { opacity: 0.5 },
+  moreGlyph: { fontSize: 22, lineHeight: 26, fontWeight: '800', color: colors.text },
+  menu: { gap: 8 },
+  menuTitle: { ...typography.h2, color: colors.text },
+  menuDanger: { marginTop: 8 },
 });

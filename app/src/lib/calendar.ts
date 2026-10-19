@@ -1,5 +1,6 @@
 // Aritmética de calendario pura (docs/003, Decisión 4.1 D3): calendario gregoriano, sin objetos de
 // fecha del sistema, sin conversión a UTC y sin Intl. Así el resultado no depende de la zona horaria.
+import { screenMargin } from '../theme/tokens';
 import { MAX_YEAR, MIN_YEAR } from './dates';
 
 // Primer día de la semana: 0 = domingo, 1 = lunes. Es una constante para poder revertirla.
@@ -165,4 +166,62 @@ export function monthTotals(days: readonly { ingresos: number; gastos: number }[
   const gastos = safeSumCents(days.map((d) => d.gastos));
   const neto = ingresos === null || gastos === null ? null : safeSumCents([ingresos, -gastos]);
   return { ingresos, gastos, neto };
+}
+
+// Suma `delta` días (positivo o negativo) a una fecha AAAA-MM-DD sin objetos de fecha del sistema.
+// null si la fecha no es válida o el resultado sale del rango 2000-2100.
+export function addDays(key: string, delta: number): string | null {
+  const parsed = parseDateKey(key);
+  if (!parsed || !Number.isInteger(delta)) return null;
+  let { year, month, day } = parsed;
+  day += delta;
+  while (day < 1) {
+    const prev = shiftMonth(year, month, -1);
+    if (!prev) return null;
+    ({ year, month } = prev);
+    day += daysInMonth(year, month);
+  }
+  while (day > daysInMonth(year, month)) {
+    day -= daysInMonth(year, month);
+    const next = shiftMonth(year, month, 1);
+    if (!next) return null;
+    ({ year, month } = next);
+  }
+  return dateKey(year, month, day);
+}
+
+// Semana (WEEK_START = lunes, hasta el domingo) que contiene la fecha indicada. null si la fecha no
+// es válida o la semana sale del rango 2000-2100.
+export function weekRange(todayKey: string): { desde: string; hasta: string } | null {
+  const parsed = parseDateKey(todayKey);
+  if (!parsed) return null;
+  const offset = (dayOfWeek(parsed.year, parsed.month, parsed.day) - WEEK_START + 7) % 7;
+  const desde = addDays(todayKey, -offset);
+  const hasta = addDays(todayKey, 6 - offset);
+  return desde && hasta ? { desde, hasta } : null;
+}
+
+// Celdas del calendario (docs/007 §5.11 D.2, P-3): siete columnas con 3 dp de separación y el margen
+// lateral responsive (16 dp, 20 dp desde 400 dp). 44,3 dp a 360 dp de ventana; 48 dp o más desde ≈ 386 dp. Solo presentación.
+export const CALENDAR_CELL_GAP = 3;
+
+export function calendarCellWidth(windowWidth: number): number {
+  const raw = (windowWidth - 2 * screenMargin(windowWidth) - 6 * CALENDAR_CELL_GAP) / 7;
+  // Se trunca a centésimas para que las siete celdas nunca excedan el ancho disponible.
+  return Math.max(0, Math.floor(raw * 100) / 100);
+}
+
+const WEEKDAY_TITLE = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+// Encabezado de grupo del Historial (docs/007 §5.11 C.4): «Hoy», «Ayer» o «Miércoles 14 de octubre»
+// (más « de 2025» si el año no es el de hoy). Una fecha no válida se devuelve tal cual.
+export function dayGroupTitle(fecha: string, todayKey: string): string {
+  const parsed = parseDateKey(fecha);
+  if (!parsed) return fecha;
+  if (fecha === todayKey) return 'Hoy';
+  if (addDays(todayKey, -1) === fecha) return 'Ayer';
+  const weekday = WEEKDAY_TITLE[dayOfWeek(parsed.year, parsed.month, parsed.day)]!;
+  const base = `${weekday} ${parsed.day} de ${MONTH_NAMES[parsed.month - 1]!.toLowerCase()}`;
+  const todayYear = Number(todayKey.slice(0, 4));
+  return parsed.year === todayYear ? base : `${base} de ${parsed.year}`;
 }

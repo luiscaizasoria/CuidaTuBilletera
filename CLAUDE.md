@@ -61,6 +61,13 @@ Estado y plan de las fases:
 
 - docs/004-ROADMAP-PROYECTO.md
 
+Diseño del rediseño UX/UI y su validación:
+
+- docs/007-DISENO-UX.md
+- docs/008-DISENO-VISUAL.md
+- docs/009-PLAN-IMPLEMENTACION-REDISENO.md
+- docs/010-MATRIZ-PRUEBAS-UX.md
+
 Los documentos anteriores son fuentes de verdad del proyecto según su responsabilidad.
 
 ---
@@ -129,8 +136,19 @@ Política de delegación:
 - `architect`: diseño y revisión estructural. Se consulta antes de implementar cambios estructurales. Es de solo lectura: propone el texto de las decisiones y quien coordina las documenta tras la aprobación del usuario (primero en docs/001 si cambia una norma; el motivo se registra en docs/003).
 - `backend-engineer`: implementación API/D1 (Hono, Zod, servicios y acceso a datos) con sus pruebas. No toma decisiones arquitectónicas.
 - `mobile-engineer`: implementación y revisión de la app móvil (React Native, Expo, TypeScript y Android) con sus pruebas. Se usa de forma proactiva en las tareas de /app. No toma decisiones arquitectónicas: el diseño arquitectónico móvil se coordina con `architect` y las pruebas móviles con `qa-engineer`.
+- `mobile-ux-designer`: experiencia de uso móvil (navegación, flujos, formularios, ayudas, accesibilidad, safe areas, usabilidad). Se consulta ANTES de implementar cambios significativos de navegación o experiencia. Produce especificaciones y prototipos aislados en docs/; no implementa pantallas.
+- `mobile-visual-designer`: apariencia móvil (identidad, íconos, colores, tipografía, tarjetas, ilustraciones, consistencia visual). Se consulta en cambios significativos de presentación. Produce tokens, recursos y especificaciones en docs/; no implementa pantallas ni reemplaza assets activos.
+- `mobile-ux-qa`: validación UX/UI independiente de la app móvil (fidelidad al diseño aprobado, navegación y Atrás, cuenta activa, formularios, textos, contraste, áreas táctiles, safe areas, teclado y estados) con la matriz de docs/010-MATRIZ-PRUEBAS-UX.md. No modifica pantallas: registra defectos con evidencia y los devuelve al implementador.
 - `qa-engineer`: pruebas, regresiones y calidad. Ejecuta pruebas, typecheck y lint y aporta la evidencia con la que se cierra una tarea.
 - `devops-engineer`: Wrangler, CI/CD, entornos y despliegues.
+
+Política de cambios de interfaz móvil (permanente, aplica a todas las fases). Los agentes se ejecutan de forma secuencial, nunca en paralelo, para proteger la memoria del Dev Container:
+
+1. Cambio significativo de interfaz (navegación, flujos, pantallas nuevas o rediseño): `architect` cuando haya restricciones estructurales → `mobile-ux-designer` define o revisa el flujo → `mobile-visual-designer` define o revisa la presentación → `mobile-engineer` implementa solo el diseño aprobado por el usuario → `mobile-ux-qa` valida UX/UI de forma independiente → `qa-engineer` valida regresiones técnicas.
+2. Cambio mínimo de texto o presentación: proceso proporcional al riesgo (sin diseñadores si no cambia el diseño), pero toda modificación de la interfaz visible exige al menos la revisión de `mobile-ux-qa`.
+3. Un defecto alto o crítico de `mobile-ux-qa` detiene el cierre y la publicación (PR, build o entrega) hasta su corrección y nueva validación.
+
+Los diseñadores no modifican reglas financieras, endpoints, D1, sesiones, dependencias nativas, infraestructura ni pantallas funcionales.
 
 Ningún agente hace commit, push, PR, migración remota ni despliegue sin autorización expresa del usuario.
 
@@ -156,11 +174,13 @@ Registro de ejecución (al cerrar cada tarea importante):
 
 ## Fase actual
 
-Fase 2A - D1, usuarios y sesiones (en curso).
+Rediseño UX/UI de la app móvil (R0 a R6, línea de trabajo transversal): R0 (documentación) completada; R1 es la siguiente. La Fase 6 (conciliación) no está iniciada.
 
 Historial:
 
 - Fase 0 - Preparación del proyecto: completada.
 - Fase 1 - Autenticación con Google: completada funcionalmente. Es una implementación transitoria sin D1, con pendientes de seguimiento en docs/003 y docs/004.
+- Fase 2A - D1, usuarios y sesiones: implementada; conserva pendientes de validación registrados en docs/004.
+- Fases 3 (movimientos), 4 (calendario) y 5 (reportes y exportación): integradas en main (PR #13, #14 y #15, base 0e0b5f8).
 
 El detalle y la evidencia están en docs/004-ROADMAP-PROYECTO.md.

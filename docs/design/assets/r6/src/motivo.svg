@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="cuerpo" cx="0.38" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#FFC4AC"/><stop offset="0.55" stop-color="#FFA98F"/><stop offset="1" stop-color="#F98A68"/>
+    </radialGradient>
+    <radialGradient id="brillo" cx="0.33" cy="0.3" r="0.45"><stop offset="0" stop-color="#FFE0D0" stop-opacity=".55"/><stop offset="1" stop-color="#FFE0D0" stop-opacity="0"/></radialGradient>
+    <linearGradient id="pata" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFA586"/><stop offset="1" stop-color="#F58B6C"/></linearGradient>
+    <linearGradient id="hocico" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFB5A0"/><stop offset="1" stop-color="#FA9C80"/></linearGradient>
+    <linearGradient id="moneda" x1="0.2" y1="0" x2="0.8" y2="1"><stop offset="0" stop-color="#FFD54A"/><stop offset="1" stop-color="#FBB624"/></linearGradient>
+    <linearGradient id="hojaA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7BC74D"/><stop offset="1" stop-color="#2F9A43"/></linearGradient>
+    <linearGradient id="hojaB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8ED65A"/><stop offset="1" stop-color="#3FA83C"/></linearGradient>
+    <linearGradient id="hojaD" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#3BAE60"/><stop offset="1" stop-color="#86DE86"/></linearGradient>
+  </defs>
+  <!-- hojas izquierda -->
+  <path d="M255 800C125 705 120 560 180 513C245 540 275 655 255 800Z" fill="url(#hojaA)"/>
+  <path d="M185 530C215 600 245 690 255 790" fill="none" stroke="#9BDC72" stroke-width="5" stroke-linecap="round" opacity=".55"/>
+  <path d="M270 815C150 850 78 765 86 700C150 655 255 700 290 805Z" fill="url(#hojaB)"/>
+  <path d="M96 705C170 720 235 760 275 805" fill="none" stroke="#B4E88C" stroke-width="5" stroke-linecap="round" opacity=".55"/>
+  <!-- hoja derecha -->
+  <path d="M735 886C738 750 800 630 940 568C955 650 905 795 735 886Z" fill="url(#hojaD)"/>
+  <path d="M760 840C800 735 880 712 936 722C942 795 870 832 760 840Z" fill="#4DBA6C"/>
+  <path d="M760 850C800 740 860 640 930 580" fill="none" stroke="#B5F0B8" stroke-width="5" stroke-linecap="round" opacity=".6"/>
+  <!-- patas -->
+  <path d="M296 780H388V862Q388 884 366 884H330Q296 884 296 850Z" fill="#E4755A"/>
+  <path d="M410 800H530V868Q530 898 500 898H440Q410 898 410 868Z" fill="url(#pata)"/>
+  <path d="M578 810H672V868Q672 894 650 894H606Q578 894 578 868Z" fill="#EE8A6C"/>
+  <!-- cuerpo -->
+  <ellipse cx="505" cy="640" rx="266" ry="222" fill="url(#cuerpo)"/>
+  <ellipse cx="500" cy="640" rx="266" ry="222" fill="url(#brillo)"/>
+  <!-- hoja pequeña delante -->
+  <path d="M200 850C195 818 300 800 358 884C300 898 215 892 200 850Z" fill="#6BC24B"/>
+  <path d="M215 850C260 835 315 845 350 878" fill="none" stroke="#A8E486" stroke-width="5" stroke-linecap="round" opacity=".6"/>
+  <!-- orejas -->
+  <path d="M312 440Q315 418 345 405L440 395Q462 395 450 415L345 530Q322 540 314 510Z" fill="#FFA98F"/>
+  <path d="M347 450L428 420Q438 420 432 432L368 500Q352 506 347 488Z" fill="#F76654"/>
+  <path d="M668 442Q695 432 742 440Q776 448 776 468L745 545Q735 552 722 540L665 470Q655 448 668 442Z" fill="#FFA98F"/>
+  <path d="M705 468L748 478Q752 484 748 492L735 520L704 488Z" fill="#F76654"/>
+  <!-- ranura -->
+  <path d="M455 422Q520 408 584 422Q584 430 572 430H468Q455 430 455 422Z" fill="#C9461F"/>
+  <!-- ojos -->
+  <ellipse cx="512" cy="551" rx="19" ry="22" fill="#221F21"/>
+  <ellipse cx="711" cy="562" rx="14" ry="20" fill="#221F21"/>
+  <!-- hocico -->
+  <ellipse cx="638" cy="650" rx="86" ry="72" fill="url(#hocico)"/>
+  <ellipse cx="638" cy="650" rx="86" ry="72" fill="none" stroke="#F48666" stroke-width="5" opacity=".7"/>
+  <ellipse cx="621" cy="650" rx="10" ry="25" fill="#8A3B30"/>
+  <ellipse cx="681" cy="650" rx="10" ry="25" fill="#8A3B30"/>
+  <!-- moneda -->
+  <ellipse cx="516" cy="252" rx="96" ry="127" fill="#EE9A12"/>
+  <ellipse cx="498" cy="252" rx="98" ry="127" fill="url(#moneda)"/>
+  <ellipse cx="498" cy="252" rx="80" ry="108" fill="none" stroke="#F2A51C" stroke-width="9"/>
+  <g transform="translate(494 252)" fill="none" stroke="#F0A11A" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M30 -34C28 -66 -34 -66 -34 -32C-34 0 34 -4 34 36C34 68 -30 68 -32 34" stroke-width="17"/>
+    <path d="M0 -80V-56M0 56V80" stroke-width="13"/>
+  </g>
+  <!-- destellos -->
+  <g stroke="#FFC93C" stroke-linecap="round" fill="none">
+    <path d="M233 331L266 362" stroke-width="26"/>
+    <path d="M758 255L720 320" stroke-width="21"/>
+    <path d="M830 338L775 368" stroke-width="21"/>
+  </g>
+</svg>

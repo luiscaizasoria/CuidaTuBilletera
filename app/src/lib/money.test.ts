@@ -1,4 +1,11 @@
-import { formatCents, formatCompactCents, parseCentsFromInput } from './money';
+import {
+  validateAmountText,
+  AMOUNT_REJECTION_MESSAGES,
+  trimTrailingSeparator,
+  formatCents,
+  formatCompactCents,
+  parseCentsFromInput,
+} from './money';
 
 describe('parseCentsFromInput', () => {
   it.each([
@@ -117,5 +124,81 @@ describe('formatCompactCents', () => {
     expect(formatCompactCents(1.5)).toBe('—');
     expect(formatCompactCents(Number.NaN)).toBe('—');
     expect(formatCompactCents(Number.MAX_SAFE_INTEGER + 1)).toBe('—');
+  });
+});
+
+describe('validateAmountText (docs/003 R3 D8)', () => {
+  it.each([
+    ['1000', 100000],
+    ['1234', 123400],
+    ['12.50', 1250],
+    ['12,50', 1250],
+    ['.5', 50],
+    [',5', 50],
+    ['5.', 500],
+    ['0.07', 7],
+    ['0.1', 10],
+    ['0', 0],
+    ['007', 700],
+    [' 12.5 ', 1250],
+    ['999999999.99', 99_999_999_999],
+    ['90071992547409.91', 9_007_199_254_740_991],
+  ])('válido %j -> %i centavos', (input, cents) => {
+    expect(validateAmountText(input)).toEqual({ ok: true, cents });
+  });
+
+  it.each([
+    ['', 'empty'],
+    ['   ', 'empty'],
+    ['.', 'empty'],
+    [',', 'empty'],
+    ['1.000', 'thousands'],
+    ['1,234', 'thousands'],
+    ['12.345', 'thousands'],
+    ['123,456', 'thousands'],
+    ['1,234.56', 'thousands'],
+    ['1.234,56', 'thousands'],
+    ['1.234.567', 'thousands'],
+    ['1,234,567.89', 'thousands'],
+    ['1.2.3', 'thousands'],
+    ['1234.567', 'decimals'],
+    ['0.123', 'decimals'],
+    ['.123', 'decimals'],
+    ['1e5', 'chars'],
+    ['1E5', 'chars'],
+    ['abc', 'chars'],
+    ['-5', 'chars'],
+    ['+5', 'chars'],
+    ['$12.50', 'chars'],
+    ['1 000', 'chars'],
+    ['12 .5', 'chars'],
+    ['99999999999999999', 'too-large'],
+    ['99999999999999.99', 'too-large'],
+  ])('rechazado %j -> %s', (input, reason) => {
+    expect(validateAmountText(input)).toEqual({ ok: false, reason });
+  });
+
+  it('un monto válido que supera el máximo del movimiento sigue siendo válido aquí (lo acota la pantalla)', () => {
+    expect(validateAmountText('1000000000')).toEqual({ ok: true, cents: 100_000_000_000 });
+  });
+
+  it('mensajes exactos por motivo', () => {
+    expect(AMOUNT_REJECTION_MESSAGES).toEqual({
+      chars: 'Escribe solo números, por ejemplo 12.50.',
+      thousands: 'Escribe el monto sin separador de miles, por ejemplo 1000 o 12.50.',
+      decimals: 'Usa como máximo 2 decimales, por ejemplo 12.50.',
+    });
+  });
+});
+
+describe('trimTrailingSeparator', () => {
+  it.each([
+    ['12.', '12'],
+    ['12,', '12'],
+    [' 12.5 ', '12.5'],
+    ['12', '12'],
+    ['', ''],
+  ])('%j -> %j', (input, expected) => {
+    expect(trimTrailingSeparator(input)).toBe(expected);
   });
 });

@@ -1,5 +1,5 @@
 import { AuthError } from './auth-types';
-import { ApiRequestError, createResourcesApi } from './resources-api';
+import { ApiRequestError, createResourcesApi, hasAppearanceKeys } from './resources-api';
 import { account, category, pageOf, transaction } from '../resources-test-utils';
 
 const res = (status: number, body: unknown) =>
@@ -19,7 +19,10 @@ const TOKEN = 'access-token';
 describe('createResourcesApi: peticiones', () => {
   it('listAccounts: URL, cabeceras y respuesta', async () => {
     const { api, call } = make(async () => res(200, pageOf([account()])));
-    await expect(api.listAccounts(TOKEN)).resolves.toEqual(pageOf([account()]));
+    await expect(api.listAccounts(TOKEN)).resolves.toEqual({
+      ...pageOf([account()]),
+      appearanceSupported: true,
+    });
     const [url, init] = call();
     expect(url).toBe('https://api.test/accounts');
     expect(init.method).toBe('GET');
@@ -468,6 +471,64 @@ describe('createResourcesApi: calendario', () => {
   bad('cantidad decimal', body([day('2026-10-01', { cantidad: 1.5 })]));
 });
 
+describe('createResourcesApi: saldo de la cuenta', () => {
+  const balance = (overrides: Record<string, unknown> = {}) => ({
+    accountId: 'acc-1',
+    saldoInicial: 1000,
+    ingresos: 500,
+    gastos: 1750,
+    saldo: -250,
+    ...overrides,
+  });
+
+  it('GET /accounts/:id/balance con token y respuesta validada', async () => {
+    const { api, call } = make(async () => res(200, balance()));
+    await expect(api.getAccountBalance(TOKEN, 'acc-1')).resolves.toEqual(balance());
+    const [url, init] = call();
+    expect(url).toBe('https://api.test/accounts/acc-1/balance');
+    expect(init.method).toBe('GET');
+    expect(init.headers).toEqual({ Authorization: `Bearer ${TOKEN}` });
+  });
+
+  it('codifica el id en la ruta', async () => {
+    const { api, call } = make(async () => res(200, balance({ accountId: 'a/b' })));
+    await api.getAccountBalance(TOKEN, 'a/b');
+    expect(call()[0]).toBe('https://api.test/accounts/a%2Fb/balance');
+  });
+
+  it('404 -> ApiRequestError sin propagar el mensaje del servidor', async () => {
+    const { api } = make(async () => res(404, errBody('NOT_FOUND')));
+    const error = await api.getAccountBalance(TOKEN, 'acc-1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 404, code: 'NOT_FOUND' });
+    expect(String((error as Error).message)).not.toContain('MENSAJE-NO-PROPAGAR');
+  });
+
+  it.each([500, 503])('%s -> AuthError server', async (status) => {
+    const { api } = make(async () => res(status, errBody('INTERNAL')));
+    await expect(api.getAccountBalance(TOKEN, 'acc-1')).rejects.toMatchObject({
+      kind: 'server',
+    });
+  });
+
+  it.each([
+    ['otra cuenta', { accountId: 'acc-2' }],
+    ['saldo no entero', { saldo: -250.5 }],
+    ['saldo inicial no entero', { saldoInicial: 1000.1, saldo: -249.9 }],
+    ['saldo fuera de rango seguro', { saldoInicial: 2 ** 53, saldo: 2 ** 53 - 1250 }],
+    ['ingresos negativos', { ingresos: -500, saldo: -1250 }],
+    ['gastos negativos', { gastos: -1750, saldo: 3250 }],
+    ['saldo como texto', { saldo: '-250' }],
+    ['campo ausente', { ingresos: undefined }],
+    ['suma incoherente', { saldo: -249 }],
+  ])('respuesta inválida (%s) -> AuthError unknown', async (_name, overrides) => {
+    const { api } = make(async () => res(200, balance(overrides)));
+    await expect(api.getAccountBalance(TOKEN, 'acc-1')).rejects.toMatchObject({
+      kind: 'unknown',
+    });
+  });
+});
+
 describe('createResourcesApi: reportes', () => {
   const ACC = 'acc-1';
   const range = { accountId: ACC, desde: '2026-10-01', hasta: '2026-10-31' };
@@ -686,5 +747,54 @@ describe('createResourcesApi: exportación de archivos', () => {
     await expect(offline.api.exportFile(TOKEN, csvOptions)).rejects.toMatchObject({
       kind: 'network',
     });
+  });
+});
+
+describe('apariencia de cuenta', () => {
+  const legacy: Record<string, unknown> = { ...account() };
+  delete legacy.color;
+  delete legacy.icono;
+
+  it('hasAppearanceKeys detecta las claves aunque valgan null o undefined', () => {
+    expect(hasAppearanceKeys({ color: null })).toBe(true);
+    expect(hasAppearanceKeys({ icono: undefined })).toBe(true);
+    expect(hasAppearanceKeys({ nombre: 'a' })).toBe(false);
+  });
+
+  it('listAccounts: con claves (aunque null) hay soporte; sin claves no; lista vacía es null', async () => {
+    const withKeys = make(async () => res(200, pageOf([account()])));
+    expect((await withKeys.api.listAccounts(TOKEN)).appearanceSupported).toBe(true);
+    const without = make(async () => res(200, pageOf([legacy])));
+    const page = await without.api.listAccounts(TOKEN);
+    expect(page.appearanceSupported).toBe(false);
+    expect(page.items[0]).toMatchObject({ color: null, icono: null });
+    const empty = make(async () => res(200, pageOf([])));
+    expect((await empty.api.listAccounts(TOKEN)).appearanceSupported).toBeNull();
+  });
+
+  it('basta una cuenta con la clave para detectar soporte', async () => {
+    const { api } = make(async () => res(200, pageOf([legacy, { ...legacy, icono: null }])));
+    expect((await api.listAccounts(TOKEN)).appearanceSupported).toBe(true);
+  });
+
+  it('parseAccount conserva color e ícono string y normaliza ausentes o de otro tipo a null', async () => {
+    const { api } = make(async () =>
+      res(200, pageOf([{ ...account(), color: 'rosa', icono: 7 }, legacy])),
+    );
+    const { items } = await api.listAccounts(TOKEN);
+    expect(items[0]).toMatchObject({ color: 'rosa', icono: null });
+    expect(items[1]).toMatchObject({ color: null, icono: null });
+  });
+
+  it('createAccount y updateAccount envían el cuerpo tal cual y parsean la apariencia', async () => {
+    const created = make(async () =>
+      res(201, { account: { ...account(), color: 'limon' }, categories: [] }),
+    );
+    const result = await created.api.createAccount(TOKEN, { nombre: 'A', color: 'limon' });
+    expect(JSON.parse(created.call()[1].body as string)).toEqual({ nombre: 'A', color: 'limon' });
+    expect(result.account.color).toBe('limon');
+    const patched = make(async () => res(200, { account: account() }));
+    await patched.api.updateAccount(TOKEN, 'acc-1', { color: null });
+    expect(JSON.parse(patched.call()[1].body as string)).toEqual({ color: null });
   });
 });

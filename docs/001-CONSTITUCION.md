@@ -70,9 +70,10 @@ Esquema (texto plano):
 | Base de datos | Cloudflare D1 (SQLite), migraciones versionadas con wrangler |
 | Compilación móvil | EAS Build (perfil gratuito) para generar el APK |
 | Repositorio y CI/CD | GitHub y GitHub Actions |
-
-Nota (Decisiones 2B.1 y 3.1 de docs/003): React Navigation y TanStack Query se difieren a un incremento posterior; las Fases 2B y 3 usan navegación por estado local y no añaden dependencias.
 | Entorno de desarrollo | Dev container (Docker) |
+
+Nota (Decisiones 2B.1, 3.1 y 4.1 de docs/003, ratificadas en la Decisión R0): React Navigation y TanStack Query siguen diferidos; la app usa navegación por estado local y pestañas propias y no añade dependencias nativas para navegación ni datos; las únicas dependencias nativas añadidas por el rediseño son `react-native-safe-area-context` y `expo-navigation-bar` (docs/003, Decisión R5.1 D17).
+
 
 Los límites de las capas gratuitas cambian con el tiempo. Antes de cerrar decisiones de capacidad se verifican en la documentación oficial de Cloudflare.
 
@@ -183,18 +184,60 @@ Límites de protección opcionales (para cuidar las cuotas gratuitas, no como pl
 
 ## 7. Pantallas de la app
 
-1. **Login**: botón de Google. Al abrir la app con sesión válida se entra directo.
-2. **Inicio**: selector de cuenta, saldo, últimos movimientos y botón de nuevo movimiento.
-3. **Nuevo y editar movimiento**: tipo (ingreso o gasto), monto, categoría (solo las de esa cuenta y tipo), fecha y nota.
-4. **Historial**: lista paginada con filtros por tipo y categoría y selector de rango de fechas con calendario.
-5. **Calendario**: vista mensual con indicador por día; al tocar un día se ven sus movimientos.
-6. **Reportes**: por mes, por año y entre fechas, con totales y desglose por categoría.
-7. **Cuentas**: crear, renombrar y archivar.
-8. **Categorías**: crear, editar y archivar, separadas por ingreso y egreso, dentro de la cuenta elegida.
-9. **Conciliación**: ingreso del saldo real, muestra de la diferencia y confirmación.
-10. **Ajustes**: exportar, cerrar sesión.
+Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle de flujos, estados y textos está en docs/007-DISENO-UX.md y la apariencia en docs/008-DISENO-VISUAL.md. Este apartado fija solo las normas.
 
-Reglas de experiencia: formulario de movimiento rápido de completar (monto primero), confirmaciones solo en acciones destructivas o de conciliación, mensajes de error claros y estados de carga y vacío en todas las pantallas.
+1. **Login**: botón de Google. Al abrir la app con sesión válida se entra directo a Mis cuentas.
+2. **Mis cuentas** (pantalla inicial autenticada): cuentas activas con su saldo actual, acción «Nueva cuenta» y acceso a las archivadas. Con al menos dos cuentas activas muestra el total de sus saldos. Tocar una cuenta abre su Detalle. Sin cuentas, invita a crear la primera.
+3. **Crear cuenta**: nombre y saldo inicial opcional.
+4. **Detalle de cuenta**: contenedor con barra inferior de cinco pestañas (Cuenta, Movimientos, Calendario, Reportes y Más):
+   - **Cuenta**: saldo y movimientos de la semana.
+   - **Movimientos**: historial paginado con filtros por tipo y categoría y selector de rango de fechas con calendario.
+   - **Calendario**: vista mensual con indicador por día; al tocar un día se ven sus movimientos.
+   - **Reportes**: por mes, por año y entre fechas, con totales, desglose por categoría y exportación (CSV y PDF).
+   - **Más** (configuración de la cuenta y de la sesión): datos de la cuenta (renombrar), **Categorías**, opciones avanzadas (archivar) y cerrar sesión. La conciliación podría ubicarse aquí en la Fase 6 (docs/007 14.13, abierta).
+5. **Nuevo y editar movimiento** (pantalla sobre el Detalle): tipo (ingreso o gasto), categoría (solo las de esa cuenta y tipo), monto, fecha y nota, en ese orden. «Nuevo movimiento» es una acción destacada visible en Cuenta, Movimientos y Calendario.
+6. **Categorías** (dentro de Más): crear, editar y archivar, separadas por ingreso y egreso, dentro de la cuenta activa; eliminar solo si no tienen movimientos.
+7. **Conciliación** (Fase 6): ingreso del saldo real, muestra de la diferencia y confirmación.
+
+### Navegación
+
+- La navegación se resuelve con estado local y pestañas propias, sin dependencias nuevas (Decisión R0 de docs/003, que ratifica 2B.1, 3.1 y 4.1).
+- La cuenta activa se conserva solo en memoria mientras dure la sesión; cerrar sesión la borra.
+- Tocar el nombre o el saldo de la barra de contexto abre un selector rápido de las cuentas activas; al cambiar de cuenta se conserva la pestaña y se reinicia el estado por pestaña (filtros, período).
+- Guías contextuales de primera vez, descartables y reactivables desde Más.
+- Atrás en una pestaña distinta de Cuenta vuelve a Cuenta; Atrás en Cuenta vuelve a Mis cuentas; Atrás en Mis cuentas sale de la app sin cerrar sesión. Una acción «‹ Mis cuentas» con zona táctil de 48 dp está siempre visible en el Detalle, además del Atrás del sistema.
+
+### Cuenta activa visible
+
+- Toda pantalla interna de una cuenta (Detalle, Categorías, Nuevo y editar movimiento) muestra una barra de contexto con el nombre de la cuenta, su estado «Archivada» si aplica y, salvo en la pestaña Cuenta, su saldo.
+- El contenedor del Detalle es la única fuente de esos datos; ninguna pestaña consulta el saldo por su cuenta. Tras crear, editar o anular un movimiento el contenedor relee el saldo con `GET /accounts/:id/balance`.
+- Si el saldo no se puede leer, se muestra «Saldo no disponible» con opción de reintentar; nunca se inventa un valor.
+
+### Archivado en lugar de eliminación
+
+- La app no ofrece eliminar cuentas, solo archivarlas (docs/001 §5). Archivar exige una confirmación que muestra el nombre de la cuenta.
+- Una cuenta archivada se consulta en Mis cuentas > Archivadas, puede desarchivarse, conserva su historial y no admite movimientos nuevos (cómo se presenta en el Detalle, p. ej. «Nuevo movimiento» deshabilitado con su explicación, está pendiente: docs/007 14.12).
+- Sin movimientos, cada categoría puede eliminarse; con movimientos solo puede archivarse (docs/001 §5).
+
+### Reglas de experiencia
+
+- Formulario de movimiento rápido de completar: tipo, categoría y monto en ese orden, con teclado numérico, fecha «Hoy» por defecto y protección contra doble envío.
+- Confirmaciones solo en acciones destructivas o de conciliación, y al abandonar un formulario con cambios sin guardar (docs/003, Rediseño R3 D1). Sin cambios, se sale sin diálogo.
+- Mensajes de error claros y estados de carga, vacío y error en todas las pantallas.
+
+### Android: safe areas, teclado y accesibilidad
+
+- La app respeta las barras del sistema: ningún título, botón ni acción queda bajo la barra de estado ni bajo la de navegación, con navegación por gestos o por tres botones. Los márgenes se toman de un único origen basado en los insets reales del sistema (`react-native-safe-area-context`). Excepción controlada (docs/003, Decisión R5.1 D17, que sustituye a la opción A de R0 D7): en Android la barra de navegación del sistema se oculta automáticamente con comportamiento transitorio (`expo-navigation-bar`). La barra se muestra mientras el teclado esté abierto y con un lector de pantalla (TalkBack) activo, y se oculta de nuevo al cerrar el teclado, al desactivar el lector y al volver a primer plano. La barra de estado no se oculta. Si el módulo falla, la app degrada a barras visibles sin error. La validación se hace en un Android real con gestos y con tres botones.
+- Con el teclado abierto, el campo activo y «Guardar» permanecen visibles; las pantallas se desplazan.
+- Todo objetivo táctil mide al menos 48 dp. Excepciones aprobadas y acotadas (docs/007 §10): chips pequeños de filtro de 36 dp con zona táctil efectiva de 48 dp; celdas de día del calendario de 52 dp de alto y al menos 44 dp de ancho con ancho de pantalla de hasta unos 400 dp.
+- El texto escala con el tamaño de fuente del sistema sin bloquearlo. El saldo, los importes, los botones, las pestañas y las categorías habituales no se truncan. Solo los nombres libres del usuario (cuenta, nota) se truncan con elipsis y su texto completo está en la etiqueta de accesibilidad.
+- El color nunca es el único portador de significado: los importes llevan signo y los tipos llevan palabra.
+
+### Validación UX/UI
+
+- Todo cambio visible de la interfaz móvil exige la revisión independiente de `mobile-ux-qa` con docs/010-MATRIZ-PRUEBAS-UX.md. Un defecto alto o crítico detiene el cierre y la publicación hasta su corrección y nueva validación.
+- La validación en un teléfono Android real (nivel D de docs/010) es evidencia distinta de las pruebas automáticas; ninguna sustituye a la otra.
+- El flujo de agentes para cambios de interfaz está en CLAUDE.md («Coordinación y delegación»).
 
 ## 8. Calidad y pruebas
 
@@ -252,7 +295,7 @@ Cada fase termina con pruebas en verde, CI exitoso y despliegue funcionando.
 
 ## 13. Definición de terminado
 
-Una tarea está terminada cuando: cumple la especificación, tiene pruebas que pasan, el CI está en verde, no introduce secretos ni dependencias innecesarias, la documentación afectada está actualizada y el cambio se puede desplegar.
+Una tarea está terminada cuando: cumple la especificación, tiene pruebas que pasan, el CI está en verde, no introduce secretos ni dependencias innecesarias, la documentación afectada está actualizada y el cambio se puede desplegar. Si el cambio altera la interfaz móvil visible, además la revisión de `mobile-ux-qa` no deja defectos altos ni críticos abiertos.
 
 ### Política definitiva de sesiones — Fase 2A
 

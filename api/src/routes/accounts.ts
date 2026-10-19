@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { ACCOUNT_COLORS, ACCOUNT_ICONS } from '../lib/account-appearance';
 import { authMiddleware, type AuthEnv } from '../lib/auth-middleware';
 import {
   ACCOUNT_NAME_MAX,
@@ -35,15 +36,27 @@ export const categoryColorSchema = z
   .regex(/^#[0-9A-Fa-f]{6}$/)
   .transform((value) => value.toUpperCase());
 
+const accountColorSchema = z.enum(ACCOUNT_COLORS);
+const accountIconSchema = z.enum(ACCOUNT_ICONS);
+
 const createAccountSchema = z.strictObject({
   nombre: accountNameSchema,
+  // Ausente o null guardan NULL (apariencia predeterminada).
+  color: accountColorSchema.nullish(),
+  icono: accountIconSchema.nullish(),
   // `?? 0` y `+ 0`: el saldo es opcional y -0 se guarda como 0.
   saldoInicial: z.number().int().min(-MAX_AMOUNT_CENTS).max(MAX_AMOUNT_CENTS).optional(),
 });
 
+// Ausente = sin cambio; null = volver al predeterminado; valor = fijar.
 const patchAccountSchema = z
-  .strictObject({ nombre: accountNameSchema.optional(), archivada: z.boolean().optional() })
-  .refine((body) => body.nombre !== undefined || body.archivada !== undefined);
+  .strictObject({
+    nombre: accountNameSchema.optional(),
+    archivada: z.boolean().optional(),
+    color: accountColorSchema.nullable().optional(),
+    icono: accountIconSchema.nullable().optional(),
+  })
+  .refine((body) => Object.values(body).some((value) => value !== undefined));
 
 const createCategorySchema = z.strictObject({
   nombre: categoryNameSchema,
@@ -71,7 +84,12 @@ export function accountRoutes(deps: Partial<ResourceDeps> = {}, now?: () => Date
     const created = await createAccountWithDefaults(
       c.env.DB as D1Database,
       c.get('user').id,
-      { nombre: body.nombre, saldoInicial: (body.saldoInicial ?? 0) + 0 },
+      {
+        nombre: body.nombre,
+        saldoInicial: (body.saldoInicial ?? 0) + 0,
+        color: body.color ?? null,
+        icono: body.icono ?? null,
+      },
       deps,
     );
     return c.json(created, 201);

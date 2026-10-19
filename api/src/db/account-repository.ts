@@ -7,6 +7,8 @@ export interface AccountRow {
   nombre: string;
   saldo_inicial: number;
   archivada: number;
+  color: string | null;
+  icono: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -33,13 +35,15 @@ export interface NewAccount {
   userId: string;
   nombre: string;
   saldoInicial: number;
+  color: string | null;
+  icono: string | null;
   now: Date;
 }
 
 // Cuenta + agregados en una sola consulta (sin N+1). `deleted_at IS NULL` va en el ON y no en
 // el WHERE: así una cuenta sin movimientos (o solo con anulados) sigue apareciendo (LEFT JOIN).
-const TOTALS_SELECT = `SELECT a.id, a.user_id, a.nombre, a.saldo_inicial, a.archivada, a.created_at,
-          a.updated_at,
+const TOTALS_SELECT = `SELECT a.id, a.user_id, a.nombre, a.saldo_inicial, a.archivada, a.color, a.icono,
+          a.created_at, a.updated_at,
           COALESCE(SUM(CASE WHEN t.tipo = 'ingreso' THEN t.monto END), 0) AS ingresos,
           COALESCE(SUM(CASE WHEN t.tipo = 'gasto' THEN t.monto END), 0) AS gastos
      FROM accounts a
@@ -96,15 +100,18 @@ export function insertAccountStatement(db: D1Database, input: NewAccount): D1Pre
   const at = input.now.toISOString();
   return db
     .prepare(
-      `INSERT INTO accounts (id, user_id, nombre, saldo_inicial, archivada, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, 0, ?5, ?5)`,
+      `INSERT INTO accounts (id, user_id, nombre, saldo_inicial, archivada, color, icono, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7, ?7)`,
     )
-    .bind(input.id, input.userId, input.nombre, input.saldoInicial, at);
+    .bind(input.id, input.userId, input.nombre, input.saldoInicial, input.color, input.icono, at);
 }
 
 export interface AccountPatch {
   nombre?: string;
   archivada?: boolean;
+  // undefined = sin cambio; null = volver a NULL (predeterminado); valor = fijar.
+  color?: string | null;
+  icono?: string | null;
 }
 
 // Devuelve la cuenta actualizada, o null si no existe o no pertenece al usuario.
@@ -124,6 +131,14 @@ export async function updateAccount(
   if (patch.archivada !== undefined) {
     values.push(patch.archivada ? 1 : 0);
     sets.push(`archivada = ?${values.length}`);
+  }
+  if (patch.color !== undefined) {
+    values.push(patch.color);
+    sets.push(`color = ?${values.length}`);
+  }
+  if (patch.icono !== undefined) {
+    values.push(patch.icono);
+    sets.push(`icono = ?${values.length}`);
   }
   values.push(now.toISOString());
   sets.push(`updated_at = ?${values.length}`);

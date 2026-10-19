@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- silueta de la alcancia (se usa para separar las hojas con un hueco) -->
+    <g id="pig">
+      <ellipse cx="505" cy="640" rx="266" ry="222"/>
+      <path d="M410 800H530V868Q530 898 500 898H440Q410 898 410 868Z"/>
+      <path d="M578 810H672V868Q672 894 650 894H606Q578 894 578 868Z"/>
+      <path d="M312 440Q315 418 345 405L440 395Q462 395 450 415L345 530Q322 540 314 510Z"/>
+      <path d="M668 442Q695 432 742 440Q776 448 776 468L745 545Q735 552 722 540L665 470Q655 448 668 442Z"/>
+    </g>
+    <mask id="hojas" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <use href="#pig" fill="#000" stroke="#000" stroke-width="76" stroke-linejoin="round"/>
+    </mask>
+    <mask id="cuerpo" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <!-- ojo -->
+      <ellipse cx="505" cy="570" rx="26" ry="29" fill="#000"/>
+      <!-- arco que separa el hocico por la izquierda -->
+      <path d="M574 588A100 88 0 0 0 574 712" fill="none" stroke="#000" stroke-width="40" stroke-linecap="round"/>
+      <!-- fosas -->
+      <ellipse cx="627" cy="650" rx="20" ry="34" fill="#000"/>
+      <ellipse cx="707" cy="650" rx="20" ry="34" fill="#000"/>
+      <!-- ranura -->
+      <rect x="445" y="458" width="150" height="40" rx="20" fill="#000"/>
+    </mask>
+    <mask id="moneda" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <g transform="translate(508 190)" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M46 -52C44 -112 -52 -112 -52 -54C-52 0 52 -8 52 54C52 112 -46 112 -48 54" stroke-width="40"/>
+      </g>
+    </mask>
+  </defs>
+  <g fill="#fff">
+    <g mask="url(#hojas)">
+      <path d="M255 800C125 705 120 560 180 513C245 540 275 655 255 800Z"/>
+      <path d="M270 815C150 850 78 765 86 700C150 655 255 700 290 805Z"/>
+      <path d="M735 886C738 750 800 630 940 568C955 650 905 795 735 886Z"/>
+      <path d="M760 840C800 735 880 712 936 722C942 795 870 832 760 840Z"/>
+    </g>
+    <g mask="url(#cuerpo)"><use href="#pig"/></g>
+    <g mask="url(#moneda)"><ellipse cx="508" cy="190" rx="136" ry="170"/></g>
+  </g>
+  <g stroke="#fff" stroke-linecap="round" fill="none">
+    <path d="M215 335L248 366" stroke-width="40"/>
+    <path d="M780 225L744 290" stroke-width="40"/>
+    <path d="M850 335L796 365" stroke-width="40"/>
+  </g>
+</svg>

@@ -22,6 +22,9 @@ export interface AccountDto {
   // Calculado (saldoInicial + ingresos - gastos de los movimientos vigentes); nunca se guarda.
   saldo: number;
   archivada: boolean;
+  // Identificadores de catálogo (D12); null = apariencia predeterminada de la app.
+  color: string | null;
+  icono: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,6 +56,8 @@ export function toAccountDto(row: AccountWithTotalsRow): AccountDto {
     saldoInicial: row.saldo_inicial,
     saldo,
     archivada: row.archivada === 1,
+    color: row.color,
+    icono: row.icono,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -84,7 +89,7 @@ export async function listUserAccounts(
 export async function createAccountWithDefaults(
   db: D1Database,
   userId: string,
-  input: { nombre: string; saldoInicial: number },
+  input: { nombre: string; saldoInicial: number; color: string | null; icono: string | null },
   overrides?: Partial<ResourceDeps>,
 ): Promise<{ account: AccountDto; categories: CategoryDto[] }> {
   const deps = resolveResourceDeps(overrides);

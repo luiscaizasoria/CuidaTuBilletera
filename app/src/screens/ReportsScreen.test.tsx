@@ -1,17 +1,27 @@
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AuthError } from '../lib/auth-types';
 import { ExportFileError, clearExports, shareExport } from '../lib/export-files';
 import { ApiRequestError } from '../lib/resources-api';
 import type { CategoryReport, PeriodReport, ReportSummary } from '../lib/resources-api';
 import { account, fakeResourcesApi } from '../resources-test-utils';
-import { controlledPromise } from '../test-utils';
+import { colors, moduleColors } from '../theme/tokens';
+import { controlledPromise, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import ReportsScreen from './ReportsScreen';
 import type { ReportsView } from '../lib/reports';
+
+relaxTimeoutsForColdCache();
 
 jest.mock('../lib/export-files', () => ({
   ...jest.requireActual('../lib/export-files'),
   clearExports: jest.fn(),
   shareExport: jest.fn(async () => undefined),
+}));
+
+// Fecha local fija: el selector de fechas abre en el mes de hoy.
+jest.mock('../lib/dates', () => ({
+  ...jest.requireActual('../lib/dates'),
+  todayLocal: () => '2026-10-15',
 }));
 
 jest.mock('../hooks/use-auth', () => ({
@@ -120,13 +130,51 @@ beforeAll(async () => {
   jest.clearAllMocks();
 }, 60_000);
 
+beforeEach(() => {
+  mockWindow(360, 1);
+});
+
 afterEach(() => jest.clearAllMocks());
+
+// Elige una fecha en el selector: abre el campo, navega desde el mes inicial hasta el de la fecha
+// y toca el día (el selector abre en el mes de la fecha ya elegida o, si no hay, en el de hoy).
+async function pickDate(field: 'Desde' | 'Hasta', from: string, target: string) {
+  const current = screen.getByRole('button', { name: new RegExp(`^${field}: `) });
+  await fireEvent.press(current);
+  const months = (key: string) => Number(key.slice(0, 4)) * 12 + Number(key.slice(5, 7));
+  const diff = months(target) - months(from);
+  for (let i = 0; i < Math.abs(diff); i += 1) {
+    await fireEvent.press(
+      screen.getByRole('button', { name: diff < 0 ? 'Mes anterior' : 'Mes siguiente' }),
+    );
+  }
+  const day = Number(target.slice(8, 10));
+  const names = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+  const name = names[Number(target.slice(5, 7)) - 1];
+  await fireEvent.press(
+    screen.getByRole('button', { name: new RegExp(`^${day} de ${name} de ${target.slice(0, 4)}`) }),
+  );
+}
 
 describe('ReportsScreen: presentación', () => {
   it('modo Mes: consulta summary y by-category del mes, sin serie', async () => {
     const api = makeApi();
     await renderReports(api);
-    expect(await screen.findByText('Reportes de Efectivo')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Reportes' })).toBeTruthy();
+    expect(screen.queryByText(/Reportes de/)).toBeNull();
     expect(screen.getByText('Octubre 2026')).toBeTruthy();
     await screen.findByTestId('report-card-ingresos');
     const o = { accountId: 'acc-1', desde: '2026-10-01', hasta: '2026-10-31' };
@@ -146,6 +194,7 @@ describe('ReportsScreen: presentación', () => {
       'Balance $1154.50',
     );
     expect(screen.getByText('$1154.50')).toBeTruthy();
+    expect(screen.getByText('+$1200.00')).toBeTruthy();
   });
 
   it('balance negativo se muestra con signo', async () => {
@@ -155,7 +204,8 @@ describe('ReportsScreen: presentación', () => {
       ),
     });
     await renderReports(api);
-    expect(await screen.findByText('-$12.50')).toBeTruthy();
+    // Gastos (-$12.50) y Balance (-$12.50): la cifra de Balance va en `text` también si es negativa.
+    expect(await screen.findAllByText('-$12.50')).toHaveLength(2);
   });
 
   it('desglose por categoría: importes, porcentaje exacto, archivada y barras', async () => {
@@ -168,14 +218,18 @@ describe('ReportsScreen: presentación', () => {
     expect(screen.getByText('Antigua (archivada)')).toBeTruthy();
     expect(screen.getByText('100.0%')).toBeTruthy(); // Sueldo, único ingreso
     // Ancho de barra relativo al mayor del grupo (3033 = 100%; 1517/3033 = 50.0%).
-    expect(screen.getByTestId('report-bar-c-food').props.style).toEqual(
+    expect(
+      screen.getByTestId('report-bar-c-food', { includeHiddenElements: true }).props.style,
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ width: '100%', backgroundColor: '#E53935' }),
       ]),
     );
-    expect(screen.getByTestId('report-bar-c-old').props.style).toEqual(
+    expect(
+      screen.getByTestId('report-bar-c-old', { includeHiddenElements: true }).props.style,
+    ).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ width: '50%', backgroundColor: '#9e9e9e' }),
+        expect.objectContaining({ width: '50%', backgroundColor: '#6B7280' }),
       ]),
     );
     expect(screen.getByTestId('report-category-c-old').props.accessibilityLabel).toContain(
@@ -293,15 +347,17 @@ describe('ReportsScreen: modos y período', () => {
     );
   });
 
-  it('Rango: parte del período visto, aplica uno nuevo y usa serie mensual', async () => {
+  it('Rango: parte del período visto, se elige con el selector y usa serie mensual', async () => {
     const api = makeApi();
     await renderReports(api);
     await screen.findByTestId('report-card-ingresos');
     await fireEvent.press(screen.getByRole('radio', { name: 'Modo Rango' }));
-    expect(screen.getByLabelText('Desde').props.value).toBe('2026-10-01');
-    expect(screen.getByLabelText('Hasta').props.value).toBe('2026-10-31');
-    await fireEvent.changeText(screen.getByLabelText('Desde'), '2026-01-15');
-    await fireEvent.changeText(screen.getByLabelText('Hasta'), '2026-03-20');
+    expect(screen.getByRole('button', { name: 'Desde: 01/10/2026' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hasta: 31/10/2026' })).toBeTruthy();
+    expect(screen.queryByLabelText('Desde')).toBeNull();
+    expect(screen.queryByPlaceholderText(/AAAA-MM-DD/)).toBeNull();
+    await pickDate('Desde', '2026-10-01', '2026-01-15');
+    await pickDate('Hasta', '2026-10-31', '2026-03-20');
     await fireEvent.press(screen.getByText('Aplicar'));
     await waitFor(() =>
       expect(api.getReportByPeriod).toHaveBeenLastCalledWith('tok', {
@@ -314,6 +370,7 @@ describe('ReportsScreen: modos y período', () => {
     expect(onViewChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ mode: 'range', desde: '2026-01-15', hasta: '2026-03-20' }),
     );
+    expect(screen.getByText('Del 15/01/2026 al 20/03/2026')).toBeTruthy();
   });
 
   it('Rango de más de 120 meses agrupa por año', async () => {
@@ -331,26 +388,34 @@ describe('ReportsScreen: modos y período', () => {
     );
   });
 
-  it('Rango inválido o desde > hasta: error y sin consulta nueva', async () => {
+  it('Rango sin fechas o con desde > hasta: mensaje y sin consulta nueva', async () => {
     const api = makeApi();
-    await renderReports(api, { ...OCT, mode: 'range', desde: '2026-01-01', hasta: '2026-01-31' });
-    await screen.findByTestId('report-card-ingresos');
-    const calls = api.getReportSummary.mock.calls.length;
-    await fireEvent.changeText(screen.getByLabelText('Hasta'), '2026-02-30');
+    await renderReports(api, { ...OCT, mode: 'range', desde: '', hasta: '' });
+    // Sin rango elegido no se consulta nada.
+    expect(api.getReportSummary).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByText('Aplicar'));
-    expect(await screen.findByText(/formato AAAA-MM-DD/)).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('Hasta'), '');
+    expect(screen.getByText('Elige las fechas «Desde» y «Hasta».')).toBeTruthy();
+    expect(api.getReportSummary).not.toHaveBeenCalled();
+
+    await pickDate('Desde', '2026-10-15', '2026-03-01');
+    await pickDate('Hasta', '2026-10-15', '2026-02-01');
     await fireEvent.press(screen.getByText('Aplicar'));
-    expect(screen.getByText(/formato AAAA-MM-DD/)).toBeTruthy();
-    await fireEvent.changeText(screen.getByLabelText('Desde'), '2026-03-01');
-    await fireEvent.changeText(screen.getByLabelText('Hasta'), '2026-02-01');
-    await fireEvent.press(screen.getByText('Aplicar'));
-    expect(screen.getByText(/no puede ser posterior/)).toBeTruthy();
-    expect(api.getReportSummary.mock.calls.length).toBe(calls);
-    // Corregir el rango limpia el error.
-    await fireEvent.changeText(screen.getByLabelText('Hasta'), '2026-03-02');
-    await fireEvent.press(screen.getByText('Aplicar'));
+    expect(screen.getByText('La fecha «Desde» no puede ser posterior a «Hasta».')).toBeTruthy();
+    expect(api.getReportSummary).not.toHaveBeenCalled();
+
+    // Corregir una fecha limpia el error y un rango válido consulta el resumen, las categorías y la serie.
+    await pickDate('Hasta', '2026-02-01', '2026-03-02');
     expect(screen.queryByText(/no puede ser posterior/)).toBeNull();
+    await fireEvent.press(screen.getByText('Aplicar'));
+    await waitFor(() =>
+      expect(api.getReportSummary).toHaveBeenLastCalledWith('tok', {
+        accountId: 'acc-1',
+        desde: '2026-03-01',
+        hasta: '2026-03-02',
+      }),
+    );
+    expect(api.getReportByCategory).toHaveBeenCalled();
+    expect(api.getReportByPeriod).toHaveBeenCalled();
   });
 });
 
@@ -375,7 +440,9 @@ describe('ReportsScreen: estados', () => {
       getReportByCategory: jest.fn(async (_t, o) => emptyCategories(o)),
     });
     await renderReports(api);
-    expect(await screen.findByText('Sin movimientos en este período')).toBeTruthy();
+    expect(
+      await screen.findByText('Sin movimientos en este período. Prueba con otro mes.'),
+    ).toBeTruthy();
     expect(screen.queryByTestId('report-card-ingresos')).toBeNull();
   });
 
@@ -415,7 +482,7 @@ describe('ReportsScreen: estados', () => {
     const api = makeApi({ getReportSummary: summary });
     await renderReports(api);
     await fireEvent.press(screen.getByLabelText('Mes siguiente'));
-    expect(await screen.findByText('$7.77')).toBeTruthy();
+    expect(await screen.findByText('+$7.77')).toBeTruthy();
     await act(async () =>
       slow.resolve(
         summaryOf(
@@ -424,8 +491,8 @@ describe('ReportsScreen: estados', () => {
         ),
       ),
     );
-    expect(screen.getByText('$7.77')).toBeTruthy();
-    expect(screen.queryByText('$9999.00')).toBeNull();
+    expect(screen.getByText('+$7.77')).toBeTruthy();
+    expect(screen.queryByText('+$9999.00')).toBeNull();
   });
 
   it('no actualiza el estado tras desmontar', async () => {
@@ -482,7 +549,7 @@ describe('ReportsScreen: cuenta y sesión', () => {
       getReportSummary: jest.fn(async (_t, o) => summaryOf(o, { ingresos: 5, balance: 5 - 4550 })),
     });
     await renderReports(otherApi, OCT, other);
-    expect(await screen.findByText('Reportes de Ahorros')).toBeTruthy();
+    expect(await screen.findByRole('header', { name: 'Reportes' })).toBeTruthy();
     await screen.findByTestId('report-card-ingresos');
     expect(screen.queryByText('Sueldo')).toBeNull();
     expect(screen.queryByText('Efectivo')).toBeNull();
@@ -514,7 +581,7 @@ describe('ReportsScreen: exportar archivos', () => {
       getReportByCategory: jest.fn(async (_t, o) => emptyCategories(o)),
     });
     await renderReports(api);
-    await screen.findByText('Sin movimientos en este período');
+    await screen.findByText('Sin movimientos en este período. Prueba con otro mes.');
     expect(screen.queryByLabelText('Exportar CSV')).toBeNull();
     expect(screen.queryByLabelText('Exportar PDF')).toBeNull();
   });
@@ -737,5 +804,352 @@ describe('ReportsScreen: exportar archivos', () => {
       expect(JSON.stringify(spy.mock.calls)).not.toContain('1500');
       spy.mockRestore();
     }
+  });
+});
+
+describe('ReportsScreen: R4 (título, período y resumen)', () => {
+  it('Modo es un Segmented tono reportes con etiquetas «Modo Mes/Año/Rango» y Mes por defecto (criterio 23)', async () => {
+    await renderReports();
+    await screen.findByTestId('report-card-ingresos');
+    const labels = screen.getAllByRole('radio').map((n) => n.props.accessibilityLabel);
+    expect(labels).toEqual(['Modo Mes', 'Modo Año', 'Modo Rango']);
+    const month = screen.getByRole('radio', { name: 'Modo Mes' });
+    expect(month.props.accessibilityState.selected).toBe(true);
+    expect(StyleSheet.flatten(month.props.style)).toMatchObject({
+      backgroundColor: moduleColors.reportes.tile,
+      minHeight: 48,
+    });
+  });
+
+  it('las flechas de período miden 48 dp y respetan los límites (criterio 23)', async () => {
+    await renderReports(makeApi(), { ...OCT, year: 2000, month: 1 });
+    await screen.findByTestId('report-card-ingresos');
+    const prev = screen.getByRole('button', { name: 'Mes anterior' });
+    expect(StyleSheet.flatten(prev.props.style)).toMatchObject({ width: 48, height: 48 });
+    expect(prev.props.accessibilityState.disabled).toBe(true);
+  });
+
+  it('Ingresos y Gastos son botones con «Ver movimientos ›»; Balance es texto sin color de módulo (criterio 25)', async () => {
+    await renderReports();
+    const income = await screen.findByTestId('report-card-ingresos');
+    expect(income.props.accessibilityRole).toBe('button');
+    expect(screen.getAllByText('Ver movimientos ›')).toHaveLength(2);
+    expect(StyleSheet.flatten(screen.getAllByText('Ver movimientos ›')[0]!.props.style).color).toBe(
+      colors.brand700,
+    );
+    expect(StyleSheet.flatten(income.props.style).minHeight).toBeGreaterThanOrEqual(48);
+    const balance = screen.getByTestId('report-card-balance');
+    expect(balance.props.accessibilityRole).toBeUndefined();
+    expect(balance.props.accessible).toBe(true);
+    expect(StyleSheet.flatten(screen.getByText('$1154.50').props.style).color).toBe(colors.text);
+  });
+
+  it('el Balance negativo va en `text`, no en expenseText (criterio 25)', async () => {
+    const api = makeApi({
+      getReportSummary: jest.fn(async (_t, o) =>
+        summaryOf(o, { ingresos: 0, gastos: 1250, balance: -1250 }),
+      ),
+    });
+    await renderReports(api);
+    await screen.findByTestId('report-card-balance');
+    const values = screen.getAllByText('-$12.50');
+    const colorsUsed = values.map((n) => StyleSheet.flatten(n.props.style).color);
+    expect(colorsUsed).toContain(colors.text);
+  });
+});
+
+describe('ReportsScreen: R4 (barras por categoría)', () => {
+  it('fila con ícono de 32 dp, nombre de dos líneas sin elipsis, total, porcentaje y barra decorativa (criterio 26)', async () => {
+    await renderReports();
+    const name = await screen.findByText('Comida');
+    expect(name.props.numberOfLines).toBe(2);
+    expect(name.props.ellipsizeMode).toBe('clip');
+    expect(screen.getByText('66.7%')).toBeTruthy();
+    expect(screen.getByText('$30.33')).toBeTruthy();
+    const icons = screen.getAllByTestId('category-icon', { includeHiddenElements: true });
+    expect(StyleSheet.flatten(icons[0]!.props.style)).toMatchObject({ width: 32, height: 32 });
+    const bar = screen.getByTestId('report-bar-c-food', { includeHiddenElements: true });
+    expect(StyleSheet.flatten(bar.props.style)).toMatchObject({ height: 10, borderRadius: 5 });
+    expect(bar.parent!.props.importantForAccessibility).toBe('no');
+    expect(StyleSheet.flatten(bar.parent!.props.style)).toMatchObject({
+      height: 10,
+      backgroundColor: colors.border,
+    });
+    expect(screen.getByTestId('report-category-c-food').props.accessibilityLabel).toBe(
+      'Comida: $30.33, 66.7% de los gastos. Ver movimientos',
+    );
+  });
+
+  it('un importe pequeño conserva un mínimo visible de 4 dp (criterio 26)', async () => {
+    const api = makeApi({
+      getReportByCategory: jest.fn(async (_t, o) => ({
+        ...emptyCategories(o),
+        gastos: {
+          total: 100001,
+          items: [
+            {
+              categoryId: 'g',
+              nombre: 'Grande',
+              icono: 'tag',
+              color: '#E53935',
+              archivada: false,
+              total: 100000,
+              cantidad: 1,
+            },
+            {
+              categoryId: 'p',
+              nombre: 'Pequeña',
+              icono: 'tag',
+              color: '#E53935',
+              archivada: false,
+              total: 1,
+              cantidad: 1,
+            },
+          ],
+        },
+      })),
+    });
+    await renderReports(api);
+    const tiny = await screen.findByTestId('report-bar-p', { includeHiddenElements: true });
+    expect(StyleSheet.flatten(tiny.props.style)).toMatchObject({ width: '0%', minWidth: 4 });
+  });
+
+  it('el nombre largo de 40 caracteres no usa numberOfLines de 1 (criterio 26)', async () => {
+    const long = 'N'.repeat(40);
+    const api = makeApi({
+      getReportByCategory: jest.fn(async (_t, o) => ({
+        ...emptyCategories(o),
+        gastos: {
+          total: 10,
+          items: [
+            {
+              categoryId: 'l',
+              nombre: long,
+              icono: 'tag',
+              color: '#E53935',
+              archivada: false,
+              total: 10,
+              cantidad: 1,
+            },
+          ],
+        },
+      })),
+    });
+    await renderReports(api);
+    expect((await screen.findByText(long)).props.numberOfLines).toBe(2);
+  });
+});
+
+describe('ReportsScreen: R4 (serie, leyenda y tabla)', () => {
+  const yearView: ReportsView = { ...OCT, mode: 'year' };
+
+  it('la serie trae leyenda «↑ Ingresos / ↓ Gastos» y el aviso de desplazamiento solo si hace falta (criterio 27)', async () => {
+    await renderReports(makeApi(), yearView);
+    await screen.findByText('Evolución mensual');
+    expect(screen.getByText('↑ Ingresos')).toBeTruthy();
+    expect(screen.getByText('↓ Gastos')).toBeTruthy();
+    expect(screen.queryByText('Desliza para ver más períodos.')).toBeNull();
+    const scroller = screen.getByTestId('period-scroll');
+    await fireEvent(scroller, 'layout', { nativeEvent: { layout: { width: 200 } } });
+    await fireEvent(scroller, 'contentSizeChange', 900, 120);
+    expect(screen.getByText('Desliza para ver más períodos.')).toBeTruthy();
+  });
+
+  it('las columnas conservan su etiqueta y las cifras no escalan con la fuente (criterio 27)', async () => {
+    await renderReports(makeApi(), yearView);
+    await screen.findByText('Evolución mensual');
+    expect(screen.getByTestId('report-period-2026-01').props.accessibilityLabel).toBe(
+      'Ene 26: ingresos $2.00, gastos $1.00',
+    );
+    expect(screen.getByText('+2').props.allowFontScaling).toBe(false);
+    expect(StyleSheet.flatten(screen.getByText('Ene 26').props.style).fontSize).toBe(12);
+    // Ingresos a la izquierda, Gastos a la derecha.
+    const bars = screen.getByTestId('report-period-ingresos-2026-01').parent!.children;
+    expect((bars[0] as unknown as { props: { testID: string } }).props.testID).toBe(
+      'report-period-ingresos-2026-01',
+    );
+    expect((bars[1] as unknown as { props: { testID: string } }).props.testID).toBe(
+      'report-period-gastos-2026-01',
+    );
+  });
+
+  it('«Tabla» muestra una fila por período con los valores de la API y su etiqueta (criterio 27)', async () => {
+    await renderReports(makeApi(), yearView);
+    await screen.findByText('Evolución mensual');
+    expect(screen.getByRole('radio', { name: 'Gráfico' }).props.accessibilityState.selected).toBe(
+      true,
+    );
+    await fireEvent.press(screen.getByRole('radio', { name: 'Tabla' }));
+    expect(screen.queryByTestId('report-period-2026-01')).toBeNull();
+    expect(screen.getByText('Período')).toBeTruthy();
+    expect(screen.getByTestId('report-table-2026-03').props.accessibilityLabel).toBe(
+      'Mar 26: ingresos $1.00, gastos $4.00, balance -$3.00',
+    );
+    expect(screen.getByTestId('report-table-2026-01').props.accessibilityLabel).toBe(
+      'Ene 26: ingresos $2.00, gastos $1.00, balance $1.00',
+    );
+    expect(screen.getAllByTestId(/^report-table-/)).toHaveLength(3);
+    await fireEvent.press(screen.getByRole('radio', { name: 'Gráfico' }));
+    expect(screen.getByTestId('report-period-2026-01')).toBeTruthy();
+  });
+
+  it('con fuente ≥ 115 % la tabla se apila en dos líneas (criterio 43)', async () => {
+    mockWindow(360, 1.3);
+    await renderReports(makeApi(), yearView);
+    await screen.findByText('Evolución mensual');
+    await fireEvent.press(screen.getByRole('radio', { name: 'Tabla' }));
+    expect(screen.queryByText('Período')).toBeNull();
+    expect(screen.getByText('Ingresos +$1.00 · Gastos -$4.00')).toBeTruthy();
+  });
+});
+
+describe('ReportsScreen: R4 (exportación al final y estados)', () => {
+  it('«Exportar este período» va después del desglose y de la serie, con su texto de alcance (criterio 28)', async () => {
+    await renderReports(makeApi(), { ...OCT, mode: 'year' });
+    await screen.findByText('Exportar este período');
+    expect(screen.getByRole('header', { name: 'Exportar este período' })).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Descarga los movimientos de este período en un archivo para guardarlo o compartirlo.',
+      ),
+    ).toBeTruthy();
+    const headers = screen.getAllByRole('header').map((n) => n.props.children);
+    const order = [
+      'Gastos por categoría',
+      'Ingresos por categoría',
+      'Evolución mensual',
+      'Exportar este período',
+    ];
+    const positions = order.map((text) => headers.indexOf(text));
+    expect(positions.every((p) => p >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(screen.getByLabelText('Exportar CSV')).toBeTruthy();
+    expect(screen.getByLabelText('Exportar PDF')).toBeTruthy();
+  });
+
+  it('los botones de exportar son secundarios y de 48 dp (criterio 28)', async () => {
+    await renderReports();
+    const csv = await screen.findByLabelText('Exportar CSV');
+    expect(StyleSheet.flatten(csv.props.style)).toMatchObject({
+      minHeight: 48,
+      backgroundColor: colors.surface,
+      borderColor: colors.brand700,
+    });
+  });
+
+  it('carga con «Calculando tu resumen…» (criterio 29)', async () => {
+    const gate = controlledPromise<ReportSummary>();
+    await renderReports(makeApi({ getReportSummary: jest.fn(() => gate.promise) }));
+    expect(screen.getByText('Calculando tu resumen…')).toBeTruthy();
+    expect(screen.getByTestId('reports-loading')).toBeTruthy();
+    await act(async () => gate.resolve(summaryOf({ accountId: 'acc-1', desde: '', hasta: '' })));
+  });
+
+  it('vacío según el modo (criterio 29)', async () => {
+    const empty = {
+      getReportSummary: jest.fn(async (_t: string, o: Opts) => summaryOf(o, { cantidad: 0 })),
+      getReportByCategory: jest.fn(async (_t: string, o: Opts) => emptyCategories(o)),
+    };
+    const view = await renderReports(makeApi(empty), { ...OCT, mode: 'year' });
+    expect(
+      await screen.findByText('Sin movimientos en este período. Prueba con otro año.'),
+    ).toBeTruthy();
+    await view.unmount();
+    await renderReports(makeApi(empty), {
+      ...OCT,
+      mode: 'range',
+      desde: '2026-01-01',
+      hasta: '2026-02-01',
+    });
+    expect(
+      await screen.findByText('Sin movimientos en este período. Prueba con otro rango.'),
+    ).toBeTruthy();
+  });
+
+  it('el error usa ErrorBox con «Reintentar reportes» y no deja datos anteriores (criterio 29)', async () => {
+    const getReportSummary = jest
+      .fn()
+      .mockResolvedValueOnce(
+        summaryOf({ accountId: 'acc-1', desde: '2026-10-01', hasta: '2026-10-31' }),
+      )
+      .mockRejectedValueOnce(new AuthError('server'));
+    await renderReports(makeApi({ getReportSummary }));
+    await screen.findByTestId('report-card-ingresos');
+    await fireEvent.press(screen.getByLabelText('Mes siguiente'));
+    const message = await screen.findByText(/El servidor no está disponible/);
+    expect(StyleSheet.flatten(message.parent!.props.style).backgroundColor).toBe(
+      colors.expenseSoft,
+    );
+    expect(screen.queryByTestId('report-card-ingresos')).toBeNull();
+    expect(screen.getByLabelText('Reintentar reportes')).toBeTruthy();
+  });
+
+  it('cambiar account.id sin remontar descarta lo anterior y consulta la cuenta nueva (criterio 39)', async () => {
+    const gate = controlledPromise<ReportSummary>();
+    const getReportSummary = jest
+      .fn()
+      .mockImplementationOnce(async (_t: string, o: Opts) => summaryOf(o))
+      .mockReturnValueOnce(gate.promise);
+    const api = makeApi({ getReportSummary });
+    const view = await renderReports(api);
+    await screen.findByTestId('report-card-ingresos');
+    await view.rerender(
+      <ReportsScreen
+        account={account({ id: 'acc-9', nombre: 'Ahorros' })}
+        api={api}
+        initialView={OCT}
+        onViewChange={onViewChange}
+        onOpenHistory={onOpenHistory}
+      />,
+    );
+    expect(screen.queryByTestId('report-card-ingresos')).toBeNull();
+    expect(screen.queryByText('Sueldo')).toBeNull();
+    expect(screen.getByText('Calculando tu resumen…')).toBeTruthy();
+    expect(getReportSummary).toHaveBeenLastCalledWith(
+      'tok',
+      expect.objectContaining({ accountId: 'acc-9' }),
+    );
+    await act(async () => gate.resolve(summaryOf({ accountId: 'acc-9', desde: '', hasta: '' })));
+  });
+});
+
+describe('ReportsScreen: R4 (vista de la serie, UXQA-R4-02)', () => {
+  it('Tabla se conserva al cambiar de período y al reintentar tras un error', async () => {
+    const base = makeApi();
+    const getReportSummary = jest
+      .fn()
+      .mockImplementationOnce(base.getReportSummary)
+      .mockImplementationOnce(base.getReportSummary)
+      .mockRejectedValueOnce(new AuthError('server'))
+      .mockImplementation(base.getReportSummary);
+    await renderReports(makeApi({ getReportSummary }), { ...OCT, mode: 'year' });
+    await screen.findByText('Evolución mensual');
+    await fireEvent.press(screen.getByRole('radio', { name: 'Tabla' }));
+    await fireEvent.press(screen.getByLabelText('Año anterior'));
+    await screen.findByTestId('report-table-2026-01');
+    expect(screen.queryByTestId('report-period-2026-01')).toBeNull();
+    // Un error y «Reintentar reportes» tampoco la reinician.
+    await fireEvent.press(screen.getByLabelText('Año anterior'));
+    await fireEvent.press(await screen.findByLabelText('Reintentar reportes'));
+    await screen.findByText('Evolución mensual');
+    expect(screen.getByRole('radio', { name: 'Tabla' }).props.accessibilityState.selected).toBe(
+      true,
+    );
+    expect(screen.getByTestId('report-table-2026-01')).toBeTruthy();
+  });
+});
+
+describe('R4 D6: margen lateral responsive (ReportsScreen)', () => {
+  it.each([
+    [360, 16],
+    [412, 20],
+  ])('a %s dp el contenedor usa %s dp de relleno', async (width, margin) => {
+    mockWindow(width, 1);
+    await renderReports();
+    await screen.findByTestId('report-card-ingresos');
+    const root = screen.toJSON() as unknown as {
+      props: { style: import('react-native').ViewStyle };
+    };
+    expect(StyleSheet.flatten(root.props.style).padding).toBe(margin);
   });
 });

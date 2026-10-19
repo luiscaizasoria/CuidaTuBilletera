@@ -10,6 +10,29 @@ import type {
 } from './lib/auth-types';
 import { AuthError } from './lib/auth-types';
 
+// El mock de jest-expo mide 750 dp y fontScale 2, lo que activa siempre el modo de dos filas de la
+// barra de contexto. Las pruebas fijan una ventana normal salvo que prueben ese modo.
+// Con la caché de Jest fría (CI, primera corrida, máquina cargada) el primer render de las suites
+// pesadas transforma React Native en línea y supera el límite por defecto de 5 s por prueba o gancho
+// y el de 1 s de `findBy`/`waitFor`. Las suites pesadas llaman a esta función una vez, al inicio:
+// solo ajusta los límites, no cambia ninguna aserción ni silencia pruebas.
+export function relaxTimeoutsForColdCache() {
+  jest.setTimeout(30_000);
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('@testing-library/react-native').configure({ asyncUtilTimeout: 5000 });
+}
+
+export function mockWindow(width = 411, fontScale = 1, height = 800) {
+  // `import *` crea una copia del módulo con la interoperabilidad de Babel: se espía el original.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+    width,
+    height,
+    scale: 2.6,
+    fontScale,
+  });
+}
+
 export const NOW_MS = Date.UTC(2026, 9, 13, 12, 0, 0);
 export const USER: AuthUser = { id: 'sub-1', email: 'ana@example.com', name: 'Ana' };
 export const REFRESH_EXPIRES_AT = '2026-11-13T12:00:00.000Z';
@@ -202,3 +225,20 @@ export const fail = (kind: AuthError['kind'], status?: number, code?: string) =>
   jest.fn(async () => {
     throw new AuthError(kind, status, code);
   });
+
+// Elige un ícono con la hoja «Elegir ícono» (R5.1b): abre la fila «Ícono», busca por nombre, marca la
+// celda y confirma con «Usar este ícono». `root` limita las consultas (p. ej. a una hoja abierta).
+export async function chooseIcon(
+  name: string,
+  root: {
+    getByRole: (role: 'button' | 'radio', options: { name: string | RegExp }) => unknown;
+    getByLabelText: (label: string) => unknown;
+  },
+) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { fireEvent } = require('@testing-library/react-native');
+  await fireEvent.press(root.getByRole('button', { name: /^Ícono .*, cambiar$/ }));
+  await fireEvent.changeText(root.getByLabelText('Buscar ícono'), name);
+  await fireEvent.press(root.getByRole('radio', { name: `Ícono ${name}` }));
+  await fireEvent.press(root.getByRole('button', { name: 'Usar este ícono' }));
+}
