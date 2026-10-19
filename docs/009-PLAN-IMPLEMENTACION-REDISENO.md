@@ -137,3 +137,10 @@ Paso 342 (agente `mobile-ux-qa`, política de interfaz móvil y matriz docs/010)
 - Development Build `7c58a37f-e2d5-4e27-85f7-2c3fedb575a9` (docs/004). El código del modo inmersivo se consolida en commits locales en el paso 372 (cierre funcional en docs/003 D18 y docs/004).
 - Sin validación en dispositivo: INM-01 a INM-24 (docs/010 §21.1), con gestos y tres botones. Los APK anteriores no cargan este código.
 - Las etapas futuras F-A y F-B se conservan sin cambios.
+
+## 13. R6 - Preparación (paso 373, propuesta, sin implementar)
+
+- Decisiones y recursos en docs/003 «Decisión R6» y docs/008 §13.2; vista previa en `docs/design/prototipo/r6-vista-previa.html`.
+- Secuencia al aprobarse: `mobile-visual-designer` (regenerar primer plano, monocromático y splash) → `mobile-engineer` (copiar recursos, `app.json`, `expo-splash-screen`, alcancía y pruebas) → `mobile-ux-qa` → `qa-engineer` → `devops-engineer` (Development Build nueva, con autorización expresa) → validación en Android real (build `preview` para splash e ícono temático).
+- Archivos previstos: `app/app.json`, `app/package.json`, `package-lock.json`, `app/assets/*`, `app/src/screens/ui.tsx`, `AccountsScreen.tsx`, `app/src/theme/tokens.ts` (retirar `pigZoom`) y sus pruebas.
+- Las etapas futuras F-A y F-B se conservan sin cambios.

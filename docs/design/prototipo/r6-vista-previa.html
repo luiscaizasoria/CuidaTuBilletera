@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R6 - Vista previa de identidad visual (propuesta)</title>
+<style>
+  :root { --brand: #0F5F5A; --bg: #FFF9EE; --text: #1B2B2A; --muted: #51605F; --card: #FFFFFF; --line: #D9D2C3; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 17px; margin: 28px 0 8px; }
+  p.note { color: var(--muted); margin: 4px 0 12px; max-width: 760px; }
+  .aviso { background: #FFF0C2; border: 1px solid #E0B800; padding: 10px 12px; border-radius: 10px; max-width: 760px; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  figure { margin: 0; text-align: center; } figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; max-width: 150px; }
+  .tile { width: 108px; height: 108px; position: relative; overflow: hidden; background: var(--brand); }
+  .tile img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .circle { border-radius: 50%; } .squircle { border-radius: 30%; } .round { border-radius: 18%; }
+  .safe::after { content: ""; position: absolute; left: 50%; top: 50%; width: 61.3%; height: 61.3%; transform: translate(-50%,-50%); border: 2px dashed #FFD84D; border-radius: 50%; }
+  .mono { background: #D3E3FD; } .mono img { filter: invert(1) brightness(0.25) sepia(1) hue-rotate(190deg) saturate(3); }
+  .splash { width: 180px; height: 320px; background: var(--brand); position: relative; border-radius: 14px; overflow: hidden; }
+  .splash .mask { position: absolute; left: 50%; top: 50%; width: 128px; height: 128px; transform: translate(-50%,-50%); border-radius: 50%; outline: 2px dashed #FFD84D; }
+  .splash img { position: absolute; left: 50%; top: 50%; width: 192px; height: 192px; transform: translate(-50%,-50%); }
+  .phone { width: 300px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .hdr { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+  .hdr .t small { display: block; color: var(--muted); } .hdr .t b { font-size: 24px; }
+  .hdr img { width: 72px; height: 72px; flex-shrink: 0; }
+  .empty { text-align: center; padding: 12px 8px; } .empty img { width: 120px; height: 120px; margin-bottom: 16px; }
+  .btn { display: block; background: var(--brand); color: #fff; border-radius: 12px; padding: 14px; font-weight: 700; margin-top: 12px; text-align: center; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; }
+  .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 99px; background: #E3E8EF; }
+</style>
+</head>
+<body>
+<h1>R6 · Vista previa de identidad visual</h1>
+<p class="aviso"><b>Propuesta, pendiente de aprobación.</b> Muestra los recursos ACTUALES de <code>docs/design/assets/</code> con máscaras aproximadas de Android (no es una captura de dispositivo). Las líneas amarillas punteadas marcan la zona segura (círculo de 66/108 dp del ícono adaptable; máscara circular del splash). Varios recursos se regeneran antes de copiarlos al proyecto.</p>
+
+<h2>1. Ícono de la aplicación (<code>icon.png</code>, 1024×1024, sin alfa) · reutilizar tal cual para la build de prueba</h2>
+<div class="row">
+  <figure><div class="tile round"><img src="../assets/icon.png" alt="Ícono principal"></div><figcaption>Esquinas redondeadas</figcaption></figure>
+  <figure><div class="tile circle"><img src="../assets/icon.png" alt="Ícono principal en círculo"></div><figcaption>Círculo</figcaption></figure>
+</div>
+
+<h2>2. Ícono adaptable: fondo verde #0F5F5A (<code>backgroundColor</code>) + primer plano</h2>
+<p class="note">Con el primer plano ACTUAL (arte al 62 % del ancho) las puntas de las hojas tocan o salen de la zona segura: se regenera al ~53 %.</p>
+<div class="row">
+  <figure><div class="tile circle safe"><img src="../assets/adaptive-icon-foreground.png" alt=""></div><figcaption>Círculo + zona segura</figcaption></figure>
+  <figure><div class="tile squircle"><img src="../assets/adaptive-icon-foreground.png" alt=""></div><figcaption>Squircle</figcaption></figure>
+  <figure><div class="tile round"><img src="../assets/adaptive-icon-foreground.png" alt=""></div><figcaption>Esquinas redondeadas</figcaption></figure>
+</div>
+
+<h2>3. Monocromático (Android 13+, ícono temático) · el actual se rehace</h2>
+<div class="row">
+  <figure><div class="tile circle mono"><img src="../assets/adaptive-icon-monochrome.png" alt=""></div><figcaption>Actual: una mancha; sin ojo, ranura ni «$»</figcaption></figure>
+</div>
+
+<h2>4. Splash (fondo #0F5F5A) · el arte actual se reduce</h2>
+<p class="note">Android 12+ recorta el ícono con una máscara circular (línea punteada). Con el arte actual al 78 % se cortan orejas, hojas y moneda.</p>
+<div class="row">
+  <figure><div class="splash"><img src="../assets/splash-icon.png" alt=""><div class="mask"></div></div><figcaption>Splash actual con máscara circular</figcaption></figure>
+</div>
+
+<h2>5. Alcancía en Mis cuentas (<code>vacio-alcancia.png</code>, ya en <code>app/assets/illustrations/</code>)</h2>
+<p class="note">Decorativa (sin etiqueta para lectores de pantalla). Una sola alcancía por pantalla: con cuentas, en el encabezado (72 dp a 360 dp de ancho); sin cuentas, la de 120 dp en el estado vacío y no en el encabezado. Se oculta con ancho ≤ 340 dp o fuente ≥ 175 %.</p>
+<div class="row">
+  <div class="phone">
+    <span class="tag">Con cuentas</span>
+    <div class="hdr"><div class="t"><small>Hola, Luis</small><b>Mis cuentas</b></div><img src="../assets/illustrations/vacio-alcancia.png" alt=""></div>
+    <div class="card"><b>Efectivo</b><br>$ 120.00</div>
+    <div class="card"><b>Banco</b><br>$ 1,450.00</div>
+  </div>
+  <div class="phone">
+    <span class="tag">Sin cuentas</span>
+    <div class="hdr"><div class="t"><small>Hola, Luis</small><b>Mis cuentas</b></div></div>
+    <div class="empty"><img src="../assets/illustrations/vacio-alcancia.png" alt=""><br><b>Todavía no tienes cuentas</b><div class="btn">Crear mi primera cuenta</div></div>
+  </div>
+</div>
+</body>
+</html>

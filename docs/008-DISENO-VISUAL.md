@@ -280,7 +280,7 @@ Técnica común de profundidad (sin dependencias): contenedor con `overflow: 'hi
 
 ### 6.1 Encabezado de Mis cuentas (docs/007 §5.2.2)
 
-Fondo **claro** (`bg` + manchas), sin franja verde. Fila superior de 48 dp: «CuidaTuBilletera» (`brandLabel`) a la izquierda y **avatar** a la derecha (círculo `surface` de 40 dp con borde 1.5 `border`, `sh1`, inicial 16/800 `text`; objetivo táctil 48 dp; etiqueta «Tu perfil y sesión»). Debajo, saludo + título con subrayado amarillo a la izquierda y la **alcancía** a la derecha, alineada abajo: caja de 72 dp (96 dp con ancho ≥ 400 dp) y la imagen ampliada ×1.4 dentro de la caja para compensar el margen transparente del PNG (el arte visible queda en ~62 dp / ~84 dp); un destello amarillo. Con fuente ≥ 130 % la caja baja a 48 dp; con fuente ≥ 175 % o ancho ≤ 340 dp se oculta (docs/007 §5.2.5).
+Fondo **claro** (`bg` + manchas), sin franja verde. Fila superior de 48 dp: «CuidaTuBilletera» (`brandLabel`) a la izquierda y **avatar** a la derecha (círculo `surface` de 40 dp con borde 1.5 `border`, `sh1`, inicial 16/800 `text`; objetivo táctil 48 dp; etiqueta «Tu perfil y sesión»). Debajo, saludo + título con subrayado amarillo a la izquierda y la **alcancía** a la derecha, alineada abajo: caja de 72 dp (96 dp con ancho ≥ 400 dp) y la imagen ampliada ×1.4 dentro de la caja para compensar el margen transparente del PNG (el arte visible queda en ~62 dp / ~84 dp) [**SUSTITUIDO por §13.2 (paso 373, propuesta): sin ampliación ×1.4; el PNG casi no tiene margen y el arte ocupa ~93 % de la caja**]; un destello amarillo. Con fuente ≥ 130 % la caja baja a 48 dp; con fuente ≥ 175 % o ancho ≤ 340 dp se oculta (docs/007 §5.2.5).
 
 **Hoja de perfil** (14.17): hoja inferior `surface`, radio 24 arriba, asa de 40 × 4; avatar de 48 dp en `yellowSoft`, nombre 17/800, correo `small`; [Cerrar sesión] `secondary` a todo el ancho y [Cerrar] `ghost`. Tocar fuera la cierra.
 
@@ -1037,9 +1037,9 @@ Descartados por contraste: `text3` `#5F6B68` y `borderStrong` `#7E8A86` como col
 
 **Nota para coherencia con docs/007 §5.15.1.** Esa subsección fija para el botón fondo `surface`, borde 1.5 `borderStrong` y glifo de texto a 24 sp; esta subsección lo sustituye por círculo `segBg`, borde `border` y chevron dibujado (cierra la pregunta Q5 de docs/007). Debe alinearla `mobile-ux-designer` o quien coordina, junto con la zona de 48 dp (que no cambia).
 
-### 6.18 Disposición con barra del sistema oculta (docs/003 D17; docs/007 §5.15 B y C; PROPUESTA de ajuste, sin cambios de código)
+### 6.18 Disposición con barra del sistema oculta (docs/003 D17 y D18; docs/007 §5.15 B y C; análisis de geometría; la propuesta `edgeMin` NO se adoptó)
 
-Alcance: solo valida la disposición visual cuando `insets.bottom` (`B`) puede valer 0 (barra oculta), ~16 a 24 dp (gestos) o ~48 dp (tres botones al revelarse). No rediseña. Base: HEAD 62100f0 (la implementación de D17 todavía no está en esa rama; las cifras se derivan de los estilos reales). **Sin medición en Android real**: las cifras son geometría de los estilos, no capturas.
+Alcance: solo valida la disposición visual cuando `insets.bottom` (`B`) puede valer 0 (barra oculta), ~16 a 24 dp (gestos) o ~48 dp (tres botones al revelarse). No rediseña. Base: HEAD 62100f0, anterior a D17. **Actualización (paso 373):** D17 está implementada y confirmada funcionalmente por el usuario en Android real (commits `75833ed` y `011d59f`, Development Build `7c58a37f`; docs/003 D18). Se adoptaron `SafeAreaProvider`, `useSystemInsets` sobre insets reales y `navigationBarTranslucent`; **no** se adoptó `sizes.edgeMin` (docs/004 paso 367: sin mínimos fijos, se evalúa con INM-08, INM-20 e INM-21, aún pendientes en dispositivo). Las cifras se derivan de los estilos reales: son geometría, no capturas ni mediciones en dispositivo.
 
 **Geometría base (verificable en el código).**
 
@@ -1077,7 +1077,7 @@ Nota: con `B` = 48 (revelada) la barra del sistema se superpone un instante; el 
 3. FAB y Snackbar no se pegan al borde en ningún caso (>= 79 y >= 71 dp); no necesitan ajuste.
 4. La franja superior no cambia (la barra de estado sigue visible); su color ya sigue a `statusBar`.
 
-**Recomendación (relleno visual mínimo, sin números por modelo).** Una sola constante nueva de diseño, `sizes.edgeMin = 8` (dp), y usar `max(B, edgeMin)` como relleno inferior efectivo `Be` solo donde un control táctil queda a menos de 16 dp del borde:
+**Recomendación original, NO adoptada (relleno visual mínimo, sin números por modelo).** Una sola constante nueva de diseño, `sizes.edgeMin = 8` (dp), y usar `max(B, edgeMin)` como relleno inferior efectivo `Be` solo donde un control táctil queda a menos de 16 dp del borde:
 
 | Contenedor | Relleno actual | Relleno recomendado | Resultado con B = 0 | Con B >= 8 |
 | --- | --- | --- | --- | --- |
@@ -1279,7 +1279,7 @@ export const sizes = {
   accountCardMin: 88, accountCardMinWide: 92, accountIcon: 52, avatar: 40,
   // APROBADOS como valores iniciales (docs/003 Decisión R0 D8; valores del prototipo, docs/007 §10): tabMinWidth 48, tabPillPadX 10, chipSmHeight 36, chipHitSlop 6, segmentOption 48, categoryOptionMin 56, calendarCellHeight 52. El relleno horizontal de la pestaña (2 dp, §6.8) no tiene token propio por ahora
   tabMinWidth: 48, tabPillPadX: 10, chipSmHeight: 36, chipHitSlop: 6, segmentOption: 48, categoryOptionMin: 56, calendarCellHeight: 52,
-  headerPig: 72, headerPigWide: 96, headerPigLargeFont: 48, pigZoom: 1.4, balanceCardMin: 132, balanceCardPig: 104,
+  headerPig: 72, headerPigWide: 96, headerPigLargeFont: 48, pigZoom: 1.4 /* SUSTITUIDO por §13.2: se retira, sin ampliación */, balanceCardMin: 132, balanceCardPig: 104,
 } as const;
 
 // Fondo del cuadrado de categoría: color de la API oscurecido (mezcla con negro, pasos de 1 %) hasta 3:1 con blanco.
@@ -1333,7 +1333,7 @@ Compatibilidad con pruebas: conservar `accessibilityLabel` y `testID` de docs/00
 
 ## 13. Especificación del ícono Android
 
-Recursos generados desde la imagen aprobada (verificados, ver 13.1). Rutas destino futuras en `app/assets/` (la carpeta hoy **no existe**; no se creó):
+Recursos generados desde la imagen aprobada (verificados, ver 13.1). Rutas destino futuras en `app/assets/` (la carpeta hoy contiene solo `brand/` e `illustrations/`; los recursos nativos de esta tabla aún no se han copiado):
 
 | Archivo en `docs/design/assets/` | Destino futuro | Formato y medida | Uso |
 | --- | --- | --- | --- |
@@ -1343,6 +1343,8 @@ Recursos generados desde la imagen aprobada (verificados, ver 13.1). Rutas desti
 | `adaptive-icon-monochrome.png` | `app/assets/adaptive-icon-monochrome.png` | PNG 1024x1024 RGBA, silueta blanca sobre transparente | `android.adaptiveIcon.monochromeImage` (ícono temático Android 13+) |
 | `splash-icon.png` | `app/assets/splash-icon.png` | PNG 1024x1024 RGBA, arte al 78 % | `expo-splash-screen` |
 | `favicon.png` | `app/assets/favicon.png` | PNG 48x48 | Solo web; opcional (la app es Android) |
+
+> **Nota (paso 373):** el bloque JSON siguiente y las columnas «arte al 62 %»/«arte al 78 %» de la tabla quedan **sustituidos por §13.2** (solo `backgroundColor` sin `backgroundImage`; `imageWidth` 288; arte regenerado al ~53 %; monocromático rehecho). Se conservan como historial.
 
 Cambios futuros de `app.json` (**no aplicados**; dependen de la versión de Expo instalada, `expo ~57`; confirmar en la documentación de esa versión):
 
@@ -1391,6 +1393,21 @@ Limitaciones honestas:
 3. El recorte del sujeto sobre el verde se hizo por distancia de color: es fiable para la alcancía, la moneda y los destellos (revisado sobre fondo magenta), pero queda un halo/sombra mínima en los pies de la alcancía.
 4. El monocromático es una silueta sólida (sin ojos ni detalles). Funciona para el ícono temático, pero un monocromático diseñado a mano (con ojos y ranura) sería mejor.
 5. No se probó en un dispositivo ni en un lanzador Android real.
+
+
+### 13.2 Revisión R6 (paso 373, PROPUESTA pendiente de aprobación; corrige §6.1 y §13)
+
+Medidas tomadas sobre los recursos actuales y revisadas por `mobile-visual-designer` y `architect`. Vista previa local: `docs/design/prototipo/r6-vista-previa.html` (máscaras aproximadas, no es una captura de dispositivo).
+
+- **Fondo adaptable:** una sola clave, `android.adaptiveIcon.backgroundColor: "#0F5F5A"`. No se declara `backgroundImage` (el bloque de §13 combinaba ambas; con las dos gana la imagen). `adaptive-icon-background.png` queda sin uso y no se copia.
+- **Primer plano:** el arte actual ocupa 635×574 px (62 % del ancho) y las puntas de las hojas quedan a ~340 px del centro, fuera del círculo seguro de 628 px (66/108 dp). Se regenera con el arte a ~53 % del ancho (≈540×490 px) y ningún píxel con alfa > 10 % fuera del círculo de 628 px.
+- **Monocromático:** la silueta sólida actual se lee como una mancha. Se rehace (cuerpo relleno con recortes para ojo, hocico y ranura; moneda en anillo con «$»; trazos y huecos ≥ 24 px a 1024) o se omite `monochromeImage`; no se usa la actual.
+- **Splash:** Android 12+ enmascara el ícono en círculo; el arte actual (799×722, 78 %) se recortaría. Se regenera con el arte dentro de un círculo de 640 px (~53-62 % del lienzo), `imageWidth: 288`, `backgroundColor: "#0F5F5A"`. Sustituye a `imageWidth: 200` de §13. Requiere `expo-splash-screen` (dependencia nativa nueva, `npx expo install`, ~57.0.9 según `bundledNativeModules`) como plugin.
+- **`icon.png`:** se reutiliza tal cual para la build de prueba; regenerar a 1024 nativos antes de Google Play (decisión 15.7).
+- **Alcancía de Mis cuentas:** `vacio-alcancia.png` (360×360; el arte ocupa 336×304) casi no tiene margen transparente, así que **no se aplica la ampliación ×1.4** de §6.1 ni el token `pigZoom: 1.4`: encabezado: oculta con ancho ≤ 340 dp (incluye 320 dp) o fuente ≥ 175 %; 72 dp con ancho de 341 a 399 dp; 96 dp con ancho ≥ 400 dp; 48 dp con fuente ≥ 130 % (y ancho > 340 dp); vacío («Sin cuentas» y «Solo archivadas») 120 dp con 16 dp hasta el título. Siempre decorativa. Una sola alcancía por pantalla (con cuentas: encabezado; sin cuentas: la del vacío). La del vacío también se oculta con fuente ≥ 175 % (como el `EmptyState` actual) y va sin círculo; esto precisa §9.1 y §9.3 («círculo con emoji hasta R6» deja de aplicar al aprobarse R6).
+- **Nombre visible:** se mantiene «CuidaTuBilletera» (16 caracteres; riesgo de recorte en el lanzador, sin verificar). Alternativa si se trunca en el dispositivo: «Cuida tu Billetera». Decisión del usuario tras ver el ícono en el teléfono.
+- **Pruebas:** el splash y el ícono temático no se reflejan fielmente en una Development Build; se validan con una build `preview` en Android 12+ real y en uno anterior.
+- **Contraste:** blanco sobre `#0F5F5A` = 7,49:1. Verificar el amarillo de marca con `docs/design/contrast.js` antes de citarlo; el arte (moneda, destellos) es gráfico decorativo sin texto.
 
 
 ## 14. Prototipo y verificación visual
