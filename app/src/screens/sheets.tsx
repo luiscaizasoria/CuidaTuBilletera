@@ -69,6 +69,7 @@ export function Sheet({
       visible={visible}
       animationType={reduceMotion ? 'none' : 'slide'}
       statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onClose}
       testID={testID}
     >

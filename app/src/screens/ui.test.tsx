@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Platform, StatusBar, StyleSheet, Text } from 'react-native';
+import { Platform, StyleSheet, Text } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import {
   Button,
   Card,
@@ -305,23 +306,22 @@ describe('Snackbar', () => {
 });
 
 describe('Screen', () => {
-  const original = StatusBar.currentHeight;
   const originalOS = Platform.OS;
   beforeEach(() => {
     Platform.OS = 'android';
   });
   afterEach(() => {
     Platform.OS = originalOS;
-    (StatusBar as { currentHeight?: number }).currentHeight = original;
   });
 
-  // R5.1: la barra informada manda solo si supera el respaldo de 32 dp (mitigación provisional).
-  it('relleno superior con la altura de la barra de estado en Android', async () => {
-    (StatusBar as { currentHeight?: number }).currentHeight = 40;
+  // Con SafeAreaProvider mandan los insets reales del sistema (docs/003 D17).
+  it('relleno superior con el inset real del sistema en Android', async () => {
     await render(
-      <Screen>
-        <Text>Hola</Text>
-      </Screen>,
+      <SafeAreaInsetsContext.Provider value={{ top: 40, bottom: 20, left: 0, right: 0 }}>
+        <Screen>
+          <Text>Hola</Text>
+        </Screen>
+      </SafeAreaInsetsContext.Provider>,
     );
     expect(screen.getByTestId('screen-top-inset')).toHaveStyle({
       height: 40,
@@ -330,8 +330,7 @@ describe('Screen', () => {
     expect(screen.getByText('Hola')).toBeTruthy();
   });
 
-  it.each([0, undefined])('altura %s usa el respaldo', async (h) => {
-    (StatusBar as { currentHeight?: number }).currentHeight = h;
+  it('sin provider usa el respaldo superior', async () => {
     await render(
       <Screen statusBar="surface" scroll={false}>
         <Text>Hola</Text>
@@ -343,8 +342,18 @@ describe('Screen', () => {
     });
   });
 
-  it('sin scroll y sin barra inferior reserva el margen inferior del sistema', async () => {
-    (StatusBar as { currentHeight?: number }).currentHeight = 24;
+  it('sin scroll y sin barra inferior reserva el margen inferior real del sistema', async () => {
+    await render(
+      <SafeAreaInsetsContext.Provider value={{ top: 40, bottom: 20, left: 0, right: 0 }}>
+        <Screen scroll={false}>
+          <Text>Hola</Text>
+        </Screen>
+      </SafeAreaInsetsContext.Provider>,
+    );
+    expect(screen.getByTestId('screen-bottom-inset')).toHaveStyle({ height: 20 });
+  });
+
+  it('sin provider el margen inferior usa el respaldo', async () => {
     await render(
       <Screen scroll={false}>
         <Text>Hola</Text>

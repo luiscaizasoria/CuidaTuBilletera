@@ -1,8 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import { useMemo } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './hooks/use-auth';
 import { GuidesProvider } from './hooks/use-guides';
+import { useImmersiveNavigation } from './hooks/use-immersive-navigation';
 import { createAuthService, type AuthService } from './lib/auth-service';
 import { readConfig } from './lib/config';
 import { createGoogleProvider } from './lib/google-auth';
@@ -69,9 +71,10 @@ export default function App({
 }) {
   const resolved = useMemo(() => service ?? createDefaultService(), [service]);
   const api = useMemo(() => resourcesApi ?? createDefaultResourcesApi(), [resourcesApi]);
+  useImmersiveNavigation();
 
   return (
-    <>
+    <SafeAreaProvider>
       {resolved ? (
         <AuthProvider service={resolved}>
           <Root api={api} guideStorage={guideStorage} />
@@ -82,7 +85,7 @@ export default function App({
         </Screen>
       )}
       <StatusBar style="dark" />
-    </>
+    </SafeAreaProvider>
   );
 }
 
