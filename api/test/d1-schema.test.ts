@@ -44,9 +44,9 @@ describe('esquema creado por la migración 0001', () => {
     const { results } = await db
       .prepare('SELECT name FROM d1_migrations ORDER BY id')
       .all<{ name: string }>();
-    // La 0002 (cuentas y categorías), la 0003 (movimientos) y la 0004 (apariencia de cuenta) se
+    // La 0002 (cuentas y categorías), la 0003 (movimientos) y la 0004 (apariencia de cuenta) y la 0005 (Conciliación) se
     // prueban en accounts-schema.test.ts, transactions-schema.test.ts y account-appearance-*.
-    expect(results).toHaveLength(4);
+    expect(results).toHaveLength(5);
     expect(results[0]?.name).toMatch(/^0001_users_refresh_tokens(\.sql)?$/);
   });
 

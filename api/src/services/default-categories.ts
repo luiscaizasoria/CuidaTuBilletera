@@ -17,7 +17,9 @@ export const DEFAULT_CATEGORIES: readonly DefaultCategory[] = [
   { nombre: 'Hogar', tipo: 'egreso', icono: 'home', color: '#14B8A6' },
   { nombre: 'Entretenimiento', tipo: 'egreso', icono: 'film', color: '#EC4899' },
   { nombre: 'Otros gastos', tipo: 'egreso', icono: 'ellipsis', color: '#6B7280' },
+  { nombre: 'Conciliación', tipo: 'egreso', icono: 'exchange', color: '#6366F1' },
   { nombre: 'Sueldo', tipo: 'ingreso', icono: 'briefcase', color: '#22C55E' },
   { nombre: 'Ventas', tipo: 'ingreso', icono: 'shopping-bag', color: '#06B6D4' },
   { nombre: 'Otros ingresos', tipo: 'ingreso', icono: 'plus-circle', color: '#84CC16' },
+  { nombre: 'Conciliación', tipo: 'ingreso', icono: 'exchange', color: '#6366F1' },
 ];

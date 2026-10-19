@@ -110,7 +110,7 @@ describe('autenticación y cabeceras (los 7 endpoints)', () => {
 });
 
 describe('POST /accounts', () => {
-  it('crea la cuenta y exactamente 11 categorías iniciales', async () => {
+  it('crea la cuenta y exactamente las categorías iniciales', async () => {
     const body = await createAccount({ nombre: '  Billetera  ', saldoInicial: 12_345 });
     expect(body.account).toEqual({
       id: expect.any(String),
@@ -123,7 +123,7 @@ describe('POST /accounts', () => {
       createdAt: iso(NOW),
       updatedAt: iso(NOW),
     });
-    expect(body.categories).toHaveLength(11);
+    expect(body.categories).toHaveLength(DEFAULT_CATEGORIES.length);
     expect(
       body.categories
         .filter((c: Json) => c.tipo === 'egreso')
@@ -136,6 +136,7 @@ describe('POST /accounts', () => {
         'Entretenimiento',
         'Hogar',
         'Otros gastos',
+        'Conciliación',
         'Salud',
         'Servicios básicos',
         'Transporte',
@@ -146,7 +147,7 @@ describe('POST /accounts', () => {
         .filter((c: Json) => c.tipo === 'ingreso')
         .map((c: Json) => c.nombre)
         .sort(),
-    ).toEqual(['Otros ingresos', 'Sueldo', 'Ventas'].sort());
+    ).toEqual(['Conciliación', 'Otros ingresos', 'Sueldo', 'Ventas'].sort());
     for (const category of body.categories) {
       expect(category).toEqual({
         id: expect.any(String),
@@ -161,7 +162,9 @@ describe('POST /accounts', () => {
         updatedAt: iso(NOW),
       });
     }
-    expect(await count(db, 'categories', `account_id = '${body.account.id}'`)).toBe(11);
+    expect(await count(db, 'categories', `account_id = '${body.account.id}'`)).toBe(
+      DEFAULT_CATEGORIES.length,
+    );
   });
 
   it('el saldo inicial es opcional (0) y admite negativos y los extremos del rango', async () => {
@@ -282,7 +285,7 @@ describe('atomicidad de la creación', () => {
         }),
       ),
     ];
-    expect(statements).toHaveLength(12);
+    expect(statements).toHaveLength(DEFAULT_CATEGORIES.length + 1);
     await expect(db.batch(statements)).rejects.toThrow();
     expect(await count(db, 'accounts')).toBe(0);
     expect(await count(db, 'categories')).toBe(0);
@@ -420,7 +423,9 @@ describe('PATCH /accounts/:id', () => {
   it('archivar una cuenta conserva sus categorías', async () => {
     const { account } = await createAccount();
     await call('PATCH', `/accounts/${account.id}`, token, { archivada: true });
-    expect(await count(db, 'categories', `account_id = '${account.id}'`)).toBe(11);
+    expect(await count(db, 'categories', `account_id = '${account.id}'`)).toBe(
+      DEFAULT_CATEGORIES.length,
+    );
   });
 
   it.each([
@@ -477,16 +482,16 @@ describe('GET /accounts/:id/categories', () => {
     const { account } = await createAccount();
     const url = `/accounts/${account.id}/categories`;
     const egresos = await json(await call('GET', `${url}?tipo=egreso`, token));
-    expect(egresos.total).toBe(8);
-    expect((await json(await call('GET', `${url}?tipo=ingreso`, token))).total).toBe(3);
+    expect(egresos.total).toBe(9);
+    expect((await json(await call('GET', `${url}?tipo=ingreso`, token))).total).toBe(4);
     const page = await json(await call('GET', `${url}?tipo=egreso&page=2&page_size=3`, token));
     expect(page.items).toHaveLength(3);
-    expect(page).toMatchObject({ page: 2, pageSize: 3, total: 8 });
+    expect(page).toMatchObject({ page: 2, pageSize: 3, total: 9 });
 
     await call('PATCH', `/categories/${egresos.items[0].id}`, token, { archivada: true });
-    expect((await json(await call('GET', url, token))).total).toBe(10);
+    expect((await json(await call('GET', url, token))).total).toBe(DEFAULT_CATEGORIES.length - 1);
     const all = await json(await call('GET', `${url}?incluirArchivadas=true`, token));
-    expect(all.total).toBe(11);
+    expect(all.total).toBe(DEFAULT_CATEGORIES.length);
     expect(all.items.find((c: Json) => c.id === egresos.items[0].id).archivada).toBe(true);
   });
 
@@ -516,7 +521,7 @@ describe('GET /accounts/:id/categories', () => {
     const { account } = await createAccount();
     await call('PATCH', `/accounts/${account.id}`, token, { archivada: true });
     const body = await json(await call('GET', `/accounts/${account.id}/categories`, token));
-    expect(body.total).toBe(11);
+    expect(body.total).toBe(DEFAULT_CATEGORIES.length);
   });
 });
 
@@ -590,7 +595,9 @@ describe('POST /accounts/:id/categories', () => {
     const response = await call('POST', url(account.id), token, body);
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual(ERR('INVALID_REQUEST'));
-    expect(await count(db, 'categories', `account_id = '${account.id}'`)).toBe(11);
+    expect(await count(db, 'categories', `account_id = '${account.id}'`)).toBe(
+      DEFAULT_CATEGORIES.length,
+    );
   });
 
   it('rechaza un nombre repetido sin distinguir mayúsculas ni tildes en mayúscula', async () => {
@@ -600,7 +607,9 @@ describe('POST /accounts/:id/categories', () => {
       expect(response.status).toBe(409);
       expect(await response.json()).toEqual(ERR('CATEGORY_NAME_TAKEN'));
     }
-    expect(await count(db, 'categories', `account_id = '${account.id}'`)).toBe(11);
+    expect(await count(db, 'categories', `account_id = '${account.id}'`)).toBe(
+      DEFAULT_CATEGORIES.length,
+    );
   });
 
   it('el duplicado vale por cuenta y tipo: mismo nombre en el otro tipo o en otra cuenta es válido', async () => {
@@ -632,7 +641,7 @@ describe('POST /accounts/:id/categories', () => {
 
   it('el límite de 60 categorías por cuenta cuenta las archivadas', async () => {
     const { account } = await createAccount();
-    for (let i = 0; i < MAX_CATEGORIES_PER_ACCOUNT - 11; i += 1) {
+    for (let i = 0; i < MAX_CATEGORIES_PER_ACCOUNT - DEFAULT_CATEGORIES.length; i += 1) {
       await insertCategory(db, account.id, { nombre: `Extra ${i}`, archivada: i % 2 });
     }
     expect(await count(db, 'categories', `account_id = '${account.id}'`)).toBe(
@@ -648,7 +657,7 @@ describe('POST /accounts/:id/categories', () => {
 
   it('con 59 categorías todavía permite la 60', async () => {
     const { account } = await createAccount();
-    for (let i = 0; i < MAX_CATEGORIES_PER_ACCOUNT - 12; i += 1) {
+    for (let i = 0; i < MAX_CATEGORIES_PER_ACCOUNT - DEFAULT_CATEGORIES.length - 1; i += 1) {
       await insertCategory(db, account.id, { nombre: `Extra ${i}` });
     }
     expect(

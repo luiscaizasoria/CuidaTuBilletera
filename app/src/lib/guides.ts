@@ -52,7 +52,7 @@ export const GUIDES = [
   {
     id: 'categorias',
     module: 'mas',
-    text: 'Las categorías ordenan tus gastos e ingresos. Puedes cambiarles el nombre y el color.',
+    text: 'Las categorías ordenan tu dinero. Si tu saldo no coincide con el real, anota la diferencia en Conciliación.',
   },
 ] as const satisfies readonly Guide[];
 

@@ -4,7 +4,7 @@ Versión 1.0 · Documento rector. Todo lo que se construya (por Claude Code o po
 
 ## 1. Propósito
 
-Aplicación móvil Android para llevar gastos e ingresos diarios, organizados en cuentas separadas (por ejemplo negocio y casa), con historial, calendario, reportes, exportación y conciliación del saldo con el dinero real. El login es con Google. La primera versión debe ser simple, funcional y casi sin costo de infraestructura.
+Aplicación móvil Android para llevar gastos e ingresos diarios, organizados en cuentas separadas (por ejemplo negocio y casa), con historial, calendario, reportes, exportación y conciliación manual del saldo con el dinero real mediante categorías predeterminadas. El login es con Google. La primera versión debe ser simple, funcional y casi sin costo de infraestructura.
 
 ## 2. Principios
 
@@ -12,7 +12,7 @@ Aplicación móvil Android para llevar gastos e ingresos diarios, organizados en
 2. **Gratis por diseño.** Toda la infraestructura debe caber en las capas gratuitas de Cloudflare y GitHub. La única herramienta de pago es Claude Code.
 3. **El servidor manda.** La app es solo online. Toda regla de negocio se valida en la API; la app valida solo para dar mejor experiencia.
 4. **Dinero correcto.** Montos como enteros en centavos. Nunca decimales de punto flotante.
-5. **Historial auditable.** Los movimientos anulados se conservan para auditoría y dejan de afectar los saldos. Las cuentas se archivan y las categorías vinculadas a movimientos no se eliminan físicamente. La conciliación se registra como movimiento de ajuste.
+5. **Historial auditable.** Los movimientos anulados se conservan para auditoría y dejan de afectar los saldos. Las cuentas se archivan y las categorías vinculadas a movimientos no se eliminan físicamente. La conciliación manual se registra como un movimiento normal de ingreso o gasto con la categoría «Conciliación».
 6. **Probado y automatizado.** Nada se fusiona sin pruebas ni sin pasar la integración continua.
 7. **Reproducible.** Cualquier persona o máquina levanta el proyecto con un comando dentro de un contenedor.
 8. **Preparado para crecer sin construir de más.** Se dejan puntos de extensión baratos (por ejemplo la columna `plan`), no funciones.
@@ -28,7 +28,7 @@ Aplicación móvil Android para llevar gastos e ingresos diarios, organizados en
 - Historial con filtros y selector de rango de fechas tipo calendario.
 - Calendario mensual que muestra visualmente en qué días hubo movimientos.
 - Reportes por mes, por año y entre fechas.
-- Conciliación: igualar el saldo de una cuenta con el dinero real.
+- Conciliación manual: igualar el saldo de una cuenta con el dinero real registrando un ingreso o un egreso con la categoría predeterminada «Conciliación», con el importe que el usuario elige (docs/003, Decisión 6.1).
 - Exportación del historial (CSV y PDF) para enviarlo por correo mediante el menú de compartir de Android.
 - Administración de catálogos (categorías).
 
@@ -114,7 +114,7 @@ Todos los identificadores son UUID en texto. Todas las tablas tienen `created_at
 - **users**: id, google_sub (único), email, nombre, currency (valor fijo `USD`), plan (valor `free`), plan_expires_at (nulo)
 - **accounts**: id, user_id, nombre, saldo_inicial (centavos), archivada
 - **categories**: id, account_id, nombre, descripcion (opcional), tipo (`ingreso` o `egreso`), icono, color, archivada
-- **transactions**: id, account_id, category_id (nulo solo en ajustes), tipo (`ingreso`, `gasto` o `ajuste`), monto (centavos, entero), fecha (día calendario, formato AAAA-MM-DD), nota, deleted_at (nulo si está activo), created_at
+- **transactions**: id, account_id, category_id, tipo (`ingreso` o `gasto`), monto (centavos, entero), fecha (día calendario, formato AAAA-MM-DD), nota, deleted_at (nulo si está activo), created_at
 - **refresh_tokens**: id, user_id, family_id, token_hash, expires_at, revoked_at, revoked_reason, replaced_by (detalle en «Modelo persistente de tokens», sección de sesiones de Fase 2A)
 
 Índices mínimos: `transactions(account_id, fecha)`, `transactions(account_id, category_id)`, `categories(account_id, tipo)`, `accounts(user_id)`.
@@ -123,7 +123,7 @@ Todos los identificadores son UUID en texto. Todas las tablas tienen `created_at
 
 - Nombre de categoría único por cuenta y tipo.
 - Un movimiento solo acepta una categoría de su misma cuenta y cuyo tipo coincida con el del movimiento. La API lo valida.
-- Monto de ingreso y gasto siempre positivo; el signo lo da el tipo. El ajuste puede ser positivo o negativo.
+- Monto de ingreso y gasto siempre positivo; el signo lo da el tipo.
 - Las cuentas se archivan, no se eliminan físicamente. Una categoría puede eliminarse físicamente solo si no tiene movimientos asociados, incluidos los anulados; si tiene movimientos, puede archivarse. Una cuenta o categoría archivada no admite movimientos nuevos, pero conserva su historial.
 - La fecha del movimiento es un día de calendario sin zona horaria. Los reportes agrupan por ese día.
 
@@ -136,8 +136,10 @@ Todos los identificadores son UUID en texto. Todas las tablas tienen `created_at
 
 Al crear una cuenta, la API copia un conjunto inicial editable.
 
-- Egresos: Alimentación, Transporte, Servicios básicos, Salud, Educación, Hogar, Entretenimiento, Otros gastos.
-- Ingresos: Sueldo, Ventas, Otros ingresos.
+- Egresos: Alimentación, Transporte, Servicios básicos, Salud, Educación, Hogar, Entretenimiento, Otros gastos, Conciliación.
+- Ingresos: Sueldo, Ventas, Otros ingresos, Conciliación.
+
+«Conciliación» es una categoría normal (editable, archivable y eliminable si no tiene movimientos); su ícono y color iniciales son `exchange` y `#6366F1`. Las cuentas existentes la reciben una sola vez, sin duplicados, y no se vuelve a crear si el usuario la renombra, archiva o elimina (docs/003, Decisión 6.1).
 
 Después cada cuenta administra sus categorías de forma independiente.
 
@@ -145,14 +147,15 @@ Después cada cuenta administra sus categorías de forma independiente.
 
 - Un usuario nuevo crea su primera cuenta manualmente; el inicio de sesión no crea cuentas financieras automáticamente.
 - El saldo inicial es opcional en el formulario y en la API. Cuando no se envía, se registra `0` centavos USD.
-- La creación de cada cuenta y sus 11 categorías iniciales debe ser atómica.
+- La creación de cada cuenta y sus 13 categorías iniciales debe ser atómica.
 
-### Saldo y conciliación
+### Saldo y conciliación manual
 
-- Saldo de una cuenta = saldo_inicial + suma de ingresos - suma de gastos + suma de ajustes.
+- Saldo de una cuenta = saldo_inicial + suma de ingresos - suma de gastos.
 - El saldo nunca se guarda: se calcula.
-- **Conciliar:** el usuario ingresa el saldo real. La API calcula la diferencia contra el saldo calculado y la app la muestra antes de confirmar. Al confirmar se crea un movimiento de tipo `ajuste` con esa diferencia, con la fecha de hoy y una nota automática.
-- Los reportes excluyen los ajustes de los totales de ingresos y gastos y los muestran en una línea aparte.
+- **Conciliar (manual):** el usuario compara el saldo de la app con su dinero real y, con el formulario de movimientos existente, registra la diferencia como **egreso** (si la app muestra más de lo real) o **ingreso** (si muestra menos) con la categoría «Conciliación» y el importe que elige. Ejemplo: la app muestra $500 y el dinero real es $470: egreso de $30 con la categoría Conciliación; si la app muestra $470 y el real es $500: ingreso de $30.
+- No existe pantalla de conciliación, ingreso del saldo real, cálculo automático de la diferencia, tipo de movimiento nuevo ni endpoint propio. Esos movimientos se editan, se anulan y aparecen en historial, calendario, reportes y exportaciones como cualquier otro, sin fórmulas nuevas.
+- Fuera de alcance: importación bancaria, integraciones externas y nuevos servicios financieros.
 
 ## 6. API
 
@@ -166,7 +169,6 @@ Todas las rutas, salvo las de autenticación, exigen JWT. Las respuestas de `/au
 | `GET /me` | Datos del usuario y configuración. Lee al usuario de D1 por el `sub` (UUID) del JWT v2; usuario inexistente o JWT inválido (incluido v1): 401 `INVALID_TOKEN` |
 | `GET /accounts`, `POST /accounts`, `PATCH /accounts/:id` | Gestión de cuentas (incluye archivar) |
 | `GET /accounts/:id/balance` | Saldo calculado |
-| `POST /accounts/:id/reconcile` | Recibe el saldo real, crea el ajuste |
 | `GET /accounts/:id/categories`, `POST /accounts/:id/categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | Gestión de categorías por cuenta; eliminación solo si no tienen movimientos asociados |
 | `GET /transactions` | Filtros: cuenta, tipo, categoría, desde, hasta, página |
 | `POST /transactions`, `PATCH /transactions/:id`, `DELETE /transactions/:id` | Gestión de movimientos; PATCH no cambia tipo ni categoría y DELETE realiza anulación lógica |
@@ -176,7 +178,7 @@ Todas las rutas, salvo las de autenticación, exigen JWT. Las respuestas de `/au
 | `GET /reports/by-period?group=month` o `group=year` | Serie por mes o por año |
 | `GET /export?account_id=&desde=&hasta=&format=csv` o `format=pdf` | Exportación del historial |
 
-Movimientos (Decisión 3.1 de docs/003): en este incremento `transactions.tipo` admite solo `ingreso` y `gasto` (el `ajuste` llega con la conciliación). `GET /transactions` exige `account_id` y usa `page_size` con defecto 20 y máximo 100. Las cuentas devuelven además `saldo` (centavos, calculado). Códigos 409 adicionales: `CATEGORY_ARCHIVED`, `CATEGORY_MISMATCH` y `TRANSACTION_VOIDED`. El monto máximo es 99999999999 centavos, la nota admite hasta 500 caracteres y las fechas futuras están permitidas.
+Movimientos (Decisión 3.1 de docs/003): en este incremento `transactions.tipo` admite solo `ingreso` y `gasto` (no habrá tipo `ajuste`: la conciliación es manual con una categoría, Decisión 6.1). `GET /transactions` exige `account_id` y usa `page_size` con defecto 20 y máximo 100. Las cuentas devuelven además `saldo` (centavos, calculado). Códigos 409 adicionales: `CATEGORY_ARCHIVED`, `CATEGORY_MISMATCH` y `TRANSACTION_VOIDED`. El monto máximo es 99999999999 centavos, la nota admite hasta 500 caracteres y las fechas futuras están permitidas.
 
 Recursos de cuentas y categorías (Decisión 2B.1 de docs/003): los listados usan los parámetros de query `page` y `page_size` (defecto 50, máximo 100) y responden `{ items, page, pageSize, total }`; las respuestas llevan `Cache-Control: no-store`; los recursos ajenos responden 404 `NOT_FOUND`; los conflictos de negocio usan 409 con los códigos `ACCOUNT_ARCHIVED`, `CATEGORY_NAME_TAKEN`, `CATEGORY_IN_USE` y `LIMIT_REACHED`.
 
@@ -194,10 +196,10 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
    - **Movimientos**: historial paginado con filtros por tipo y categoría y selector de rango de fechas con calendario.
    - **Calendario**: vista mensual con indicador por día; al tocar un día se ven sus movimientos.
    - **Reportes**: por mes, por año y entre fechas, con totales, desglose por categoría y exportación (CSV y PDF).
-   - **Más** (configuración de la cuenta y de la sesión): datos de la cuenta (renombrar), **Categorías**, opciones avanzadas (archivar) y cerrar sesión. La conciliación podría ubicarse aquí en la Fase 6 (docs/007 14.13, abierta).
+   - **Más** (configuración de la cuenta y de la sesión): datos de la cuenta (renombrar), **Categorías**, opciones avanzadas (archivar) y cerrar sesión.
 5. **Nuevo y editar movimiento** (pantalla sobre el Detalle): tipo (ingreso o gasto), categoría (solo las de esa cuenta y tipo), monto, fecha y nota, en ese orden. «Nuevo movimiento» es una acción destacada visible en Cuenta, Movimientos y Calendario.
 6. **Categorías** (dentro de Más): crear, editar y archivar, separadas por ingreso y egreso, dentro de la cuenta activa; eliminar solo si no tienen movimientos.
-7. **Conciliación** (Fase 6): ingreso del saldo real, muestra de la diferencia y confirmación.
+7. **Conciliación manual** (Fase 6): sin pantalla propia; se registra con «Nuevo movimiento» y la categoría «Conciliación» (docs/003, Decisión 6.1).
 
 ### Navegación
 
@@ -222,7 +224,7 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
 ### Reglas de experiencia
 
 - Formulario de movimiento rápido de completar: tipo, categoría y monto en ese orden, con teclado numérico, fecha «Hoy» por defecto y protección contra doble envío.
-- Confirmaciones solo en acciones destructivas o de conciliación, y al abandonar un formulario con cambios sin guardar (docs/003, Rediseño R3 D1). Sin cambios, se sale sin diálogo.
+- Confirmaciones solo en acciones destructivas y al abandonar un formulario con cambios sin guardar (docs/003, Rediseño R3 D1). Sin cambios, se sale sin diálogo.
 - Mensajes de error claros y estados de carga, vacío y error en todas las pantallas.
 
 ### Android: safe areas, teclado y accesibilidad
@@ -241,7 +243,7 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
 
 ## 8. Calidad y pruebas
 
-- **Unitarias de la API:** Vitest con el entorno de Workers de Cloudflare (`@cloudflare/vitest-pool-workers`) y D1 local. Se cubren como mínimo: cálculo de saldo, conciliación, validación categoría-cuenta-tipo, filtros por rango de fechas, reportes, aislamiento entre usuarios y validación del token de Google (con claves simuladas).
+- **Unitarias de la API:** Vitest con el entorno de Workers de Cloudflare (`@cloudflare/vitest-pool-workers`) y D1 local. Se cubren como mínimo: cálculo de saldo, categorías predeterminadas (incluida «Conciliación»), validación categoría-cuenta-tipo, filtros por rango de fechas, reportes, aislamiento entre usuarios y validación del token de Google (con claves simuladas).
 - **Unitarias de la app:** Jest y React Native Testing Library para lógica de formato de montos, validación de formularios y componentes clave.
 - **Integración de la API:** pruebas que recorren los flujos completos (login simulado, crear cuenta, movimientos, conciliar, reportar) sobre D1 local.
 - **Reglas:** todo cambio de regla de negocio incluye su prueba; los errores corregidos incluyen una prueba que los reproduzca; meta inicial de cobertura de 80 % en la lógica de negocio de la API.
@@ -280,7 +282,7 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
 | 3 | Movimientos, historial y filtros |
 | 4 | Calendario |
 | 5 | Reportes y exportación |
-| 6 | Conciliación |
+| 6 | Conciliación manual (categoría predeterminada «Conciliación», sin pantalla ni endpoint nuevos) |
 | 7 | Pulido, pruebas de punta a punta y APK de prueba |
 | Futuro | Play Store, anuncios, planes de pago, iOS |
 

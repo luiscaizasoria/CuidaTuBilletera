@@ -98,7 +98,7 @@ Círculos de 120-220 dp parcialmente fuera de pantalla, detrás del contenido (`
 
 ### 2.7 Categorías: color de la API como fondo del cuadrado
 
-Sin cambios respecto a la iteración 2: las 11 categorías iniciales (`api/src/services/default-categories.ts`) traen `icono` y `color`; el fondo del cuadrado es `catFill = categoryFill(color)` (el color oscurecido en pasos de 1 % hasta que un glifo blanco alcance 3:1; el dato `color` de la API no se toca). La paleta del selector de `CategoriesScreen` (`CATEGORY_COLORS`, 7 colores) no coincide con ellas (decisión 15.4). Valores en la sección 3.3. Los importes usan `income`/`expense`, nunca el color de la categoría; la dona usa `catFill` con leyenda de nombre y porcentaje.
+Sin cambios respecto a la iteración 2: las 13 categorías iniciales (11 más las dos «Conciliación», Decisión 6.1) (`api/src/services/default-categories.ts`) traen `icono` y `color`; el fondo del cuadrado es `catFill = categoryFill(color)` (el color oscurecido en pasos de 1 % hasta que un glifo blanco alcance 3:1; el dato `color` de la API no se toca). La paleta del selector de `CategoriesScreen` (`CATEGORY_COLORS`, 7 colores) no coincide con ellas (decisión 15.4). Valores en la sección 3.3. Los importes usan `income`/`expense`, nunca el color de la categoría; la dona usa `catFill` con leyenda de nombre y porcentaje.
 
 ## 3. Contraste WCAG y distinguibilidad (verificado con script)
 
@@ -222,6 +222,7 @@ Lectura: la marca y el verde de ingreso, y el ámbar fuerte y el coral, se disti
 | Sueldo | `#22C55E` | 2.28:1 | No | `#1DA951` (−14 %) | 3.07:1 | 7.24:1 |
 | Ventas | `#06B6D4` | 2.43:1 | No | `#05A2BD` (−11 %) | 3.04:1 | 6.79:1 |
 | Otros ingresos | `#84CC16` | 1.98:1 | No | `#6AA312` (−20 %) | 3.06:1 | 8.35:1 |
+| Conciliación (egreso e ingreso; Decisión 6.1) | `#6366F1` | 4.47:1 | Sí | `#6366F1` | 4.47:1 | 3.69:1 |
 
 ### 3.4 R4: pares nuevos y colores del selector de Categorías
 

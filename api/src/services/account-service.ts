@@ -84,7 +84,7 @@ export async function listUserAccounts(
   };
 }
 
-// Crea la cuenta y sus 11 categorías iniciales en un único db.batch (atómico). El límite de
+// Crea la cuenta y sus categorías iniciales en un único db.batch (atómico). El límite de
 // cuentas se comprueba antes; COUNT + INSERT no es atómico y se acepta (Decisión 2B.1, D6).
 export async function createAccountWithDefaults(
   db: D1Database,

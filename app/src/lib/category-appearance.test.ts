@@ -109,7 +109,7 @@ describe('CATEGORY_ICON_OPTIONS (R5.1b, docs/008 §6.17)', () => {
     }
   });
 
-  it('los 11 slugs de las categorías por defecto se dibujan igual; un desconocido da 🏷️', () => {
+  it('los slugs de las categorías por defecto se dibujan igual; un desconocido da 🏷️', () => {
     expect(categoryGlyph('utensils').glyph).toBe('🍽️');
     expect(categoryGlyph('bus').glyph).toBe('🚌');
     expect(categoryGlyph('wifi').glyph).toBe('📶');
