@@ -1369,19 +1369,37 @@ Todos pendientes en dispositivo: las pruebas Jest (mock) no miden layout, foco d
 | ICO-23 | Buscar y borrar | Escribir en el buscador y luego borrar con ✕ o «Borrar búsqueda» | Durante la búsqueda no hay chips ni flechas; al borrar vuelven con el grupo activo visible y las flechas correctas; los 17 grupos se conservan | D | pendiente en dispositivo |
 | ICO-24 | Reducir movimiento y chip cortado | Activar «Quitar animaciones» y usar las flechas; tocar un chip parcialmente cortado | Con el ajuste, salto directo; sin él, animado; el chip tocado queda completo y seleccionado; las flechas no alteran grupo, borrador ni búsqueda | D | pendiente en dispositivo |
 
-### 21.1 Casos INM-01 a INM-10: modo inmersivo (docs/007 §5.15 B) — propuesta, no aprobada
+### 21.1 Casos INM-01 a INM-24: modo inmersivo (docs/007 §5.15 B y C) — aprobada (D17), pendiente en dispositivo
 
-Estos casos **no están aprobados, no cuentan para ningún cierre** y no deben ejecutarse hasta que el usuario apruebe el modo inmersivo. Todos: «propuesta, no aprobada».
+**Registro de validación del usuario (2026-10-19, paso 372, docs/003 D18).** El usuario probó la Development Build `7c58a37f` en Android real, de forma manual y sin captura ni grabación, y confirmó: la app abre, la barra de navegación del sistema se oculta y las flechas de grupos del selector de íconos funcionan. Es una validación **funcional**, no cobertura QA completa: ningún caso INM-01 a INM-24 ni ICO-16 a ICO-24 pasa individualmente a «aprobada» y todos permanecen «pendiente en dispositivo». Solo consta, como observación de INM-01, que la barra se oculta (sin comprobar encabezados ni recorte). No probados: TalkBack, fuente ampliada, teclado y modales en configuraciones especiales, otros dispositivos Android, gestos frente a tres botones.
 
-| ID | Caso | Qué se verificaría | Estado |
-| --- | --- | --- | --- |
-| INM-01 | Abrir la app con modo inmersivo activo, 3 botones y gestos | Contenido a pantalla completa; ningún título ni botón bajo el recorte o el gesto | propuesta, no aprobada |
-| INM-02 | Deslizar desde el borde inferior | Aparecen las barras; la app no ejecuta ninguna acción propia; se ocultan solas | propuesta, no aprobada |
-| INM-03 | Atrás con hoja abierta, teclado abierto y formulario sucio | Mismo orden que sin inmersivo; sin cierre accidental de la app | propuesta, no aprobada |
-| INM-04 | Abrir teclado en formulario | Campo y «Guardar» visibles; barras del sistema no ocultas mientras escribes | propuesta, no aprobada |
-| INM-05 | Hoja «Elegir ícono» con barras ocultas y reveladas | Pie y «Usar este ícono» tocables, nunca bajo la barra | propuesta, no aprobada |
-| INM-06 | TalkBack activado | Barras visibles; todos los controles alcanzables; al desactivar TalkBack vuelve el modo | propuesta, no aprobada |
-| INM-07 | Atrás en raíz y volver desde segundo plano | Sale de la app; al volver, las barras vuelven a ocultarse | propuesta, no aprobada |
-| INM-08 | Barra de pestañas con y sin barras reveladas | No se solapa con las barras; objetivos ≥ 48 dp; sin salto brusco del contenido | propuesta, no aprobada |
-| INM-09 | Notch/recorte y giro de pantalla | Encabezados fuera del recorte; sin margen arbitrario por modelo | propuesta, no aprobada |
-| INM-10 | Ajuste para desactivar el modo | Efecto inmediato; persiste tras reiniciar | propuesta, no aprobada |
+Aprobados el 2026-10-17 (docs/003 D17). Estado de todos: **aprobada, pendiente en dispositivo**. Nivel D (Android real con la Development Build nueva; no emulador). Cada caso se ejecuta con navegación por gestos y con tres botones salvo que se indique. Ningún caso se da por pasado sin evidencia (captura o grabación). El cierre del modo exige INM-01 a INM-10 más la matriz del rediseño; los casos INM-11 en adelante cubren los riesgos y límites aceptados en D17. Un defecto alto o crítico detiene la integración.
+
+Comportamiento esperado global: barra de navegación oculta al abrir y tras volver a primer plano; barra de estado siempre visible; `bottom` puede valer 0 con la barra oculta (válido, no un error); contenido, barra de pestañas, pie de hojas, Snackbar y botones primarios siempre enteros y tocables (≥ 48 dp), nunca bajo el recorte, el borde ni la barra revelada; sin ajuste de usuario; excepciones automáticas: TalkBack activo y teclado abierto.
+
+| ID | Caso | Qué se verifica (criterio observable) | Nivel | Estado |
+| --- | --- | --- | --- | --- |
+| INM-01 | Abrir la app (frío), 3 botones y gestos | La barra de navegación se oculta; la barra de estado sigue visible; contenido a pantalla completa; ningún título ni botón bajo el recorte ni el gesto | D | aprobada, pendiente en dispositivo |
+| INM-02 | Deslizar desde el borde inferior | Aparece la barra unos segundos y se oculta sola; la app no ejecuta ninguna acción propia; el primer deslizamiento solo revela | D | aprobada, pendiente en dispositivo |
+| INM-03 | Atrás con hoja abierta, teclado abierto y formulario sucio | Orden idéntico al de siempre (teclado, hoja o aviso, pila, Cuentas); sin cierre accidental de la app | D | aprobada, pendiente en dispositivo |
+| INM-04 | Abrir teclado en un formulario | La barra del sistema se muestra mientras el teclado está abierto; campo y «Guardar» visibles; al cerrar el teclado la barra se oculta | D | aprobada, pendiente en dispositivo |
+| INM-05 | Hoja «Elegir ícono» con barra oculta y revelada | Pie y «Usar este ícono» enteros y tocables (≥ 48 dp), nunca bajo la barra; con `bottom = 0` el pie conserva su relleno propio | D | aprobada, pendiente en dispositivo |
+| INM-06 | TalkBack activado | Barra visible; todos los controles alcanzables; el gesto de revelado no es necesario | D | aprobada, pendiente en dispositivo |
+| INM-07 | Atrás en la raíz y volver desde segundo plano | Atrás sale de la app sin confirmación; al volver, la barra vuelve a ocultarse | D | aprobada, pendiente en dispositivo |
+| INM-08 | Barra de pestañas con y sin barra del sistema revelada | Sin solape con la barra; objetivos ≥ 48 dp; con `bottom = 0` pestañas enteras al borde inferior, íconos y rótulos completos; sin salto brusco del contenido al revelar | D | aprobada, pendiente en dispositivo |
+| INM-09 | Recorte (notch) y barra de estado | Encabezados fuera del recorte; sin margen arbitrario por modelo; la barra de estado no se oculta | D | aprobada, pendiente en dispositivo |
+| INM-10 | Buscar un ajuste para desactivar el modo | NO existe ajuste en Más (decisión D17); el comportamiento no cambia tras reiniciar; las únicas excepciones son TalkBack y teclado | D | aprobada, pendiente en dispositivo |
+| INM-11 | Reaplicar al volver de segundo plano | Ir a otra app y volver (y bloquear y desbloquear la pantalla): al volver la barra está oculta de nuevo sin tocar nada | D | aprobada, pendiente en dispositivo |
+| INM-12 | TalkBack activado y desactivado en caliente | Con la app abierta: activar TalkBack muestra la barra; desactivarlo la oculta, sin reiniciar la app ni perder la pantalla | D | aprobada, pendiente en dispositivo |
+| INM-13 | Teclado abierto y cerrado repetidamente | Abrir y cerrar 10 veces: un cambio de barra por evento, sin parpadeo continuo ni bucle; sin saltos persistentes del diseño | D | aprobada, pendiente en dispositivo |
+| INM-14 | Hoja con `Modal` y `navigationBarTranslucent` | Abrir una hoja con la barra oculta: el scrim cubre hasta el borde inferior; la barra no reaparece por abrir el modal; al cerrarlo se mantiene el estado | D | aprobada, pendiente en dispositivo |
+| INM-15 | Atrás con gestos (barra oculta) | Primer Atrás desde el borde puede solo revelar la barra (riesgo aceptado); el siguiente actúa; ninguna pantalla se cierra por error | D | aprobada, pendiente en dispositivo |
+| INM-16 | Atrás con tres botones | Con la barra revelada, el botón Atrás sigue el mismo orden; con ella oculta se revela primero y luego actúa; sin pérdida de datos del formulario sin aviso | D | aprobada, pendiente en dispositivo |
+| INM-17 | Rotación | No aplica: la app es solo vertical (`portrait`); al girar el teléfono la pantalla no rota ni se rompe. Registrar «no aplica» | D | aprobada, pendiente en dispositivo |
+| INM-18 | Salir de la app y recuperar la barra del sistema | Al ir al inicio o a otra app, la barra de navegación vuelve a verse normalmente fuera de la app; no queda oculta en el sistema | D | aprobada, pendiente en dispositivo |
+| INM-19 | Hueco bajo «Guardar» con teclado abierto | En formularios de movimiento, cuenta y categoría con el teclado abierto: sin hueco visible entre «Guardar» y el teclado ni «Guardar» tapado. Si hay hueco, registrar medida (dp) y captura como defecto; no se arregla con reglas de teclado nuevas | D | aprobada, pendiente en dispositivo |
+| INM-20 | Snackbar y FAB al ocultar o revelar la barra | Como máximo un fotograma de desajuste; luego Snackbar y FAB en su posición, sin solape con la barra de pestañas ni con la barra del sistema | D | aprobada, pendiente en dispositivo |
+| INM-21 | `bottom = 0` con la barra oculta | Contenido, lista y botones primarios enteros hasta el borde; el último elemento de listas largas se alcanza con el desplazamiento y no queda tapado por las pestañas | D | aprobada, pendiente en dispositivo |
+| INM-22 | Fallo del modo (degradación) | Si el sistema no permite ocultar (p. ej. launcher o versión): la barra queda visible, la app funciona igual y no hay error visible ni cierre | D | aprobada, pendiente en dispositivo |
+| INM-23 | Fuente 200 % y pantalla pequeña con la barra oculta | Sin recortes ni solapes en pestañas y pies de hoja; botones alcanzables | D | aprobada, pendiente en dispositivo |
+| INM-24 | Regresión de la matriz del rediseño | Ejecutar los casos Android transversales (§4) y las pantallas con la build nueva; sin regresiones respecto a la validación previa | D | aprobada, pendiente en dispositivo |

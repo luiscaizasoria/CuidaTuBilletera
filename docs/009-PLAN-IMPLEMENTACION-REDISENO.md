@@ -129,3 +129,11 @@ Paso 342 (agente `mobile-ux-qa`, política de interfaz móvil y matriz docs/010)
 - Plan nativo (docs/003 D16), en este orden y solo con autorización: (1) cambiar docs/001 línea ~230; (2) `npx expo install expo-navigation-bar react-native-safe-area-context`; (3) plugin `expo-navigation-bar` en `app.json`; (4) `SafeAreaProvider` en `App.tsx` y `useSystemInsets` sobre `useSafeAreaInsets()` conservando `{top, bottom}` (Screen, MainNavigator, Sheet y Snackbar no cambian); (5) componente que llama a `NavigationBar.setHidden(true)` al montar y en `AppState` activo, desactivado con TalkBack y sin reocultar con teclado abierto; (6) Development Build nueva y APK; (7) INM-01 a INM-10 con gestos y tres botones en teléfono real.
 - No se usan `setVisibilityAsync` ni `setBehaviorAsync` (obsoleta/no disponible en SDK 57).
 - Las etapas futuras F-A y F-B se conservan sin cambios.
+
+## 12. R5.1 - Modo inmersivo e insets reales implementados (paso 367, 2026-10-17)
+
+- Aprobado en docs/001 y docs/003 D17; el plan nativo de §11 se ejecutó: dependencias, plugin, `SafeAreaProvider`, `useSystemInsets` sobre `SafeAreaInsetsContext`, `navigationBarTranslucent` en `Sheet`, `lib/immersive.ts` y `hooks/use-immersive-navigation.ts`.
+- Corrección de diseño: `NavigationBar.setHidden` ignora valores repetidos (caché JS), por lo que al pasar a segundo plano se pide `false` y al volver a `active` se reaplica el valor vigente.
+- Development Build `7c58a37f-e2d5-4e27-85f7-2c3fedb575a9` (docs/004). El código del modo inmersivo se consolida en commits locales en el paso 372 (cierre funcional en docs/003 D18 y docs/004).
+- Sin validación en dispositivo: INM-01 a INM-24 (docs/010 §21.1), con gestos y tres botones. Los APK anteriores no cargan este código.
+- Las etapas futuras F-A y F-B se conservan sin cambios.

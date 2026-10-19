@@ -1037,6 +1037,68 @@ Descartados por contraste: `text3` `#5F6B68` y `borderStrong` `#7E8A86` como col
 
 **Nota para coherencia con docs/007 §5.15.1.** Esa subsección fija para el botón fondo `surface`, borde 1.5 `borderStrong` y glifo de texto a 24 sp; esta subsección lo sustituye por círculo `segBg`, borde `border` y chevron dibujado (cierra la pregunta Q5 de docs/007). Debe alinearla `mobile-ux-designer` o quien coordina, junto con la zona de 48 dp (que no cambia).
 
+### 6.18 Disposición con barra del sistema oculta (docs/003 D17; docs/007 §5.15 B y C; PROPUESTA de ajuste, sin cambios de código)
+
+Alcance: solo valida la disposición visual cuando `insets.bottom` (`B`) puede valer 0 (barra oculta), ~16 a 24 dp (gestos) o ~48 dp (tres botones al revelarse). No rediseña. Base: HEAD 62100f0 (la implementación de D17 todavía no está en esa rama; las cifras se derivan de los estilos reales). **Sin medición en Android real**: las cifras son geometría de los estilos, no capturas.
+
+**Geometría base (verificable en el código).**
+
+- Pestaña: `minHeight` 62 (`sizes.tabHeight`) incluye `paddingVertical` 8. Contenido: píldora 3 + 24 + 3 = 30, `gap` 2, etiqueta 14 = 46; 46 + 16 = 62, sin holgura. La etiqueta queda a 8 dp del borde inferior del área de pestañas.
+- Barra de pestañas (`BottomTabs`, `account-ui.tsx`): `borderTopWidth` 1 + `paddingBottom: B` + 62. Fondo `colors.surface`, que ya cubre el relleno inferior (edge-to-edge correcto).
+- FAB: `bottom: 16` dentro del contenedor que está sobre la barra. Independiente de `B`.
+- Snackbar: `bottom = B + bottomOffset + 8`, con `bottomOffset = tabsRow (altura medida - B = 63) + (FAB visible ? 56 + 16 : 0)`.
+- Hoja (`Sheet`): `paddingBottom = 24 + B`, fondo `surface`.
+- Pie del formulario de movimiento: `paddingBottom = 12 + B`, fondo `surface`, botón alto 52.
+- Selector de íconos: usa `Sheet` (24 + `B`); su pie solo añade `paddingTop` 8.
+- Franja superior: `screen-top-inset` de altura `insets.top` con `bg` o `surface` según la pantalla; no depende de la barra inferior (la barra de estado sigue visible).
+
+**Valores efectivos con el diseño actual (dp).**
+
+| Elemento | B = 0 | B = 16 | B = 24 | B = 48 |
+| --- | --- | --- | --- | --- |
+| Altura total de la barra de pestañas (1 + 62 + B) | 63 | 79 | 87 | 111 |
+| Zona táctil de pestaña (siempre 62) | 62 | 62 | 62 | 62 |
+| Etiqueta a borde físico (8 + B) | 8 | 24 | 32 | 56 |
+| Borde superior de la barra desde el borde físico | 63 | 79 | 87 | 111 |
+| Base del Snackbar sin FAB (B + 63 + 8) | 71 | 87 | 95 | 119 |
+| Base del Snackbar con FAB (B + 63 + 72 + 8) | 143 | 159 | 167 | 191 |
+| Base del FAB desde el borde físico (B + 63 + 16) | 79 | 95 | 103 | 127 |
+| Relleno inferior de hoja (24 + B) | 24 | 40 | 48 | 72 |
+| Botón Guardar a borde físico (pie de formulario, 12 + B) | 12 | 28 | 36 | 60 |
+| Botones «Cancelar» y «Usar este ícono» a borde físico (hoja, 24 + B) | 24 | 40 | 48 | 72 |
+| Espacio libre inferior de contenido con `Screen` con scroll, sin barra propia (margen + B) | 16 | 32 | 40 | 64 |
+
+Nota: con `B` = 48 (revelada) la barra del sistema se superpone un instante; el desajuste de un fotograma está aceptado en D17.
+
+**Hallazgos.**
+
+1. Con `B` = 0 la barra de pestañas conserva 62 dp de zona táctil (cumple 48 dp mínimos), pero la etiqueta queda a 8 dp del borde físico y el borde táctil inferior llega a 0 dp. Los gestos laterales de Atrás y el deslizamiento hacia arriba que revela la barra empiezan en ese borde: riesgo de toque accidental (una pestaña pulsada al empezar a revelar) y de gesto desviado. No es un defecto de contraste ni de tamaño táctil; es margen visual y de seguridad ante gestos.
+2. Los botones de hoja (24 dp) y del pie de formulario (12 dp) con `B` = 0: la hoja queda aceptable. El pie del formulario deja el botón a 12 dp del borde, el valor más ajustado después de la barra de pestañas; es el borde táctil más cercano a la zona de gesto que no es una barra.
+3. FAB y Snackbar no se pegan al borde en ningún caso (>= 79 y >= 71 dp); no necesitan ajuste.
+4. La franja superior no cambia (la barra de estado sigue visible); su color ya sigue a `statusBar`.
+
+**Recomendación (relleno visual mínimo, sin números por modelo).** Una sola constante nueva de diseño, `sizes.edgeMin = 8` (dp), y usar `max(B, edgeMin)` como relleno inferior efectivo `Be` solo donde un control táctil queda a menos de 16 dp del borde:
+
+| Contenedor | Relleno actual | Relleno recomendado | Resultado con B = 0 | Con B >= 8 |
+| --- | --- | --- | --- | --- |
+| Barra de pestañas (`paddingBottom`) | `B` | `max(B, 8)` | 71 dp totales; zonas táctiles 62; etiqueta a 16 dp del borde | sin cambio |
+| Pie del formulario (`paddingBottom`) | `12 + B` | `12 + max(B, 8)` | botón a 20 dp | sin cambio |
+| Hoja (`paddingBottom`) | `24 + B` | sin cambio | 24 dp | sin cambio |
+| Snackbar y FAB | `B` y `tabsRow` | usar el mismo `Be` en `tabsRow = altura medida - Be` | base sin FAB 71 + 8 = 79 | sin cambio |
+| `Screen` (scroll) | `B + margen` | sin cambio | 16 dp | sin cambio |
+
+Reglas: (a) `tabHeight` sigue en 62; el relleno extra es inerte (no se pulsa; no agranda las pestañas); (b) no se añade relleno por modelo ni se lee el tipo de navegación; (c) con `B` >= 16 el diseño aprobado no cambia, de modo que gestos y tres botones se ven como hoy; (d) si el usuario prefiere no tocar nada, el valor 0 queda aceptado con el riesgo del punto 1, a validar con INM-01 a INM-10.
+
+**Edge-to-edge y color.** El fondo debe extenderse bajo la zona del sistema (no dejar hueco transparente ni de otro color):
+
+- Barra de pestañas: `colors.surface` en el mismo `View` que contiene el relleno; correcto, y el borde superior `colors.border` marca la separación. No cambiar.
+- Hojas: `colors.surface` en el `View` de la hoja; con `navigationBarTranslucent` (D17) la hoja y el velo `depth.scrim` llegan al borde físico. Verificar que el velo cubre también la franja inferior (el `scrim` es `absolute` a pantalla completa: correcto).
+- Pie del formulario: `colors.surface` con el relleno incluido; correcto.
+- Pantallas sin barra propia y sin scroll (`bottomSpacer`, `screen-bottom-inset`): sin color propio, deja ver `colors.bg`; coincide con el fondo de pantalla. Si alguna pantalla termina en una superficie `surface` pegada al espaciador, hay que pintar el espaciador de ese mismo color (no hay caso hoy).
+- Los botones de la barra del sistema (cuando se revela) tienen su propio fondo; no se intenta igualar el color.
+
+**Verificación propuesta (para `mobile-ux-qa`, dispositivo real).** Medir con la barra oculta: (1) pestañas pulsables sin activar Atrás ni el deslizamiento de revelado, con la mano en la zona inferior; (2) etiqueta completa visible a 360 dp y con fuente grande; (3) Guardar y «Usar este ícono» pulsables sin revelar la barra; (4) sin banda de color distinto bajo la barra de pestañas, hojas ni pie de formulario; (5) Snackbar visible sobre el FAB. Los umbrales de este apartado son de diseño, no de especificación del sistema Android.
+
 ## 7. Iconografía de categorías
 
 Las categorías ya guardan `icono` (clave tipo Lucide) y `color`. Comparación:

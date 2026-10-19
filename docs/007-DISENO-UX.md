@@ -1580,47 +1580,56 @@ Origen: decisión del architect (catálogo de ~150 a 250 emojis, Unicode 11 o an
 
 **A.10 Archivos que tocaría (PROPUESTA; implementa `mobile-engineer`).** `app/src/screens/category-form.tsx` (sustituir la rejilla por `IconField`), `app/src/screens/account-appearance.tsx`, un nuevo `app/src/screens/icon-picker-sheet.tsx`, `app/src/screens/sheets.tsx` (solo si `Sheet tall` necesita pie fijo; hoy existe), `app/src/lib/category-appearance.ts` y `app/src/lib/account-appearance.ts` (campos `group` y `keywords`, y función de búsqueda sin tildes) y sus pruebas.
 
-#### B. Navegación inmersiva (propuesta preparada; NO aprobada; NO implementar)
+#### B. Navegación inmersiva (APROBADA (D17); pendiente de validación en dispositivo)
 
-Estado: opción A vigente (docs/001 §7, docs/003 R0 D7); B no recomendada (§9). Si el usuario la aprobara, requiere antes `architect`, autorización de dependencia nativa (`expo-navigation-bar`) y nueva Development Build. Comportamiento deseado:
-1. **Revelado.** Las barras del sistema permanecen ocultas con comportamiento «transitorio»: un gesto desde el borde las muestra unos segundos y vuelven a ocultarse solas. La app nunca imita ese gesto con elementos propios en el borde inferior: la barra de pestañas propia no se dibuja pegada al borde; conserva su zona segura (C).
-2. **Atrás.** El botón y el gesto de Atrás conservan EXACTAMENTE el orden vigente (cerrar teclado, cerrar hoja o aviso, volver en la pila, volver a Cuentas). El gesto de Atrás desde el borde NO debe confundirse con el revelado: el primer deslizamiento muestra las barras y el siguiente actúa. Se verifica en gestos y en tres botones.
-3. **Teclado.** Abrir el teclado muestra siempre la barra de estado y la inferior del sistema que Android decida; la app no las vuelve a ocultar mientras el teclado esté abierto y las oculta de nuevo al cerrarlo.
-4. **Hojas y diálogos.** Los modales (`Modal`, `Sheet`) heredan el estado de las barras; el pie de la hoja suma el inset inferior real (no 0) aunque la barra esté oculta, para no quedar bajo el gesto de revelado.
-5. **TalkBack.** Con TalkBack activo el modo inmersivo se desactiva (barras siempre visibles), porque ocultar controles del sistema perjudica la exploración y el gesto de revelado compite con los gestos de TalkBack. Se detecta con `AccessibilityInfo.isScreenReaderEnabled` y se reevalúa al cambiar.
-6. **Salida de la app.** Atrás en la pantalla raíz sale de la app (comportamiento actual); no hay confirmación. Al volver desde segundo plano las barras se vuelven a ocultar. Cerrar sesión o error de sesión no cambia el modo.
-7. **Ajustes del usuario.** Debe poder desactivarse (propuesta: valor por defecto «barras visibles»). Sin ajuste, no se aprueba (decisión abierta P3).
+Estado: **APROBADA (D17, 2026-10-17, paso 367)**; antes rotulada «propuesta preparada; NO aprobada; NO implementar» (texto histórico conservado en las notas de abajo). Aprobación y alcance en docs/003 D16-D17 y docs/001 (~línea 230). Sustituye la opción A de §9 y la decisión 14.1 solo en lo relativo a la barra de navegación inferior; la barra de estado NO se oculta. Sin validación en Android real: no se da por cerrada hasta INM-01 a INM-10 (docs/010 §21.1). API vigente: `NavigationBar.setHidden(true)` de `expo-navigation-bar` (fija el comportamiento transitorio por deslizamiento). **No** se usan `setVisibilityAsync` (obsoleta) ni `setBehaviorAsync` (ausente en SDK 57); las menciones previas a esas funciones en docs/007 y docs/009 están desfasadas. Implementación aprobada: `app/src/lib/immersive.ts` y `app/src/hooks/use-immersive-navigation.ts`.
 
-Casos de prueba de experiencia propuestos para docs/010 (texto; IDs a asignar por `mobile-ux-qa`):
+Comportamiento final esperado:
+1. **Revelado.** La barra de navegación del sistema permanece oculta con comportamiento transitorio: un deslizamiento desde el borde inferior la muestra unos segundos y vuelve a ocultarse sola. La app nunca imita ese gesto con elementos propios en el borde: no hay botones ni zonas táctiles propias pegadas al borde inferior más allá de la barra de pestañas (con su alto mínimo de 48 dp). El primer deslizamiento solo revela la barra; la app no ejecuta ninguna acción (riesgo aceptado en D17).
+2. **Atrás.** El botón y el gesto de Atrás conservan EXACTAMENTE el orden vigente (cerrar teclado, cerrar hoja o aviso, volver en la pila, volver a Cuentas). Con gestos, el primer Atrás puede exigir un gesto previo de revelado (riesgo aceptado en D17). Se verifica con gestos y con tres botones.
+3. **Teclado (D17).** Con el teclado abierto la barra de navegación se MUESTRA; al cerrarlo se oculta de nuevo. La app no fuerza ocultarla mientras haya teclado. Se evita un parpadeo continuo: abrir y cerrar el teclado produce como máximo un cambio de estado por evento, sin bucles.
+4. **Hojas y diálogos.** `Sheet` usa `Modal` con `navigationBarTranslucent` y hereda el modo (en SDK 57 `setHidden` alcanza también a las ventanas de `<Modal>`). El pie de la hoja suma el `bottom` REAL informado por el sistema; ese valor puede ser 0 con la barra oculta (D17). Qué debe verse con `bottom = 0`: el contenido llega al borde físico inferior, «Usar este ícono», «Guardar» y los demás botones del pie siguen enteros, con objetivos de al menos 48 dp, separados del borde por el relleno propio de la hoja (24 dp) y nunca recortados.
+5. **TalkBack (D17).** Con TalkBack activo la barra NO se oculta (excepción automática); se detecta con `AccessibilityInfo.isScreenReaderEnabled` y se reevalúa en caliente: al activarlo se muestra, al desactivarlo se vuelve a ocultar, sin reiniciar la app.
+6. **Segundo plano y salida.** Atrás en la pantalla raíz sale de la app (sin confirmación). Se oculta al montar y se reaplica en cada `AppState` `active`. Al salir de la app o ir a otra, el sistema recupera su barra normal (la app no la deja oculta fuera de ella). Cerrar sesión o un error de sesión no cambia el modo. Si `setHidden` falla, se degrada en silencio: la barra queda visible y la app funciona igual.
+7. **Ajustes del usuario (resuelto por D17).** La regla anterior «debe poder desactivarse» queda RESUELTA así: SIN ajuste de usuario en esta iteración. Las únicas excepciones son automáticas: TalkBack activo y teclado abierto (la barra se muestra). Un ajuste futuro, si se pide, es otra decisión (lista de ideas futuras, sin diseñar).
+8. **Orientación.** La app es solo vertical (`orientation: portrait` en `app.json`); la rotación no aplica y no se diseña horizontal.
+9. **Android.** Solo Android; en otras plataformas el módulo no hace nada.
+
+Nota histórica (propuesta anterior, superada): la propuesta pedía que el pie de la hoja sumara un inset inferior «real (no 0)» y que el modo «debiera poder desactivarse» (decisión abierta P3). D17 acepta expresamente que `bottom` pueda valer 0 y no incluye ajuste de usuario.
+
+Casos de prueba: IDs INM-01 a INM-10 asignados y mantenidos en docs/010 §21.1 (aprobados, pendientes en dispositivo). Esta tabla es solo resumen; el detalle y los casos añadidos (INM-11 en adelante) están en docs/010.
 | ID | Caso | Resultado esperado |
 | --- | --- | --- |
-| INM-01 | Abrir la app con modo inmersivo activo, 3 botones y gestos | Contenido a pantalla completa; ningún título ni botón bajo el recorte o el gesto |
-| INM-02 | Deslizar desde el borde inferior | Aparecen las barras; la app no ejecuta ninguna acción propia; se ocultan solas |
-| INM-03 | Atrás con hoja abierta, teclado abierto y formulario sucio | Mismo orden que sin inmersivo; sin cierre accidental de la app |
-| INM-04 | Abrir teclado en formulario | Campo y «Guardar» visibles; barras del sistema no ocultas mientras escribes |
-| INM-05 | Hoja «Elegir ícono» con barras ocultas y reveladas | Pie y «Usar este ícono» tocables, nunca bajo la barra |
-| INM-06 | TalkBack activado | Barras visibles; todos los controles alcanzables; al desactivar TalkBack vuelve el modo |
-| INM-07 | Atrás en raíz y volver desde segundo plano | Sale de la app; al volver, las barras vuelven a ocultarse |
-| INM-08 | Barra de pestañas con y sin barras reveladas | No se solapa con las barras; objetivos ≥ 48 dp; sin salto brusco del contenido |
-| INM-09 | Notch/recorte y giro de pantalla | Encabezados fuera del recorte; sin margen arbitrario por modelo |
-| INM-10 | Ajuste para desactivar el modo | Efecto inmediato; persiste tras reiniciar |
+| INM-01 | Abrir la app, 3 botones y gestos | Barra de navegación oculta; contenido a pantalla completa; nada bajo el recorte ni el gesto |
+| INM-02 | Deslizar desde el borde inferior | Aparece la barra; la app no ejecuta acción propia; se oculta sola |
+| INM-03 | Atrás con hoja, teclado y formulario sucio | Mismo orden de siempre; sin cierre accidental |
+| INM-04 | Abrir teclado en formulario | Barra visible mientras escribes; campo y «Guardar» visibles |
+| INM-05 | Hoja «Elegir ícono» con barra oculta y revelada | Pie tocable, nunca bajo la barra |
+| INM-06 | TalkBack activado | Barra visible; controles alcanzables; al desactivarlo se oculta |
+| INM-07 | Atrás en raíz y volver desde segundo plano | Sale; al volver se oculta de nuevo |
+| INM-08 | Barra de pestañas con y sin barra revelada | Sin solape; ≥ 48 dp; sin salto brusco |
+| INM-09 | Recorte (notch) | Encabezados fuera del recorte; sin margen por modelo |
+| INM-10 | Sin ajuste de usuario | No existe ajuste en Más; las excepciones son TalkBack y teclado |
 
-#### C. Estrategia de safe areas (con y sin barra oculta)
+#### C. Estrategia de safe areas (APROBADA (D17) con y sin barra oculta)
 
 Principio: ninguna pantalla conoce el modelo de teléfono ni suma «márgenes mágicos». Toda medida de sistema pasa por UN solo origen (`useSystemInsets`) y la consumen solo cuatro contenedores; el resto de componentes usa relleno relativo (`screenMargin`).
-1. **Origen único.** `useSystemInsets` entrega `top` y `bottom` (EXISTENTE; con respaldos 32 y 48 dp). La opción preferida a medio plazo es sustituir el cálculo por `react-native-safe-area-context` (BLOQUEADO hasta autorizar la dependencia nativa, docs/003 D11.7): ofrece recorte, gestos y barra oculta reales. Con inmersivo, SIN esa librería no es fiable (el cálculo por diferencia de alturas da 0 y los respaldos serían arbitrarios): por eso la inmersiva depende de esa librería (se suma al P3).
-2. **Quién aplica qué (cuatro contenedores).** `Screen` (`ui.tsx`): `top` arriba (relleno con el color del encabezado), `bottom` abajo si no hay barra de pestañas; `MainNavigator`: barra de pestañas con alto `sizes.tabHeight + bottom`; `Sheet`: `paddingBottom = 24 + bottom` y altura máxima basada en `top`; `Snackbar`: `bottom + offset + 8`. Encabezados, formularios y listas NO suman insets; solo se apoyan en el relleno del contenedor.
-3. **Barra de pestañas.** Mide una vez (`tabsHeight`, EXISTENTE) y expone el espacio al contenido (`bottomBar`): `Screen` no añade `bottom` si hay barra de pestañas, evitando doble relleno. Con barra del sistema oculta el `bottom` baja a 0 o al valor del gesto, y la barra de pestañas se reajusta sin salto porque el relleno sale del mismo valor.
-4. **Formularios y teclado.** `Screen` con `ScrollView` y `keyboardShouldPersistTaps="handled"`; con el teclado abierto el relleno inferior del sistema no se suma (el teclado ya lo cubre), para no dejar un hueco bajo «Guardar». Se aplica `keyboardAvoiding` (EXISTENTE). El pie del formulario mantiene `margen + bottom` solo con el teclado cerrado.
-5. **Hojas.** Con barra oculta la hoja no sube a `height - top - 8` más allá del recorte: usa `top`; el pie lleva `bottom`, que con el gesto de revelado nunca es 0 si hay zona de gestos. `statusBarTranslucent` (EXISTENTE) mantiene el scrim bajo la barra de estado.
-6. **Encabezados.** El relleno superior pinta el color del encabezado (EXISTENTE `screen-top-inset`), de modo que no hay franja. Un título jamás se mide contra `StatusBar.currentHeight` por sí mismo.
-7. **Sin ramas por teléfono.** Prohibido condicionar por marca, modelo o versión para ajustar píxeles. Si un dispositivo falla, se corrige el origen único o se documenta la limitación.
-8. **Validación.** En Android real con gestos, tres botones, recorte, giro y teclado; matriz de docs/010 más INM-01 a INM-10 si se aprueba la inmersiva.
+1. **Origen único (D17).** `useSystemInsets` conserva el contrato `{top, bottom}` pero lee los insets reales de `react-native-safe-area-context` (`SafeAreaProvider` en la raíz). Respaldo 32 dp (top) y 48 dp (bottom) SOLO si no hay provider o los valores no son finitos o son negativos. `computeInsets` se retira (el cálculo por diferencia de alturas queda descartado). Un `bottom` de 0 es un valor válido, no un error: no se sustituye por el respaldo.
+2. **Quién aplica qué (cuatro contenedores, sin cambios).** `Screen` (`ui.tsx`): `top` arriba (relleno con el color del encabezado), `bottom` abajo si no hay barra de pestañas; `MainNavigator`: barra de pestañas con alto `sizes.tabHeight + bottom`; `Sheet`: `paddingBottom = 24 + bottom` y altura máxima basada en `top`; `Snackbar`: `bottom + offset + 8`. Encabezados, formularios y listas NO suman insets.
+3. **Barra de pestañas y `bottom = 0`.** Con la barra del sistema oculta `bottom` puede valer 0 (o el pequeño inset de gesto). Esperado: la barra de pestañas mide `tabHeight` (≥ 48 dp de objetivo) y queda al borde físico inferior; íconos y rótulos enteros; sin solape con nada; al revelar la barra del sistema, `bottom` sube y la barra de pestañas se reajusta desde el mismo valor, sin superponerse. Mide una vez (`tabsHeight`, EXISTENTE) y `Screen` no suma `bottom` si hay pestañas (sin doble relleno).
+4. **Formularios y teclado.** Con el teclado abierto D17 muestra la barra del sistema; el relleno inferior no debe dejar un hueco visible bajo «Guardar». Riesgo aceptado en D17: puede aparecer un hueco; si aparece, se registra como defecto de `mobile-ux-qa` (severidad según tamaño) y NO se resuelve con reglas de teclado nuevas, que D17 no aprueba. `Screen` usa `ScrollView` con `keyboardShouldPersistTaps="handled"` y `keyboardAvoiding` (EXISTENTE).
+5. **Hojas.** `Sheet` con `navigationBarTranslucent`: el scrim cubre también la zona de la barra; altura máxima basada en `top` (no pasa del recorte); pie con `24 + bottom`; `statusBarTranslucent` (EXISTENTE) mantiene el scrim bajo la barra de estado.
+6. **Snackbar y FAB.** Se posicionan con `bottom` del mismo origen. Al ocultar o revelar la barra puede haber UN fotograma de desajuste del offset (riesgo aceptado en D17); no debe quedar desajuste permanente ni solape con la barra de pestañas.
+7. **Encabezados.** El relleno superior pinta el color del encabezado (EXISTENTE `screen-top-inset`), sin franja; la barra de estado NO se oculta.
+8. **Sin ramas por teléfono.** Prohibido condicionar por marca, modelo o versión. Si un dispositivo falla, se corrige el origen único o se documenta la limitación.
+9. **Validación.** Android real con gestos y tres botones, recorte y teclado; matriz de docs/010 más INM-01 a INM-10 y los casos añadidos. No se prueba en emulador (el aviso de Expo lo desaconseja en Android 15).
+
+Notas históricas (texto anterior, superado): la opción preferida era sustituir el cálculo por `react-native-safe-area-context`, «BLOQUEADO hasta autorizar» (docs/003 D11.7); D17 la autoriza. Antes se pedía que el pie de la hoja nunca usara 0; D17 acepta 0.
 
 #### D. Preguntas abiertas (R5.1b)
 - P1. ¿Los 12 íconos de cuenta se quedan en línea (rejilla corta) o también usan la hoja? Recomendación: usar la hoja si el catálogo de cuentas crece.
 - P2. ¿Catálogo único compartido por cuentas y categorías (con grupos) o catálogos separados? Lo decide el architect.
-- P3. ¿Se aprueba abrir el estudio de navegación inmersiva (implica `react-native-safe-area-context`, `expo-navigation-bar`, nueva build y ajuste de usuario)? Recomendación: no.
+- P3. RESUELTA (D17, 2026-10-17): el usuario aprobó la navegación inmersiva con `react-native-safe-area-context` y `expo-navigation-bar`, nueva build y SIN ajuste de usuario. (Texto original: ¿se aprueba abrir el estudio de navegación inmersiva? Recomendación: no.)
 - P4. ¿«Usar este ícono» (aplicar al confirmar) o aplicar al tocar la celda? Se propone confirmar, para cumplir «cancelar sin guardar».
 - P5. ¿Se aceptan las palabras clave en español como parte del catálogo (contenido que debe revisarse con el usuario)?
 

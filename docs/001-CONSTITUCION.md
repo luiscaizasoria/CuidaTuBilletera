@@ -72,7 +72,7 @@ Esquema (texto plano):
 | Repositorio y CI/CD | GitHub y GitHub Actions |
 | Entorno de desarrollo | Dev container (Docker) |
 
-Nota (Decisiones 2B.1, 3.1 y 4.1 de docs/003, ratificadas en la Decisión R0): React Navigation y TanStack Query siguen diferidos; la app usa navegación por estado local y pestañas propias y no añade dependencias nativas.
+Nota (Decisiones 2B.1, 3.1 y 4.1 de docs/003, ratificadas en la Decisión R0): React Navigation y TanStack Query siguen diferidos; la app usa navegación por estado local y pestañas propias y no añade dependencias nativas para navegación ni datos; las únicas dependencias nativas añadidas por el rediseño son `react-native-safe-area-context` y `expo-navigation-bar` (docs/003, Decisión R5.1 D17).
 
 
 Los límites de las capas gratuitas cambian con el tiempo. Antes de cerrar decisiones de capacidad se verifican en la documentación oficial de Cloudflare.
@@ -227,7 +227,7 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
 
 ### Android: safe areas, teclado y accesibilidad
 
-- La app respeta las barras del sistema (estado y navegación): ningún título, botón ni acción queda bajo ellas, con navegación por gestos o por tres botones. Opción A aprobada (sin módulo nativo ni modo inmersivo; docs/003, Decisión R0 D7); se implementa y valida en R1 y en un Android real.
+- La app respeta las barras del sistema: ningún título, botón ni acción queda bajo la barra de estado ni bajo la de navegación, con navegación por gestos o por tres botones. Los márgenes se toman de un único origen basado en los insets reales del sistema (`react-native-safe-area-context`). Excepción controlada (docs/003, Decisión R5.1 D17, que sustituye a la opción A de R0 D7): en Android la barra de navegación del sistema se oculta automáticamente con comportamiento transitorio (`expo-navigation-bar`). La barra se muestra mientras el teclado esté abierto y con un lector de pantalla (TalkBack) activo, y se oculta de nuevo al cerrar el teclado, al desactivar el lector y al volver a primer plano. La barra de estado no se oculta. Si el módulo falla, la app degrada a barras visibles sin error. La validación se hace en un Android real con gestos y con tres botones.
 - Con el teclado abierto, el campo activo y «Guardar» permanecen visibles; las pantallas se desplazan.
 - Todo objetivo táctil mide al menos 48 dp. Excepciones aprobadas y acotadas (docs/007 §10): chips pequeños de filtro de 36 dp con zona táctil efectiva de 48 dp; celdas de día del calendario de 52 dp de alto y al menos 44 dp de ancho con ancho de pantalla de hasta unos 400 dp.
 - El texto escala con el tamaño de fuente del sistema sin bloquearlo. El saldo, los importes, los botones, las pestañas y las categorías habituales no se truncan. Solo los nombres libres del usuario (cuenta, nota) se truncan con elipsis y su texto completo está en la etiqueta de accesibilidad.
