@@ -8,7 +8,7 @@ Convención: EXISTENTE = ya en el código o la constitución; APROBADO = decidid
 
 - EXISTENTE: no hay `DELETE /accounts`; las cuentas se archivan con `PATCH {archivada}`; `PATCH /accounts/:id` solo acepta `nombre` y `archivada` (no `saldoInicial`). La eliminación de cuenta y la edición del saldo inicial no se muestran en el diseño.
 - EXISTENTE: React Navigation y TanStack Query están nombradas en docs/001 §4 pero **diferidas** (docs/003, decisiones 2B.1 D8, 3.1 D8 y 4.1 D5) por requerir módulos nativos. El diseño usa pila propia y barra inferior propia sin dependencias.
-- EXISTENTE: sin metas, presupuestos ni conciliación (Fase 6). No se diseñan.
+- EXISTENTE: sin metas, presupuestos ni pantalla de conciliación. La Fase 6 se resolvió después como conciliación manual con la categoría «Conciliación» (docs/003 Decisión 6.1). No se diseñan.
 - EXISTENTE: ningún dato del usuario se cachea fuera de los componentes (docs/001 §4.7); se mantiene.
 - EXISTENTE: `app.json` no define `icon`, `adaptiveIcon` ni splash; no hay carpeta `app/assets`.
 - Pendiente de verificar: qué módulos nativos (`expo-font`, `@expo/vector-icons`) vienen enlazados en la build actual.

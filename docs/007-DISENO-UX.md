@@ -8,7 +8,7 @@ Leyenda de origen de cada elemento:
 - **APROBADO**: decisión registrada en docs/001 o docs/003.
 - **PROPUESTA NUEVA**: diseño nuevo de este documento; requiere aprobación (sección 14).
 
-Fuera de alcance (no se diseña): metas, presupuestos, alertas, logros, gráficos nuevos, conciliación (Fase 6, solo se reserva un lugar en el menú «Más»), eliminación de cuentas.
+Fuera de alcance (no se diseña): metas, presupuestos, alertas, logros, gráficos nuevos, conciliación (Fase 6, resuelta como conciliación manual con la categoría «Conciliación» sin pantalla propia; docs/003 Decisión 6.1), eliminación de cuentas.
 
 ---
 
@@ -72,7 +72,6 @@ Login
               ├─ Categorías
               ├─ Opciones avanzadas (Archivar; eliminación NO implementada)
               ├─ Exportar (atajo a Reportes > Exportar)
-              ├─ Conciliar (reservado, Fase 6; oculto hasta existir)
               └─ Cerrar sesión
 
 Pantallas de pila sobre el Detalle (ocultan la barra inferior):
@@ -1062,7 +1061,7 @@ Docs/003 R3 D5 aprobó el selector propio para el formulario; §5.6 y §5.8 ya p
 
 #### M. Fuera de alcance de R4 (listado, sin diseñar)
 
-Serie de Reportes por día (la API solo agrupa por mes o año), gráfico de dona, comparación entre períodos, presupuestos y metas, búsqueda de texto en Historial, edición de ícono de categoría, ilustraciones de estados vacíos y guías (R5), conciliación (Fase 6).
+Serie de Reportes por día (la API solo agrupa por mes o año), gráfico de dona, comparación entre períodos, presupuestos y metas, búsqueda de texto en Historial, edición de ícono de categoría, ilustraciones de estados vacíos y guías (R5). La conciliación (Fase 6) se resolvió como categoría predeterminada manual, sin diseño nuevo.
 
 ### 5.12 R5: guías contextuales y estados vacíos ilustrados (especificación; PROPUESTA salvo lo marcado)
 
@@ -2009,7 +2008,7 @@ Criterio de la columna Estado: «APROBADA (prototipo/navegación)» solo cuando 
 | 14.10 | Lugar de Cerrar sesión. | Más, o también en Mis cuentas. | Más y, en Mis cuentas, desde la hoja de perfil del avatar (ver 14.17, sustituye la recomendación anterior «solo sin cuentas»). | APROBADA (paso 349: Más y hoja de perfil de Mis cuentas, ver 14.17) |
 | 14.11 | Período por defecto del Detalle. | Mes actual; semana; hoy. | Pestaña Cuenta con **movimientos de la semana** (y el resumen del mes), como en el prototipo. | APROBADA (paso 347, docs/003 Decisión R0 D1) |
 | 14.12 | Cuenta archivada en el Detalle. | Solo lectura con banner o no abrirla. | **Solo lectura** con banner, etiqueta «Archivada» y «Nuevo movimiento» deshabilitado (§3.5.5). | APROBADA (paso 349: modo consulta) |
-| 14.13 | Conciliación (Fase 6). | Reservar el lugar en Más sin mostrarlo. | **Reservar**; no diseñar aún. | ABIERTA |
+| 14.13 | Conciliación (Fase 6). | Reservar el lugar en Más sin mostrarlo. | **SUSTITUIDA (paso 380):** conciliación manual con la categoría predeterminada «Conciliación» en el formulario de movimientos; no hay pantalla ni entrada en Más (docs/003 Decisión 6.1). | CERRADA |
 | 14.14 | Tocar nombre/saldo de la barra de contexto (NUEVA, §3.5.2). | (a) Abre selector rápido de cuenta (hoja inferior, cuentas activas); (b) solo texto, se cambia de cuenta con «‹ Mis cuentas». | **(a)**: cambia de cuenta sin perder la pestaña; sin dependencias ni contrato nuevo (usa `listAccounts`). | APROBADA (paso 347: selector rápido de cuenta) |
 | 14.16 | Resumen «Total en tus cuentas» en Mis cuentas (NUEVA, §5.2.3). | (a) Mostrar la suma de saldos de cuentas activas, solo con ≥ 2 cuentas; (b) no mostrar total. | **(a)**: es suma de valores reales de la API, sin estadísticas; `architect` confirma que sumar en la app es presentación, con la condición de entero seguro. | APROBADA (paso 347: total de cuentas activas con ≥ 2 cuentas) |
 | 14.17 | Acceso a perfil y cierre de sesión desde Mis cuentas (NUEVA, §5.2.2; resuelve 14.10). | (a) Avatar con inicial → hoja con nombre, correo y Cerrar sesión; (b) solo «Cerrar sesión» al pie si no hay cuentas. | **(a)**: sin datos nuevos y quita el botón grande de la lista. Más conserva Cerrar sesión. | APROBADA (paso 349: opción a) |
@@ -2041,4 +2040,4 @@ Propuestas NUEVAS P-1, P-2 y P-3: APROBADAS por el usuario (paso 346, confirmada
 | P-2 | Opciones de segmentado de 48 dp de alto (antes 44 dp en el prototipo) en Reportes, filtro de Movimientos y pestaña Cuenta. | — (el mínimo de §10 ya era 48 dp) | Aplicar: corrige una inconsistencia con §10; la pista crece 4 dp. **APROBADA (paso 346).** Condiciones: opciones de segmentado de 48 dp de alto. |
 | P-3 | Excepción de ancho en las celdas de día del calendario: alto 52 dp, ancho de 44,3 dp a 360 dp (7 columnas en 328 dp con 3 dp de separación; a 412 dp miden ≥ 48 dp). Cumple WCAG 2.5.8 (mínimo 24 dp) pero no los 48 dp de §10. | Reducir el margen lateral solo en el calendario: llega a ~46 dp, sin alcanzar 48. | Aprobar la excepción: la cuadrícula de 7 columnas no puede llegar a 48 dp en 360 dp. Pendiente de aprobación del usuario. **APROBADA (paso 346).** Condiciones: solo con ancho ≤ ≈ 400 dp; alto 52 dp; ancho ≥ 44 dp; sin superponer zonas táctiles; cumple WCAG 2.5.8; a ≥ ≈ 400 dp deben llegar a 48 dp. Ver §10. |
 
-Mejoras futuras (listadas, **sin diseñar**): conciliación (Fase 6), eliminación de datos, React Navigation y TanStack Query al migrar a una development build, notificaciones, modo oscuro (`userInterfaceStyle` hoy `light`), clave de idempotencia en `POST /transactions`.
+Mejoras futuras (listadas, **sin diseñar**): eliminación de datos, React Navigation y TanStack Query al migrar a una development build, notificaciones, modo oscuro (`userInterfaceStyle` hoy `light`), clave de idempotencia en `POST /transactions`.

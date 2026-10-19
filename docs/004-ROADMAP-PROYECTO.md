@@ -3,7 +3,7 @@
 ## Estado actual
 
 Fase actual:
-Fases 3, 4 y 5 integradas en main (PR #13, #14 y #15). En ejecución: rediseño UX/UI (R0 a R6, sección al final; R0 documentación completada, R1 siguiente); la Fase 6 no está iniciada. La Fase 2A conserva pendientes de validación: la subfase 2A.1 (API) tiene su evidencia registrada con un pendiente de pruebas remotas; la subfase 2A.2 (Android) está validada en dispositivo con pendientes (cambio de cuenta, 409 en dispositivo y PR). Detalle y evidencia en «Plan de ejecución de Fase 2».
+Fases 3, 4 y 5 integradas en main (PR #13, #14 y #15). Rediseño UX/UI R0 a R6 integrado en main (PR #16, cerrado funcionalmente; sección al final). En ejecución: la Fase 6 (conciliación manual con categorías, docs/003 Decisión 6.1) está planificada y no iniciada. La Fase 2A conserva pendientes de validación: la subfase 2A.1 (API) tiene su evidencia registrada con un pendiente de pruebas remotas; la subfase 2A.2 (Android) está validada en dispositivo con pendientes (cambio de cuenta, 409 en dispositivo y PR). Detalle y evidencia en «Plan de ejecución de Fase 2».
 
 Nomenclatura: «subfase 2A.1/2A.2» designa los bloques de este plan. Los encabezados «Fase 2A.1 … 2A.7» de docs/003 son decisiones numeradas (Decisión 2A.1 … 2A.7) y no equivalen a estas subfases.
 
@@ -134,7 +134,7 @@ Estado del primer incremento (rama `feat/fase3-movimientos`, sin commit; Pasos 3
 Riesgos y observaciones:
 
 - Inestabilidad por tiempos de espera de 5 s bajo carga: con todos los procesos de Jest o Vitest y otras tareas pesadas en paralelo se observaron fallos intermitentes (API 2 en una de dos corridas; app en 2 de 3). Con `-w 2` la app pasó 2 de 2 y las repeticiones sin carga pasaron completas. Es un riesgo para la integración continua; pendiente de decidir un ajuste de `maxWorkers` o de tiempos de espera.
-- El tipo `ajuste` no existe aún: llegará con la conciliación y exigirá reconstruir `transactions` en una migración posterior.
+- El tipo `ajuste` no existirá: la conciliación es manual con categorías «Conciliación» (docs/003 Decisión 6.1; la previsión anterior de reconstruir `transactions` queda sustituida).
 - Suma de saldos limitada a enteros seguros de JavaScript (falla con 500 en lugar de devolver cifras imprecisas).
 - POST /transactions no es idempotente.
 
@@ -178,16 +178,23 @@ Pendientes y riesgos:
 
 - Sin despliegue a DEV ni pruebas remotas de `/reports/*`: la app necesita la API con esas rutas desplegadas.
 - Sin validación en Android real (barras, scroll horizontal de la serie, teclado del modo Rango, botón atrás).
-- `balance` de reportes es flujo neto (sin saldo inicial); la línea de ajustes llega con la conciliación (Fase 6).
+- `balance` de reportes es flujo neto (sin saldo inicial); no habrá línea de ajustes: los movimientos con la categoría «Conciliación» cuentan como ingresos o gastos normales (docs/003 Decisión 6.1).
 - El desempate por `id` en el orden de categorías no es ejercitable con datos reales (nombre único por cuenta y tipo).
 - Cambios sin commit; `tsconfig.json` de la raíz sin rastrear (preexistente) debe quedar fuera del commit.
 
 ---
 
-# Fase 6 - Conciliación
+Seguimiento de seguridad de dependencias (paso 379, 2026-10-19): alertas de Dependabot sobre `braces`, `node-forge`, `sprintf-js` y `uuid`, documentadas en docs/003 «Decisión S1» (versión instalada, cadena, alcance, limitaciones, parche, riesgo residual y revisión propuesta 2026-11-19). Las tres primeras no tienen parche publicado; uuid tiene parche pero está bloqueado por `xcode 3.0.1` (override opcional sin aplicar). Los fallos de Dependabot son independientes del CI: PR #16 y main pasaron el CI. `package.json` y `package-lock.json` no se modificaron.
 
-[ ] Ajustes de saldo.
-[ ] Historial de conciliaciones.
+# Fase 6 - Conciliación manual mediante categorías
+
+**Alcance vigente (paso 380, decisión definitiva del usuario; docs/003 «Decisión 6.1» y docs/001 §5):** conciliación **exclusivamente manual** con el formulario de movimientos existente y una categoría predeterminada «Conciliación» de ingreso y otra de egreso (ícono `exchange`, color `#6366F1`). Sin pantalla, endpoint, tipo `ajuste`, previsualización ni cálculo automático; los movimientos cuentan en reportes y exportaciones como cualquier otro. El alcance anterior (pantalla en Más, `POST /accounts/:id/reconcile`, tipo `ajuste`, migración de ajustes, historial independiente y línea de ajustes en reportes) fue **sustituido por decisión del usuario** y no es requisito.
+
+[ ] Categorías predeterminadas «Conciliación» (ingreso y egreso) en cuentas nuevas (`DEFAULT_CATEGORIES`: 13 categorías por cuenta).
+[ ] Categorías «Conciliación» en cuentas existentes (migración D1 0005 de solo datos, idempotente, o creación manual: decisión pendiente del usuario).
+[ ] Pruebas (API y migración) y validación en Android real de un movimiento de conciliación.
+
+Estado: planificada, **no implementada** y sin rama (propuesta `feat/categoria-conciliacion`, desde `main` actualizado). Revisión del paso 380: `architect` af7582bfdbdc5bbe8, `backend-engineer` a13538e1fd01df0cb (borrador de SQL probado en SQLite en memoria, no en D1), `mobile-ux-designer` a45b54cb5cd5a0b4a (sin cambios de UI; ayuda opcional en la guía `categorias`), `qa-engineer` aa0fe68be97a38a82. Etapas: (1) docs/001 y 003 (hecho en este paso) → (2) `backend-engineer`: `DEFAULT_CATEGORIES`, migración 0005 si se aprueba y pruebas → (3) `qa-engineer` → (4) `mobile-engineer` y `mobile-ux-qa` solo si se aprueba la ayuda en la guía → (5) `devops-engineer`: procedimiento de respaldo y aplicación en DEV (con autorización expresa). Sin dependencias nativas ni nueva Development Build. La migración remota y el despliegue exigen autorización expresa; no existe D1 de producción.
 
 ---
 
@@ -390,13 +397,13 @@ Orden de prioridad vigente (sin renumerar etapas existentes):
 2. Validar en Android real.
 3. Completar R6.
 4. Integrar el rediseño.
-5. Retomar el alcance funcional pendiente del roadmap (Fase 6, conciliación).
+5. Retomar el alcance funcional pendiente del roadmap (Fase 6, conciliación manual con categorías, docs/003 Decisión 6.1).
 6. Actualización de versiones y multidioma, en etapas posteriores.
 
 [ ] F-A - Versiones y actualización de la app: versionName y versionCode de Android, EAS Build, EAS Update (runtimeVersion y canales), Google Play cuando corresponda, detección de nueva versión, aviso opcional y obligatorio según compatibilidad con la API, rollback, separación DEV/producción y pruebas de compatibilidad entre versiones. Estado verificado: `expo-updates`, `runtimeVersion`, `updates` y canales no existen; `eas.json` tiene `appVersionSource: remote`. Publicar en Google Play requiere cambiar primero docs/001 §3.
 [ ] F-B - Multidioma: español inicial, inglés propuesto, arquitectura de traducciones y centralización de textos, formato de fechas, montos y números, mensajes del backend por código de error, detección y persistencia del idioma, accesibilidad y pruebas con textos largos. Estado verificado: sin capa de i18n; 300 a 450 cadenas estimadas por revisar.
 
-Relación con la Fase 6: sus pantallas, textos y códigos de error nuevos se escriben en módulos de mensajes agrupados para que F-B sea una migración mecánica.
+Relación con la Fase 6: la Fase 6 vigente (conciliación manual con categorías) no añade pantallas ni códigos de error; si se añade una ayuda, su texto va en el módulo de guías para que F-B sea una migración mecánica.
 
 ## Verificación puntual de UXQA-R3-01 (2026-10-17)
 
