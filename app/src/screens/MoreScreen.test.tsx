@@ -1,6 +1,6 @@
 // Pestaña Más (R2). Incluye renombrar y archivar, que antes se probaban en AccountsScreen.test.
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, Linking, StyleSheet } from 'react-native';
 import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type ResourcesApi } from '../lib/resources-api';
 import { APPEARANCE_SAVE_ERROR } from '../lib/resources-messages';
@@ -17,6 +17,12 @@ jest.mock('../hooks/use-auth', () => ({
     authorizedCall: (call: (token: string) => Promise<unknown>) => call('tok'),
   }),
 }));
+
+const mockLinks = {
+  privacyPolicyUrl: null as string | null,
+  accountDeletionUrl: null as string | null,
+};
+jest.mock('../lib/config', () => ({ readLegalLinks: () => mockLinks }));
 
 const handlers = {
   onAccountUpdated: jest.fn(),
@@ -43,14 +49,17 @@ beforeEach(() => {
     error: null,
     signOut: jest.fn(),
     restore: jest.fn(),
+    deleteAccount: jest.fn(),
   });
+  mockLinks.privacyPolicyUrl = null;
+  mockLinks.accountDeletionUrl = null;
   Object.values(handlers).forEach((fn) => fn.mockClear());
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 afterEach(() => jest.restoreAllMocks());
 
 describe('MoreScreen: estructura y navegación', () => {
-  it('título, secciones CUENTA, AYUDA y SESIÓN, correo y sin eliminar ni conciliar', async () => {
+  it('título, secciones CUENTA, AYUDA, SESIÓN y PRIVACIDAD Y DATOS, correo y sin conciliar', async () => {
     await renderMore();
     expect(screen.getByRole('header', { name: 'Más' })).toBeTruthy();
     expect(screen.getByRole('header', { name: 'CUENTA' })).toBeTruthy();
@@ -58,10 +67,21 @@ describe('MoreScreen: estructura y navegación', () => {
     expect(screen.getByRole('header', { name: 'SESIÓN' })).toBeTruthy();
     expect(screen.getByText('Conectado como')).toBeTruthy();
     expect(screen.getByText('ana@example.com')).toBeTruthy();
-    expect(screen.queryByText(/Eliminar/)).toBeNull();
-    expect(screen.queryByText(/Conciliar/)).toBeNull();
+    // G1: la sección de privacidad está visible sin desplegar «Opciones avanzadas».
+    expect(screen.getByRole('header', { name: 'PRIVACIDAD Y DATOS' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Eliminar mi cuenta y mis datos' })).toBeTruthy();
+    expect(screen.queryByText('Archivar esta cuenta')).toBeNull();
+    expect(screen.queryByText(/Conciliar/i)).toBeNull();
     // R5: «Ver ayudas otra vez» existe y vive en Ayuda, no en Opciones avanzadas.
     expect(screen.getByText('Ver ayudas otra vez')).toBeTruthy();
+  });
+
+  it('PRIVACIDAD Y DATOS va entre SESIÓN y «Opciones avanzadas»', async () => {
+    await renderMore();
+    const headers = screen.getAllByRole('header').map((h) => h.props.children);
+    expect(headers.indexOf('SESIÓN')).toBeGreaterThan(-1);
+    expect(headers.indexOf('PRIVACIDAD Y DATOS')).toBe(headers.indexOf('SESIÓN') + 1);
+    expect(screen.getByRole('button', { name: 'Opciones avanzadas' })).toBeTruthy();
   });
 
   it('Categorías y Exportar navegan', async () => {
@@ -413,5 +433,64 @@ describe('MoreScreen: apariencia en Datos de cuenta (docs/007 §5.14, CTA-01..13
     expect(api.updateAccount).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('appearance-block')).toBeNull();
     expect(rejected).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MoreScreen: privacidad y datos (G1; ELIM-a, m, n, o, q)', () => {
+  it('sin URL válida no hay fila de política (ni «próximamente»)', async () => {
+    await renderMore();
+    expect(screen.queryByText('Política de privacidad')).toBeNull();
+    expect(screen.queryByText(/próximamente/i)).toBeNull();
+  });
+
+  it('con URL la fila abre el navegador; si falla, avisa con onNotify', async () => {
+    mockLinks.privacyPolicyUrl = 'https://ejemplo.test/privacidad';
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const onNotify = jest.fn();
+    await render(
+      <MoreScreen api={fakeResourcesApi()} account={account()} {...handlers} onNotify={onNotify} />,
+    );
+    const row = screen.getByRole('link', { name: 'Política de privacidad' });
+    await fireEvent.press(row);
+    expect(openURL).toHaveBeenCalledWith('https://ejemplo.test/privacidad');
+    expect(onNotify).not.toHaveBeenCalled();
+    openURL.mockRejectedValue(new Error('sin navegador'));
+    await fireEvent.press(row);
+    expect(onNotify).toHaveBeenCalledWith('No pudimos abrir el enlace.');
+  });
+
+  it('la fila de eliminar es un texto de peligro de al menos 48 dp, sin botón relleno ni mosaico', async () => {
+    await renderMore();
+    const row = screen.getByRole('button', { name: 'Eliminar mi cuenta y mis datos' });
+    expect(row.props.accessibilityHint).toBe('Abre una confirmación');
+    const flat = StyleSheet.flatten(
+      typeof row.props.style === 'function' ? row.props.style({ pressed: false }) : row.props.style,
+    );
+    expect(flat.minHeight).toBeGreaterThanOrEqual(48);
+    expect(flat.backgroundColor).toBeUndefined();
+    const title = screen.getByText('Eliminar mi cuenta y mis datos');
+    expect(StyleSheet.flatten(title.props.style).color).toBe('#B42A20');
+  });
+
+  it('tocar la fila abre la hoja de eliminación; no usa Alert ni llama al servicio', async () => {
+    await renderMore();
+    expect(screen.queryByTestId('delete-account-sheet')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Eliminar mi cuenta y mis datos' }));
+    expect(screen.getByTestId('delete-account-sheet')).toBeTruthy();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(mockAuthState.deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it('también está disponible con una cuenta archivada (ELIM-n)', async () => {
+    await renderMore(fakeResourcesApi(), account({ archivada: true }));
+    expect(screen.getByRole('button', { name: 'Eliminar mi cuenta y mis datos' })).toBeTruthy();
+  });
+
+  it('archivar sigue igual y vive en «Opciones avanzadas» (ELIM-o)', async () => {
+    const api = fakeResourcesApi();
+    await renderMore(api);
+    await fireEvent.press(screen.getByRole('button', { name: 'Opciones avanzadas' }));
+    expect(screen.getByText('Archivar esta cuenta')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Archivar cuenta' })).toBeTruthy();
   });
 });

@@ -14,7 +14,7 @@ import {
 import { readUnverifiedClaims } from './jwt-claims';
 
 export type AuthStatus = 'initializing' | 'authenticated' | 'unauthenticated' | 'unavailable';
-export type SignedOutReason = 'absent' | 'revoked' | 'signed-out';
+export type SignedOutReason = 'absent' | 'revoked' | 'signed-out' | 'account-deleted';
 export type UnavailableCause = 'network' | 'server' | 'storage';
 export type LogoutNotice = 'logout-unconfirmed' | 'logout-storage-error';
 
@@ -31,10 +31,35 @@ export interface AuthState {
   notice: LogoutNotice | null;
 }
 
+export type DeleteAccountFailureReason =
+  | 'reauth-required' // 401 REAUTH_REQUIRED: cuenta de Google distinta o ID token antiguo
+  | 'network'
+  | 'server'
+  | 'invalid-request' // 400 o 413
+  | 'play-services'
+  | 'config'
+  | 'in-progress'
+  | 'unknown';
+
+// `uncertain`: la solicitud pudo llegar al servidor y no se sabe si se eliminó. Nunca se afirma una
+// eliminación que no se confirmó.
+export type DeleteAccountResult =
+  | { status: 'deleted' }
+  | { status: 'cancelled' }
+  | { status: 'session-expired' }
+  | { status: 'failed'; reason: DeleteAccountFailureReason; uncertain: boolean };
+
+export interface DeleteAccountOptions {
+  // El intento anterior terminó sin certeza: primero se sondea GET /me, sin selector de Google.
+  afterUncertain?: boolean;
+}
+
 export interface AuthServiceDeps {
   google: GoogleProvider;
   storage: SessionStorage;
   api: SessionApi;
+  // Se llama al eliminar la cuenta (best-effort) para limpiar preferencias locales del usuario.
+  onAccountDeleted?: (userId: string) => Promise<void> | void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
@@ -46,6 +71,9 @@ export interface AuthService {
   restore(): Promise<void>;
   signIn(): Promise<void>;
   signOut(): Promise<LogoutOutcome>;
+  // Elimina la cuenta y los datos del usuario (DELETE /me con reautenticación de Google). Un solo
+  // vuelo a la vez. No usa authorizedCall ni la recuperación con Google: no debe recrear la cuenta.
+  deleteAccount(options?: DeleteAccountOptions): Promise<DeleteAccountResult>;
   // Ejecuta una llamada autenticada: renueva con POST /auth/refresh si el access token está por
   // vencer y, ante un 401, renueva una vez y reintenta una vez. Un segundo 401 se propaga sin
   // destruir la sesión.
@@ -148,6 +176,7 @@ export function createAuthService({
   google,
   storage,
   api,
+  onAccountDeleted,
   now = Date.now,
   sleep = defaultSleep,
   random = Math.random,
@@ -187,6 +216,9 @@ export function createAuthService({
   // refreshToken marcado como consumido cuya marca NO se pudo persistir: antes de recuperar con
   // Google se reintenta escribirla (la marca va a disco antes de cualquier llamada a Google).
   let unpersistedMark: string | null = null;
+  // Eliminación de cuenta en vuelo (single-flight). Mientras exista, restore(), onForeground(),
+  // recover() y migrate() no corren: ninguna recuperación con Google debe recrear la cuenta.
+  let deleting: Promise<DeleteAccountResult> | null = null;
 
   function setState(patch: Partial<AuthState>) {
     state = { ...state, ...patch };
@@ -591,7 +623,14 @@ export function createAuthService({
     expectedUserId: string,
     fromConflict: boolean,
   ): Promise<CycleResult> {
-    if (epoch !== epoch0 || state.signedOutReason === 'signed-out') return ENDED;
+    if (deleting) return ENDED;
+    if (
+      epoch !== epoch0 ||
+      state.signedOutReason === 'signed-out' ||
+      state.signedOutReason === 'account-deleted'
+    ) {
+      return ENDED;
+    }
     if (lastRecoveryAt !== null && now() - lastRecoveryAt < RECOVERY_COOLDOWN_MS) {
       return fail('server', epoch0);
     }
@@ -679,6 +718,7 @@ export function createAuthService({
   // la sesión v1 no guarda datos locales (todo vive en la API por usuario), así que el resultado
   // equivale a un inicio de sesión con la cuenta de Google del dispositivo.
   async function migrate(epoch0: number): Promise<CycleResult> {
+    if (deleting) return ENDED;
     let silent;
     try {
       silent = await withTimeout(() => google.signInSilently(), GOOGLE_SILENT_TIMEOUT_MS);
@@ -747,6 +787,9 @@ export function createAuthService({
     const epoch0 = epoch;
     const afterLogout =
       state.status === 'unauthenticated' && state.signedOutReason === 'signed-out' && !pendingClear;
+    // Tras eliminar la cuenta el motivo se conserva: restore() nunca lo reetiqueta.
+    const afterDeletion =
+      state.status === 'unauthenticated' && state.signedOutReason === 'account-deleted';
     if (state.status === 'unavailable' || state.degraded) setState({ busy: true });
     if (pendingClear && session === null) {
       // La marca se evalúa DENTRO de la cola: si un inicio de sesión nuevo se guardó antes, la
@@ -761,7 +804,7 @@ export function createAuthService({
           status: 'unauthenticated',
           user: null,
           busy: false,
-          signedOutReason: 'signed-out',
+          signedOutReason: afterDeletion ? 'account-deleted' : 'signed-out',
           notice: 'logout-storage-error',
         });
         return;
@@ -804,7 +847,11 @@ export function createAuthService({
           busy: false,
           degraded: false,
           // Un cierre explícito concurrente con este restore() no se reetiqueta como "ausente".
-          signedOutReason: afterLogout ? 'signed-out' : 'absent',
+          signedOutReason: afterLogout
+            ? 'signed-out'
+            : afterDeletion
+              ? 'account-deleted'
+              : 'absent',
           unavailableCause: null,
         });
         return;
@@ -925,6 +972,7 @@ export function createAuthService({
   }
 
   function restore(): Promise<void> {
+    if (deleting) return Promise.resolve();
     // Un inicio de sesión interactivo en vuelo manda: restore() no corre ni toca lastAttemptAt.
     if (signInToken !== null) return Promise.resolve();
     if (restoring) return restoring;
@@ -1036,12 +1084,155 @@ export function createAuthService({
     }
   }
 
+  // --- Eliminación de cuenta ------------------------------------------------------------------
+
+  type Fresh = { ok: true; token: string } | { ok: false; result: DeleteAccountResult };
+
+  const failed = (reason: DeleteAccountFailureReason, uncertain: boolean): DeleteAccountResult => ({
+    status: 'failed',
+    reason,
+    uncertain,
+  });
+
+  // Cierra la sesión local por un 401/refresh rechazado. Con `afterUncertain` el usuario ya no
+  // existe: es el éxito. En el primer intento NO se afirma que se haya eliminado nada.
+  async function rejectedDuringDeletion(
+    afterUncertain: boolean,
+    epoch0: number,
+    userId: string,
+  ): Promise<DeleteAccountResult> {
+    if (afterUncertain) return finishDeleted(userId);
+    await endSession('revoked', epoch0);
+    return { status: 'session-expired' };
+  }
+
+  // Access token vigente SIN authorizedCall: un rechazo no abre Google ni recrea la cuenta.
+  async function freshAccessForDeletion(
+    epoch0: number,
+    afterUncertain: boolean,
+    userId: string,
+  ): Promise<Fresh> {
+    if (session && isFresh()) return { ok: true, token: session.accessToken };
+    const result = await refreshCycle();
+    if (epoch !== epoch0) return { ok: false, result: { status: 'session-expired' } };
+    if (result.ok) return { ok: true, token: result.token };
+    if (result.cause === 'ended') {
+      // Refresh rechazado (la recuperación está bloqueada por `deleting`).
+      return { ok: false, result: await rejectedDuringDeletion(afterUncertain, epoch0, userId) };
+    }
+    // Tras un intento incierto, un fallo transitorio conserva la marca de incierto.
+    const uncertain = afterUncertain;
+    if (result.cause === 'network') return { ok: false, result: failed('network', uncertain) };
+    if (result.cause === 'server') return { ok: false, result: failed('server', uncertain) };
+    return { ok: false, result: failed('unknown', uncertain) };
+  }
+
+  async function finishDeleted(userId: string): Promise<DeleteAccountResult> {
+    epoch += 1;
+    const mine = epoch;
+    signInToken = null;
+    restoring = null;
+    cycle = null;
+    setSession(null, 0);
+    const cleared = await clearStorage();
+    try {
+      await onAccountDeleted?.(userId);
+    } catch {
+      // Las preferencias locales (guías) son best-effort: no impiden el éxito.
+    }
+    try {
+      await google.signOut();
+    } catch {
+      // idem
+    }
+    if (epoch === mine) {
+      setState({
+        status: 'unauthenticated',
+        user: null,
+        busy: false,
+        degraded: false,
+        signedOutReason: 'account-deleted',
+        unavailableCause: null,
+        error: null,
+        notice: cleared ? null : 'logout-storage-error',
+      });
+    }
+    return { status: 'deleted' };
+  }
+
+  async function runDeleteAccount(afterUncertain: boolean): Promise<DeleteAccountResult> {
+    const epoch0 = epoch;
+    if (session === null) return { status: 'session-expired' };
+    const userId = session.user.id;
+
+    const first = await freshAccessForDeletion(epoch0, afterUncertain, userId);
+    if (!first.ok) return first.result;
+
+    if (afterUncertain) {
+      // Sondeo sin selector: ¿el usuario todavía existe? (sin authorizedCall)
+      try {
+        await api.getMe(first.token);
+      } catch (error) {
+        if (epoch !== epoch0) return { status: 'session-expired' };
+        if (error instanceof AuthError && error.status === 401) return finishDeleted(userId);
+        const kind = kindOf(error);
+        return failed(kind === 'network' ? 'network' : 'server', true);
+      }
+      if (epoch !== epoch0) return { status: 'session-expired' };
+    }
+
+    let reauth;
+    try {
+      reauth = await withTimeout(() => google.reauthenticate(), GOOGLE_INTERACTIVE_TIMEOUT_MS);
+    } catch (error) {
+      const kind = kindOf(error);
+      if (kind === 'play-services' || kind === 'config' || kind === 'in-progress') {
+        return failed(kind, false);
+      }
+      return failed(kind === 'network' ? 'network' : 'unknown', false);
+    }
+    if (reauth.status !== 'success') return { status: 'cancelled' };
+    if (epoch !== epoch0) return { status: 'session-expired' };
+
+    // El selector pudo tardar: el access se revalida (o se renueva) justo antes de enviar.
+    const second = await freshAccessForDeletion(epoch0, afterUncertain, userId);
+    if (!second.ok) return second.result;
+
+    try {
+      await api.deleteAccount(second.token, reauth.idToken);
+    } catch (error) {
+      if (!(error instanceof AuthError)) return failed('unknown', true);
+      if (error.status === 401) {
+        if (error.code === 'REAUTH_REQUIRED') return failed('reauth-required', false);
+        return rejectedDuringDeletion(afterUncertain, epoch0, userId);
+      }
+      if (error.status === 400 || error.status === 413) return failed('invalid-request', false);
+      if (error.status === 429) return failed('server', false);
+      if (error.status !== undefined && error.status >= 500) return failed('server', true);
+      if (error.status !== undefined) return failed('unknown', false);
+      // Sin status: red/timeout (pudo llegar) o 2xx inesperado.
+      return failed(error.kind === 'network' ? 'network' : 'unknown', true);
+    }
+    return finishDeleted(userId);
+  }
+
+  function deleteAccount(options: DeleteAccountOptions = {}): Promise<DeleteAccountResult> {
+    if (deleting) return deleting;
+    const run: Promise<DeleteAccountResult> = runDeleteAccount(options.afterUncertain === true)
+      .catch((): DeleteAccountResult => failed('unknown', true))
+      .finally(() => {
+        if (deleting === run) deleting = null;
+      });
+    deleting = run;
+    return run;
+  }
+
   // Reactivación de la app. No modifica el estado por sí misma: delega en restore() o en el ciclo
   // de renovación, que ya validan el epoch, el cooldown de recuperación y la marca refreshConsumed.
   async function onForeground(): Promise<void> {
     try {
       // Primera carga, restauración, ciclo o inicio de sesión en vuelo: ya hay trabajo en curso.
-      if (state.status === 'initializing' || state.busy || restoring || cycle) return;
+      if (deleting || state.status === 'initializing' || state.busy || restoring || cycle) return;
       // Sin sesión (incluido el cierre explícito): jamás se llama a Google en automático.
       if (state.status === 'unauthenticated') return;
       if (state.status === 'unavailable') {
@@ -1072,6 +1263,7 @@ export function createAuthService({
     restore,
     signIn,
     signOut,
+    deleteAccount,
     authorizedCall,
     onForeground,
   };

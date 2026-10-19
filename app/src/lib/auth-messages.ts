@@ -42,6 +42,9 @@ export const SIGNED_OUT_MESSAGES: Record<SignedOutReason, string | null> = {
   absent: null,
   revoked: 'Tu sesión ya no está disponible en este dispositivo. Ingresa con Google.',
   'signed-out': null,
+  // Aviso de éxito (el Login lo pinta con su variante propia); sin «Ya puedes cerrar la app».
+  'account-deleted':
+    'Tu cuenta y tus datos se eliminaron. Si vuelves a ingresar con Google, empezarás con una cuenta nueva y vacía.',
 };
 
 // Texto de la pantalla "sesión no disponible": distingue Play Services, configuración y error

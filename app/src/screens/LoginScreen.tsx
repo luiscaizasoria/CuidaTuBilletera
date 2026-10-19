@@ -1,5 +1,6 @@
 // Login (R5.1; docs/007 §5.13 A y B, docs/008 §6.15.1 y §6.15.2). El flujo de Google Sign-In no cambia:
 // solo la presentación. Pinta bajo la barra de estado (el App no lo envuelve en `Screen`).
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,11 +12,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { PRIVACY_POLICY_HINT, PRIVACY_POLICY_LABEL } from '../lib/account-deletion-messages';
 import {
   AUTH_ERROR_MESSAGES,
   LOGOUT_NOTICE_MESSAGES,
   SIGNED_OUT_MESSAGES,
 } from '../lib/auth-messages';
+import { readLegalLinks } from '../lib/config';
+import { OPEN_LINK_ERROR, openExternal } from '../lib/external-link';
 import {
   brandGoogle,
   colors,
@@ -55,8 +59,17 @@ export default function LoginScreen() {
   const showMark = fontScale < 1.75;
   const blobScale = compact ? 0.75 : 1;
   // Prioridad: error > aviso > motivo de cierre; el motivo solo aparece si nada es más específico.
+  const deleted = signedOutReason === 'account-deleted';
   const signedOutMessage =
-    !error && !notice && signedOutReason ? SIGNED_OUT_MESSAGES[signedOutReason] : null;
+    !error && !notice && signedOutReason && !deleted ? SIGNED_OUT_MESSAGES[signedOutReason] : null;
+  const { privacyPolicyUrl } = readLegalLinks();
+  const [linkError, setLinkError] = useState(false);
+
+  async function openPolicy() {
+    if (!privacyPolicyUrl) return;
+    setLinkError(false);
+    if (!(await openExternal(privacyPolicyUrl))) setLinkError(true);
+  }
   const markSize = compact ? 120 : sizes.loginMark;
   const pigSize = compact ? 96 : sizes.loginPig;
 
@@ -147,37 +160,52 @@ export default function LoginScreen() {
           <Text style={styles.message}>{LOGIN_MESSAGE}</Text>
 
           {notice ? <Banner kind="notice" message={LOGOUT_NOTICE_MESSAGES[notice]} /> : null}
+          {deleted ? (
+            <Banner kind="success" message={SIGNED_OUT_MESSAGES['account-deleted']!} />
+          ) : null}
           {signedOutMessage ? <Banner kind="notice" message={signedOutMessage} /> : null}
           {error ? <Banner kind="error" message={AUTH_ERROR_MESSAGES[error]} /> : null}
 
           <GoogleButton busy={busy} onPress={() => void signIn()} />
           <Text style={styles.privacy}>{LOGIN_PRIVACY}</Text>
+          {privacyPolicyUrl ? (
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={PRIVACY_POLICY_LABEL}
+              accessibilityHint={PRIVACY_POLICY_HINT}
+              onPress={() => void openPolicy()}
+              style={styles.policyLink}
+            >
+              <Text style={styles.policyText}>{PRIVACY_POLICY_LABEL}</Text>
+            </Pressable>
+          ) : null}
+          {linkError ? (
+            <Text accessibilityRole="alert" style={styles.linkError}>
+              {OPEN_LINK_ERROR}
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
     </View>
   );
 }
 
-// Caja de aviso o error sobre el botón; el «⚠» es decorativo y está oculto.
-function Banner({ kind, message }: { kind: 'error' | 'notice'; message: string }) {
-  const error = kind === 'error';
+// Caja de aviso, error o éxito sobre el botón; el «⚠» / «✓» es decorativo y está oculto.
+function Banner({ kind, message }: { kind: 'error' | 'notice' | 'success'; message: string }) {
+  const tone =
+    kind === 'error'
+      ? { bg: colors.expenseSoft, fg: colors.expenseText, glyph: '⚠' }
+      : kind === 'success'
+        ? { bg: colors.incomeSoft, fg: colors.incomeText, glyph: '✓' }
+        : { bg: colors.yellowSoft, fg: colors.yellowText, glyph: '⚠' };
   return (
-    <View
-      style={[styles.banner, { backgroundColor: error ? colors.expenseSoft : colors.yellowSoft }]}
-    >
-      <Text
-        {...hidden}
-        style={[styles.bannerText, { color: error ? colors.expenseText : colors.yellowText }]}
-      >
-        ⚠
+    <View style={[styles.banner, { backgroundColor: tone.bg }]}>
+      <Text {...hidden} style={[styles.bannerText, { color: tone.fg }]}>
+        {tone.glyph}
       </Text>
       <Text
         accessibilityRole="alert"
-        style={[
-          styles.bannerText,
-          styles.bannerMessage,
-          { color: error ? colors.expenseText : colors.yellowText },
-        ]}
+        style={[styles.bannerText, styles.bannerMessage, { color: tone.fg }]}
       >
         {message}
       </Text>
@@ -268,5 +296,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'center',
   },
+  policyLink: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 12 },
+  policyText: {
+    ...typography.small,
+    fontWeight: '700',
+    color: colors.brandInk,
+    textDecorationLine: 'underline',
+  },
+  linkError: { ...typography.small, color: colors.expenseText, textAlign: 'center' },
   privacy: { ...typography.small, color: colors.text2, textAlign: 'center', marginTop: 12 },
 });

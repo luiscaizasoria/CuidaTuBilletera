@@ -373,3 +373,76 @@ describe('createSessionApi', () => {
     spies.forEach((spy) => spy.mockRestore());
   });
 });
+
+describe('createSessionApi.deleteAccount (DELETE /me)', () => {
+  const ID_TOKEN = 'id-token-google-secreto';
+
+  it('request exacto: método, URL, cabeceras y cuerpo con el literal ELIMINAR', async () => {
+    const { api, fetchMock } = makeV2(async () => noContent());
+    await expect(api.deleteAccount(ACCESS, ID_TOKEN)).resolves.toBeUndefined();
+    const [url, init] = callOf(fetchMock);
+    expect(url).toBe('https://api.test/me');
+    expect(init.method).toBe('DELETE');
+    expect(init.headers).toEqual({
+      'content-type': 'application/json',
+      Authorization: `Bearer ${ACCESS}`,
+    });
+    expect(init.body).toBe(JSON.stringify({ confirm: 'ELIMINAR', idToken: ID_TOKEN }));
+    expect(init.signal).toBeDefined();
+  });
+
+  it('un 200 no confirma la eliminación', async () => {
+    const { api } = makeV2(async () => json(200, {}));
+    await expect(api.deleteAccount(ACCESS, ID_TOKEN)).rejects.toMatchObject({ kind: 'unknown' });
+  });
+
+  it.each([
+    [401, 'REAUTH_REQUIRED', 'unknown'],
+    [401, 'INVALID_TOKEN', 'rejected'],
+    [401, 'UNAUTHORIZED', 'rejected'],
+    [400, 'INVALID_REQUEST', 'unknown'],
+    [413, 'PAYLOAD_TOO_LARGE', 'unknown'],
+    [500, 'INTERNAL_ERROR', 'server'],
+  ])('%i %s conserva status y code (kind %s)', async (status, code, kind) => {
+    const { api } = makeV2(async () => json(status, errorBody(code)));
+    await expect(api.deleteAccount(ACCESS, ID_TOKEN)).rejects.toMatchObject({
+      kind,
+      status,
+      code,
+    });
+  });
+
+  it('fallo de red: AuthError network sin status', async () => {
+    const { api } = makeV2(async () => {
+      throw new TypeError('Network request failed');
+    });
+    const error = await api.deleteAccount(ACCESS, ID_TOKEN).catch((e: unknown) => e);
+    expect(error).toMatchObject({ kind: 'network' });
+    expect((error as { status?: number }).status).toBeUndefined();
+  });
+
+  it('nunca propaga el ID token ni el mensaje del cuerpo', async () => {
+    const { api } = makeV2(async () => json(401, errorBody('REAUTH_REQUIRED')));
+    const error = (await api.deleteAccount(ACCESS, ID_TOKEN).catch((e: unknown) => e)) as Error;
+    expect(error.message).not.toContain(ID_TOKEN);
+    expect(error.message).not.toContain('MENSAJE-NO-PROPAGAR');
+    expect(JSON.stringify(error)).not.toContain(ID_TOKEN);
+  });
+
+  it('expira a los 15 s como network', async () => {
+    jest.useFakeTimers();
+    try {
+      const { api } = makeV2(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(new Error('abort')));
+          }),
+      );
+      const result = api.deleteAccount(ACCESS, ID_TOKEN).catch((e: unknown) => e);
+      await jest.advanceTimersByTimeAsync(15_000);
+      await expect(result).resolves.toMatchObject({ kind: 'network' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});

@@ -8,7 +8,7 @@ import { useImmersiveNavigation } from './hooks/use-immersive-navigation';
 import { createAuthService, type AuthService } from './lib/auth-service';
 import { readConfig } from './lib/config';
 import { createGoogleProvider } from './lib/google-auth';
-import type { GuideStorage } from './lib/guides';
+import { createGuideStore, secureGuideStorage, type GuideStorage } from './lib/guides';
 import { createResourcesApi, type ResourcesApi } from './lib/resources-api';
 import { createSessionApi } from './lib/session-api';
 import { secureSessionStorage } from './lib/session-storage';
@@ -24,6 +24,8 @@ function createDefaultService(): AuthService | null {
     google: createGoogleProvider(config.googleWebClientId),
     storage: secureSessionStorage,
     api: createSessionApi(config.apiUrl),
+    // Eliminar la cuenta borra también las guías descartadas de ese usuario (preferencia local).
+    onAccountDeleted: (userId) => createGuideStore(secureGuideStorage).reset(userId),
   });
 }
 

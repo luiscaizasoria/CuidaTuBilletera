@@ -1,5 +1,6 @@
 // Pestaña Más del Detalle (docs/007 §5.9): datos de la cuenta, categorías, exportar, sesión y
-// opciones avanzadas (archivar). Sin eliminar cuenta ni conciliar.
+// privacidad y datos (política y eliminar mi cuenta, G1) y opciones avanzadas (archivar). Sin
+// conciliar. «Eliminar mi cuenta y mis datos» borra el perfil completo; archivar solo oculta una cuenta.
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,12 +22,21 @@ import {
   isAppearanceRejection,
   type AppearanceDraft,
 } from '../lib/account-appearance';
+import {
+  DELETE_ACCOUNT_HINT,
+  DELETE_ACCOUNT_LABEL,
+  PRIVACY_POLICY_HINT,
+  PRIVACY_POLICY_LABEL,
+} from '../lib/account-deletion-messages';
 import { AuthError } from '../lib/auth-types';
+import { readLegalLinks } from '../lib/config';
+import { OPEN_LINK_ERROR, openExternal } from '../lib/external-link';
 import { APPEARANCE_SAVE_ERROR } from '../lib/resources-messages';
 import type { Account, AccountPatch, ResourcesApi } from '../lib/resources-api';
 import { colors, moduleColors, radii, shadows, typography } from '../theme/tokens';
 import { AppearancePicker } from './account-appearance';
 import { ArchivedNotice } from './account-ui';
+import DeleteAccountSheet from './delete-account-sheet';
 import SessionBanner from './SessionBanner';
 import { SignOutControl } from './session-ui';
 import { Button, ErrorBox, screenStyles as s, useScreenMargin } from './ui';
@@ -77,6 +87,8 @@ export default function MoreScreen({
   const [saveError, setSaveError] = useState<string | null>(null);
   const showAppearance = appearanceSupported && !appearanceRejected;
   const [advanced, setAdvanced] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const { privacyPolicyUrl } = readLegalLinks();
   const rename = useMutation();
   const archive = useMutation();
   const result = useRef<Account | null>(null);
@@ -169,6 +181,10 @@ export default function MoreScreen({
     setHelpBusy(false);
     if (ok) onNotify?.(HELP_RESET_DONE);
     else setHelpError(true);
+  }
+
+  async function openPolicy() {
+    if (privacyPolicyUrl && !(await openExternal(privacyPolicyUrl))) onNotify?.(OPEN_LINK_ERROR);
   }
 
   return (
@@ -265,6 +281,34 @@ export default function MoreScreen({
         <SignOutControl variant="button" />
       </View>
 
+      <Text accessibilityRole="header" style={styles.sectionHeader}>
+        PRIVACIDAD Y DATOS
+      </Text>
+      <View style={[styles.list, shadows.card]}>
+        {privacyPolicyUrl ? (
+          <Row
+            icon="🔒"
+            title={PRIVACY_POLICY_LABEL}
+            hint={PRIVACY_POLICY_HINT}
+            role="link"
+            onPress={() => void openPolicy()}
+          />
+        ) : null}
+        <Row
+          icon=""
+          title={DELETE_ACCOUNT_LABEL}
+          hint={DELETE_ACCOUNT_HINT}
+          danger
+          last
+          onPress={() => setDeleteOpen(true)}
+        />
+      </View>
+      <DeleteAccountSheet
+        visible={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onNotify={onNotify}
+      />
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Opciones avanzadas"
@@ -313,6 +357,9 @@ function Row({
   last = false,
   busy = false,
   tall = false,
+  hint,
+  role = 'button',
+  danger = false,
 }: {
   icon: string;
   title: string;
@@ -324,14 +371,19 @@ function Row({
   busy?: boolean;
   // Fila de 56 dp (Ayuda); con fuente ≥ 175 % oculta el mosaico del glifo.
   tall?: boolean;
+  // Ayuda de accesibilidad cuando no hay subtítulo visible.
+  hint?: string;
+  role?: 'button' | 'link';
+  // Acción destructiva: texto rojo, sin mosaico ni chevron (G1).
+  danger?: boolean;
 }) {
   const expandable = expanded !== undefined;
   const { fontScale } = useWindowDimensions();
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={role}
       accessibilityLabel={title}
-      accessibilityHint={subtitle}
+      accessibilityHint={hint ?? subtitle}
       accessibilityState={busy ? { disabled: true, busy: true } : expandable ? { expanded } : {}}
       disabled={busy}
       onPress={onPress}
@@ -342,18 +394,18 @@ function Row({
         pressed && styles.rowPressed,
       ]}
     >
-      {tall && fontScale >= 1.75 ? null : (
+      {danger || (tall && fontScale >= 1.75) ? null : (
         <View style={styles.tile} {...hidden}>
           <Text>{icon}</Text>
         </View>
       )}
       <View style={styles.flex}>
-        <Text style={styles.rowTitle}>{title}</Text>
+        <Text style={[styles.rowTitle, danger && styles.dangerTitle]}>{title}</Text>
         {subtitle ? <Text style={styles.small}>{subtitle}</Text> : null}
       </View>
       {busy ? (
         <ActivityIndicator size="small" color={colors.text2} testID="row-busy" />
-      ) : (
+      ) : danger ? null : (
         <Text style={styles.chevron} {...hidden}>
           {expandable && expanded ? '▾' : '›'}
         </Text>
@@ -382,6 +434,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  dangerTitle: { color: colors.expenseText },
   chevron: { fontSize: 18, fontWeight: '800', color: colors.text2 },
   editor: { paddingVertical: 12, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   label: { ...typography.body, fontWeight: '700', color: colors.text },

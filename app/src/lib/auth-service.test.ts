@@ -35,6 +35,7 @@ function setup(
     stored?: StoredLoad;
     google?: ReturnType<typeof fakeGoogle>;
     api?: ReturnType<typeof fakeApi>;
+    onAccountDeleted?: (userId: string) => Promise<void> | void;
   } = {},
 ) {
   const clock = fakeClock();
@@ -46,6 +47,7 @@ function setup(
       google,
       storage,
       api,
+      onAccountDeleted: opts.onAccountDeleted,
       now: clock.now,
       sleep: clock.sleep,
       random: clock.random,
@@ -4298,5 +4300,419 @@ describe('R1: restore() no compite con un signIn() interactivo en vuelo', () => 
     await ctx.service.authorizedCall(async (t) => t);
     expect(ctx.api.refresh).not.toHaveBeenCalled();
     expect(ctx.google.signInSilently).not.toHaveBeenCalled();
+  });
+});
+
+// --- Eliminación de cuenta (G1; docs/010 §24) ------------------------------------------------
+describe('eliminar cuenta', () => {
+  const reauthRequired = () => err('unknown', 401, 'REAUTH_REQUIRED');
+  const invalidToken = () => err('rejected', 401, 'INVALID_TOKEN');
+
+  it('éxito: reautentica, envía access + ID token, limpia todo y vuelve a Login sin api.logout', async () => {
+    const order: string[] = [];
+    const onAccountDeleted = jest.fn(async () => {
+      order.push('guides');
+    });
+    const ctx = await signedIn({ onAccountDeleted });
+    const clearAll = ctx.storage.clearAll.getMockImplementation()!;
+    ctx.storage.clearAll.mockImplementationOnce(async () => {
+      order.push('clearAll');
+      await clearAll();
+    });
+    (ctx.google.signOut as jest.Mock).mockImplementation(async () => {
+      order.push('google.signOut');
+    });
+    const unsubscribe = ctx.service.subscribe(() => {
+      if (ctx.service.getState().signedOutReason === 'account-deleted') order.push('state');
+    });
+    const access = ctx.storage.session()!.accessToken;
+
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'deleted' });
+    unsubscribe();
+
+    expect(ctx.google.reauthenticate).toHaveBeenCalledTimes(1);
+    expect(ctx.google.signInSilently).not.toHaveBeenCalled();
+    expect(ctx.api.deleteAccount).toHaveBeenCalledWith(access, 'google-id-token');
+    expect(ctx.api.logout).not.toHaveBeenCalled();
+    expect(ctx.api.refresh).not.toHaveBeenCalled();
+    expect(ctx.api.getMe).not.toHaveBeenCalled();
+    expect(ctx.api.exchangeGoogleToken).not.toHaveBeenCalled();
+    expect(onAccountDeleted).toHaveBeenCalledWith(USER.id);
+    expect(order).toEqual(['clearAll', 'guides', 'google.signOut', 'state']);
+    expect(ctx.storage.isEmpty()).toBe(true);
+    expect(ctx.service.getState()).toMatchObject({
+      status: 'unauthenticated',
+      user: null,
+      busy: false,
+      degraded: false,
+      signedOutReason: 'account-deleted',
+      notice: null,
+      error: null,
+    });
+  });
+
+  it('el estado final no se pisa: restore() posterior conserva account-deleted', async () => {
+    const ctx = await signedIn();
+    await ctx.service.deleteAccount();
+    await ctx.service.restore();
+    expect(ctx.service.getState()).toMatchObject({
+      status: 'unauthenticated',
+      signedOutReason: 'account-deleted',
+    });
+    await ctx.service.onForeground();
+    expect(ctx.google.signInSilently).not.toHaveBeenCalled();
+  });
+
+  it('un fallo de clearAll o del reset de guías no impide el éxito', async () => {
+    const onAccountDeleted = jest.fn(async () => {
+      throw new Error('guías');
+    });
+    const ctx = await signedIn({ onAccountDeleted });
+    ctx.storage.failAlways('clearAll');
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'deleted' });
+    expect(onAccountDeleted).toHaveBeenCalledTimes(1);
+    expect(ctx.service.getState()).toMatchObject({
+      status: 'unauthenticated',
+      signedOutReason: 'account-deleted',
+      notice: 'logout-storage-error',
+    });
+  });
+
+  it('un fallo de google.signOut no impide el éxito', async () => {
+    const ctx = await signedIn();
+    (ctx.google.signOut as jest.Mock).mockRejectedValue(new Error('x'));
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'deleted' });
+  });
+
+  it('cancelar el selector no borra nada ni toca la sesión', async () => {
+    const google = fakeGoogle({ reauthenticate: jest.fn(async () => ({ status: 'cancelled' })) });
+    const ctx = await signedIn({ google });
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'cancelled' });
+    expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
+    expect(ctx.storage.session()).not.toBeNull();
+    expect(ctx.service.getState().status).toBe('authenticated');
+  });
+
+  it('401 REAUTH_REQUIRED nunca es éxito: conserva la sesión y los datos locales', async () => {
+    const api = fakeApi({ deleteAccount: rejectOnce(reauthRequired()) });
+    const ctx = await signedIn({ api });
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({
+      status: 'failed',
+      reason: 'reauth-required',
+      uncertain: false,
+    });
+    expect(ctx.storage.session()).not.toBeNull();
+    expect(ctx.service.getState().status).toBe('authenticated');
+    // Tampoco con afterUncertain: REAUTH_REQUIRED jamás significa «ya eliminada».
+    const retry = await ctx.service.deleteAccount({ afterUncertain: true });
+    expect(retry.status).toBe('deleted'); // el segundo DELETE (mock) sí responde 204
+    const api2 = fakeApi({ deleteAccount: rejectOnce(reauthRequired()) });
+    const ctx2 = await signedIn({ api: api2 });
+    await expect(ctx2.service.deleteAccount({ afterUncertain: true })).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'reauth-required',
+    });
+    expect(ctx2.storage.session()).not.toBeNull();
+  });
+
+  it('401 INVALID_TOKEN en el primer intento: sesión caducada, sin afirmar eliminación', async () => {
+    const api = fakeApi({ deleteAccount: rejectOnce(invalidToken()) });
+    const ctx = await signedIn({ api });
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'session-expired' });
+    expect(ctx.storage.isEmpty()).toBe(true);
+    expect(ctx.service.getState()).toMatchObject({
+      status: 'unauthenticated',
+      signedOutReason: 'revoked',
+    });
+    expect(ctx.api.logout).not.toHaveBeenCalled();
+  });
+
+  it('401 INVALID_TOKEN tras un intento incierto: eliminada', async () => {
+    const api = fakeApi({
+      deleteAccount: rejectOnce(invalidToken()),
+      getMe: jest.fn(async () => USER),
+    });
+    const ctx = await signedIn({ api });
+    await expect(ctx.service.deleteAccount({ afterUncertain: true })).resolves.toEqual({
+      status: 'deleted',
+    });
+    expect(ctx.service.getState().signedOutReason).toBe('account-deleted');
+  });
+
+  it.each([
+    ['red', err('network'), 'network', true],
+    ['500', err('server', 500, 'INTERNAL_ERROR'), 'server', true],
+    ['503', err('server', 503), 'server', true],
+    ['429', err('server', 429), 'server', false],
+    ['400', err('unknown', 400, 'INVALID_REQUEST'), 'invalid-request', false],
+    ['413', err('unknown', 413, 'PAYLOAD_TOO_LARGE'), 'invalid-request', false],
+    ['2xx inesperado', err('unknown'), 'unknown', true],
+    ['404', err('unknown', 404), 'unknown', false],
+  ] as const)('fallo %s del DELETE conserva la sesión', async (_name, error, reason, uncertain) => {
+    const api = fakeApi({ deleteAccount: rejectOnce(error) });
+    const ctx = await signedIn({ api });
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({
+      status: 'failed',
+      reason,
+      uncertain,
+    });
+    expect(ctx.storage.session()).not.toBeNull();
+    expect(ctx.service.getState().status).toBe('authenticated');
+  });
+
+  it.each([
+    ['play-services', 'play-services'],
+    ['config', 'config'],
+    ['in-progress', 'in-progress'],
+    ['network', 'network'],
+    ['unknown', 'unknown'],
+  ] as const)('error de Google "%s" no envía el DELETE', async (kind, reason) => {
+    const google = fakeGoogle({ reauthenticate: rejectOnce(err(kind)) });
+    const ctx = await signedIn({ google });
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({
+      status: 'failed',
+      reason,
+      uncertain: false,
+    });
+    expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it('el selector que no responde a tiempo falla como red sin enviar el DELETE', async () => {
+    jest.useFakeTimers();
+    try {
+      const google = fakeGoogle({ reauthenticate: jest.fn(() => new Promise(() => undefined)) });
+      const ctx = await signedIn({ google });
+      const pending = ctx.service.deleteAccount();
+      await jest.advanceTimersByTimeAsync(GOOGLE_INTERACTIVE_TIMEOUT_MS + 1);
+      await expect(pending).resolves.toEqual({
+        status: 'failed',
+        reason: 'network',
+        uncertain: false,
+      });
+      expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  describe('access token previo al selector', () => {
+    it('con el access por vencer lo renueva ANTES de abrir Google y envía el nuevo', async () => {
+      const ctx = await signedIn();
+      ageToMargin(ctx);
+      const calls: string[] = [];
+      (ctx.api.refresh as jest.Mock).mockImplementationOnce(async () => {
+        calls.push('refresh');
+        return refreshedTokens('new');
+      });
+      (ctx.google.reauthenticate as jest.Mock).mockImplementationOnce(async () => {
+        calls.push('google');
+        return { status: 'success', idToken: 'google-id-token' };
+      });
+      await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'deleted' });
+      expect(calls).toEqual(['refresh', 'google']);
+      expect(ctx.api.deleteAccount).toHaveBeenCalledWith(
+        refreshedTokens('new').accessToken,
+        'google-id-token',
+      );
+    });
+
+    it('refresh rechazado: cierra la sesión local, sin abrir Google ni recuperar', async () => {
+      const api = fakeApi({ refresh: rejectOnce(err('rejected', 401, 'INVALID_REFRESH_TOKEN')) });
+      const ctx = await signedIn({ api });
+      ageToMargin(ctx);
+      await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'session-expired' });
+      expect(ctx.google.reauthenticate).not.toHaveBeenCalled();
+      expect(ctx.google.signInSilently).not.toHaveBeenCalled();
+      expect(ctx.api.exchangeGoogleToken).not.toHaveBeenCalled();
+      expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
+      expect(ctx.service.getState()).toMatchObject({
+        status: 'unauthenticated',
+        signedOutReason: 'revoked',
+      });
+    });
+
+    it.each([
+      ['red', err('network'), 'network'],
+      ['servidor', err('server', 503), 'server'],
+    ] as const)('refresh por %s: falla sin abrir Google', async (_n, error, reason) => {
+      const api = fakeApi({ refresh: rejectOnce(error) });
+      const ctx = await signedIn({ api });
+      ageToMargin(ctx);
+      await expect(ctx.service.deleteAccount()).resolves.toEqual({
+        status: 'failed',
+        reason,
+        uncertain: false,
+      });
+      expect(ctx.google.reauthenticate).not.toHaveBeenCalled();
+      expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
+    });
+
+    it('si el access vence mientras el usuario elige cuenta, se renueva antes de enviar', async () => {
+      const ctx = await signedIn();
+      (ctx.google.reauthenticate as jest.Mock).mockImplementationOnce(async () => {
+        ageToMargin(ctx);
+        return { status: 'success', idToken: 'google-id-token' };
+      });
+      await ctx.service.deleteAccount();
+      expect(ctx.api.refresh).toHaveBeenCalledTimes(1);
+      const renewed = (await (ctx.api.refresh as jest.Mock).mock.results[0]!.value) as {
+        accessToken: string;
+      };
+      expect(ctx.api.deleteAccount).toHaveBeenCalledWith(renewed.accessToken, 'google-id-token');
+    });
+  });
+
+  describe('afterUncertain', () => {
+    it('getMe 401: eliminada, sin abrir Google', async () => {
+      const api = fakeApi({ getMe: rejectOnce(err('rejected', 401, 'INVALID_TOKEN')) });
+      const ctx = await signedIn({ api });
+      await expect(ctx.service.deleteAccount({ afterUncertain: true })).resolves.toEqual({
+        status: 'deleted',
+      });
+      expect(ctx.google.reauthenticate).not.toHaveBeenCalled();
+      expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
+      expect(ctx.service.getState().signedOutReason).toBe('account-deleted');
+    });
+
+    it('refresh rechazado: eliminada', async () => {
+      const api = fakeApi({ refresh: rejectOnce(err('rejected', 401, 'INVALID_REFRESH_TOKEN')) });
+      const ctx = await signedIn({ api });
+      ageToMargin(ctx);
+      await expect(ctx.service.deleteAccount({ afterUncertain: true })).resolves.toEqual({
+        status: 'deleted',
+      });
+      expect(ctx.google.reauthenticate).not.toHaveBeenCalled();
+    });
+
+    it('getMe 200: continúa con reautenticación y DELETE', async () => {
+      const ctx = await signedIn();
+      await expect(ctx.service.deleteAccount({ afterUncertain: true })).resolves.toEqual({
+        status: 'deleted',
+      });
+      expect(ctx.api.getMe).toHaveBeenCalledTimes(1);
+      expect(ctx.google.reauthenticate).toHaveBeenCalledTimes(1);
+      expect(ctx.api.deleteAccount).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['red', err('network'), 'network'],
+      ['5xx', err('server', 500), 'server'],
+    ] as const)('getMe con %s: sigue incierto y no abre Google', async (_n, error, reason) => {
+      const api = fakeApi({ getMe: rejectOnce(error) });
+      const ctx = await signedIn({ api });
+      await expect(ctx.service.deleteAccount({ afterUncertain: true })).resolves.toEqual({
+        status: 'failed',
+        reason,
+        uncertain: true,
+      });
+      expect(ctx.google.reauthenticate).not.toHaveBeenCalled();
+      expect(ctx.storage.session()).not.toBeNull();
+    });
+
+    it.each([
+      ['red', err('network'), 'network'],
+      ['5xx', err('server', 500), 'server'],
+    ] as const)(
+      'renovar el access con %s conserva uncertain:true (D-2)',
+      async (_n, error, reason) => {
+        const api = fakeApi({ refresh: rejectOnce(error) });
+        const ctx = await signedIn({ api });
+        ageToMargin(ctx);
+        await expect(ctx.service.deleteAccount({ afterUncertain: true })).resolves.toEqual({
+          status: 'failed',
+          reason,
+          uncertain: true,
+        });
+        expect(ctx.google.reauthenticate).not.toHaveBeenCalled();
+      },
+    );
+
+    it('sin afterUncertain, el mismo fallo al renovar sigue siendo uncertain:false', async () => {
+      const api = fakeApi({ refresh: rejectOnce(err('network')) });
+      const ctx = await signedIn({ api });
+      ageToMargin(ctx);
+      await expect(ctx.service.deleteAccount()).resolves.toEqual({
+        status: 'failed',
+        reason: 'network',
+        uncertain: false,
+      });
+    });
+  });
+
+  describe('bloqueo mientras elimina (`deleting`)', () => {
+    it('onForeground, restore y la recuperación con Google no corren', async () => {
+      const gate = controlledPromise<{ status: 'success'; idToken: string }>();
+      const google = fakeGoogle({ reauthenticate: jest.fn(() => gate.promise) });
+      const api = fakeApi({ refresh: rejectOnce(err('rejected', 401, 'INVALID_REFRESH_TOKEN')) });
+      const ctx = await signedIn({ google, api });
+      const pending = ctx.service.deleteAccount();
+      await flush();
+      expect(google.reauthenticate).toHaveBeenCalledTimes(1);
+
+      ageToMargin(ctx);
+      await ctx.service.onForeground();
+      await ctx.service.restore();
+      await flush();
+      expect(api.refresh).not.toHaveBeenCalled();
+      expect(api.getMe).not.toHaveBeenCalled();
+      expect(google.signInSilently).not.toHaveBeenCalled();
+      expect(ctx.storage.loadSession).not.toHaveBeenCalled();
+
+      // Un refresh rechazado durante la eliminación no dispara recover() (no recrea la cuenta).
+      gate.resolve({ status: 'success', idToken: 'google-id-token' });
+      await expect(pending).resolves.toEqual({ status: 'session-expired' });
+      expect(google.signInSilently).not.toHaveBeenCalled();
+      expect(api.exchangeGoogleToken).not.toHaveBeenCalled();
+    });
+
+    it('sin sesión en memoria (p. ej. v1 heredada) no migra ni usa Google', async () => {
+      const ctx = setup({ stored: { kind: 'legacy', token: 'jwt-v1' } });
+      // Sin sesión en memoria no hay nada que eliminar.
+      await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'session-expired' });
+      expect(ctx.google.signInSilently).not.toHaveBeenCalled();
+      expect(ctx.api.exchangeGoogleToken).not.toHaveBeenCalled();
+    });
+
+    it('single-flight: una segunda llamada comparte la operación', async () => {
+      const gate = controlledPromise<{ status: 'success'; idToken: string }>();
+      const google = fakeGoogle({ reauthenticate: jest.fn(() => gate.promise) });
+      const ctx = await signedIn({ google });
+      const first = ctx.service.deleteAccount();
+      const second = ctx.service.deleteAccount();
+      expect(second).toBe(first);
+      gate.resolve({ status: 'success', idToken: 'google-id-token' });
+      await first;
+      expect(google.reauthenticate).toHaveBeenCalledTimes(1);
+      expect(ctx.api.deleteAccount).toHaveBeenCalledTimes(1);
+    });
+
+    it('el bloqueo se libera tras un fallo: restore() vuelve a funcionar', async () => {
+      const api = fakeApi({ deleteAccount: rejectOnce(err('network')) });
+      const ctx = await signedIn({ api });
+      await ctx.service.deleteAccount();
+      ageToExpired(ctx);
+      await ctx.service.restore();
+      expect(ctx.storage.loadSession).toHaveBeenCalled();
+    });
+  });
+
+  it('sin sesión: caducada, sin tocar Google ni la API', async () => {
+    const ctx = setup();
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'session-expired' });
+    expect(ctx.google.reauthenticate).not.toHaveBeenCalled();
+    expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it('el ID token de Google no queda en el estado ni en el almacenamiento', async () => {
+    const api = fakeApi({ deleteAccount: rejectOnce(err('network')) });
+    const ctx = await signedIn({ api });
+    await ctx.service.deleteAccount();
+    expect(JSON.stringify(ctx.service.getState())).not.toContain('google-id-token');
+    expect(JSON.stringify(ctx.storage.session())).not.toContain('google-id-token');
+  });
+
+  it('SIGNED_OUT_MESSAGES cubre account-deleted sin «cerrar la app»', () => {
+    expect(SIGNED_OUT_MESSAGES['account-deleted']).toContain('eliminaron');
+    expect(SIGNED_OUT_MESSAGES['account-deleted']).not.toContain('cerrar la app');
   });
 });

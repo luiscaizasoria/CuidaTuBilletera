@@ -91,4 +91,24 @@ describe('verifyGoogleIdToken', () => {
   it('rechaza texto que no es un JWT', async () => {
     await rejected('no-es-un-jwt');
   });
+
+  describe('maxAgeSeconds (reautenticación reciente)', () => {
+    const nowSec = Math.floor(NOW.getTime() / 1000);
+    const fresh = async (iat: number) =>
+      verifyGoogleIdToken(await fx.sign({ ...fx.validClaims(), iat }), audience, fx.keys, NOW, 300);
+
+    it('acepta iat de hace 299 y 300 s y uno futuro de hasta 60 s', async () => {
+      for (const iat of [nowSec - 299, nowSec - 300, nowSec + 60]) await fresh(iat);
+    });
+
+    it('rechaza iat de hace 301 s y futuro de más de 60 s', async () => {
+      for (const iat of [nowSec - 301, nowSec + 61]) {
+        await expect(fresh(iat)).rejects.toMatchObject({ status: 401, code: 'INVALID_TOKEN' });
+      }
+    });
+
+    it('sin maxAgeSeconds el login no cambia: un iat antiguo sigue siendo válido', async () => {
+      await verify(await fx.sign({ ...fx.validClaims(), iat: nowSec - 3000 }));
+    });
+  });
 });

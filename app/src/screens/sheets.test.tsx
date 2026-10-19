@@ -3,13 +3,19 @@ import { AuthError } from '../lib/auth-types';
 import type { Page } from '../lib/resources-api';
 import { account, accountPageOf, fakeResourcesApi, pageOf } from '../resources-test-utils';
 import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
-import { AccountSwitcherSheet } from './sheets';
+import { AccountSwitcherSheet, ProfileSheet } from './sheets';
 
 relaxTimeoutsForColdCache();
 
 jest.mock('../hooks/use-auth', () => ({
   useAuth: () => ({ authorizedCall: (call: (token: string) => Promise<unknown>) => call('tok') }),
 }));
+
+const mockLinks = {
+  privacyPolicyUrl: null as string | null,
+  accountDeletionUrl: null as string | null,
+};
+jest.mock('../lib/config', () => ({ readLegalLinks: () => mockLinks }));
 
 const accounts = [
   account({ id: 'acc-1', nombre: 'Efectivo', saldo: 1250 }),
@@ -107,5 +113,37 @@ describe('AccountSwitcherSheet: apariencia', () => {
     );
     await screen.findAllByRole('radio');
     expect(onSupport).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('ProfileSheet: privacidad y eliminación (G1)', () => {
+  beforeEach(() => {
+    mockLinks.privacyPolicyUrl = null;
+  });
+
+  it('sin manejador no ofrece eliminar y sin URL no ofrece la política', async () => {
+    await render(<ProfileSheet visible onClose={props.onClose} />);
+    expect(screen.queryByText('Eliminar mi cuenta y mis datos')).toBeNull();
+    expect(screen.queryByText('Política de privacidad')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeTruthy();
+  });
+
+  it('con manejador, «Eliminar…» delega en él (no abre nada por sí misma)', async () => {
+    const onDeleteAccount = jest.fn();
+    await render(
+      <ProfileSheet visible onClose={props.onClose} onDeleteAccount={onDeleteAccount} />,
+    );
+    const del = screen.getByRole('button', { name: 'Eliminar mi cuenta y mis datos' });
+    expect(del.props.accessibilityHint).toBe('Abre una confirmación');
+    await fireEvent.press(del);
+    expect(onDeleteAccount).toHaveBeenCalledTimes(1);
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('delete-account-sheet')).toBeNull();
+  });
+
+  it('con URL válida muestra la política', async () => {
+    mockLinks.privacyPolicyUrl = 'https://ejemplo.test/privacidad';
+    await render(<ProfileSheet visible onClose={props.onClose} onDeleteAccount={jest.fn()} />);
+    expect(screen.getByRole('link', { name: 'Política de privacidad' })).toBeTruthy();
   });
 });

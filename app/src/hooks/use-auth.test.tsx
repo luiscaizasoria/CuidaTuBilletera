@@ -4,7 +4,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 
 import { flush } from '../test-utils';
 import type { AuthService } from '../lib/auth-service';
-import { AuthProvider, FOREGROUND_DEBOUNCE_MS } from './use-auth';
+import { AuthProvider, FOREGROUND_DEBOUNCE_MS, useAuth } from './use-auth';
 
 type Listener = (state: AppStateStatus) => void;
 
@@ -66,6 +66,7 @@ function fakeService(): AuthService {
     restore: jest.fn(async () => undefined),
     signIn: jest.fn(async () => undefined),
     signOut: jest.fn(async () => 'revoked' as const),
+    deleteAccount: jest.fn(async () => ({ status: 'deleted' as const })),
     authorizedCall: jest.fn(),
     onForeground: jest.fn(async () => undefined),
   } as unknown as AuthService;
@@ -241,5 +242,25 @@ describe('AuthProvider: ciclo de vida con AppState', () => {
     app.emitTo(stale, 'background');
     app.emitTo(stale, 'active');
     expect(old.onForeground).not.toHaveBeenCalled();
+  });
+});
+
+describe('useAuth: eliminar cuenta', () => {
+  it('expone deleteAccount del servicio y delega con sus opciones', async () => {
+    mockAppState('active');
+    const service = fakeService();
+    let captured: ReturnType<typeof useAuth> | null = null;
+    function Probe() {
+      captured = useAuth();
+      return null;
+    }
+    await render(
+      <AuthProvider service={service}>
+        <Probe />
+      </AuthProvider>,
+    );
+    expect(captured!.deleteAccount).toBe(service.deleteAccount);
+    await captured!.deleteAccount({ afterUncertain: true });
+    expect(service.deleteAccount).toHaveBeenCalledWith({ afterUncertain: true });
   });
 });
