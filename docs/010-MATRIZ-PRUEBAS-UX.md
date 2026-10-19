@@ -1441,3 +1441,30 @@ Sustituyen a los casos CON-01 a CON-21 planteados para una pantalla de conciliac
 | CMN-09 | TalkBack | Seleccionar la categoría | Se lee «Categoría Conciliación, botón de opción, seleccionado» | D | propuesta, pendiente |
 | CMN-10 | Flujo completo | Crear, ver en Historial, Calendario y Reportes, editar o anular (gasto e ingreso) | Todo funciona como un movimiento normal | D | **validado funcionalmente por el usuario (paso 384; sin evidencia instrumentada)** |
 | CMN-11 | Cuenta antigua sin la categoría | Usar una cuenta sin migrar | El formulario funciona con 8 o 3 categorías y «+ Crear categoría» | D | no aplica en DEV (todas las cuentas migradas con la 0005) |
+
+## 24. Casos de eliminación de cuenta y privacidad (G1; implementados en local en el paso 388; los casos A tienen pruebas automáticas aprobadas; los D siguen pendientes en dispositivo; docs/003 «Decisión G1»)
+
+Nivel A = automática, D = dispositivo Android real. **Estado (paso 388):** los casos de nivel A (ELIM-a, b, c, d, e, f, g, h, i, m, n, o, p, q, r y la parte automática de los demás) tienen pruebas automáticas aprobadas en local (app: 64 suites y 2016 pruebas; API: `delete-me-api`, `delete-me-contract` y `google-token-service`), verificadas por `qa-engineer`; **ELIM-j, k y l y las partes D de a, g, h, m, p y q siguen PENDIENTES en dispositivo** (no ejecutados). Adicionales implementados: ELIM-s (cancelar el selector de Google no borra nada), ELIM-t (cuenta de Google distinta → REAUTH_REQUIRED, sin borrar), ELIM-u (respuesta incierta + «Comprobar y reintentar» sin recrear la cuenta) y ELIM-v (sin `signInSilently`/`recover` ni `onForeground` durante el borrado). Un defecto alto o crítico de `mobile-ux-qa` detiene G1.
+
+| ID | Caso | Esperado | Nivel |
+| --- | --- | --- | --- |
+| ELIM-a | La fila «Eliminar mi cuenta y mis datos» y «Política de privacidad» existen en Más (sección PRIVACIDAD Y DATOS visible sin desplegar «Opciones avanzadas») y en la hoja de perfil del avatar | Visibles, ≥ 48 dp, texto `expenseText` sin botón relleno | A y D |
+| ELIM-b | Habilitación del botón | Deshabilitado hasta escribir ELIMINAR; «eliminar», « ELIMINAR » y «Eliminar» lo habilitan; «ELIMINA» no; después se abre el selector de cuenta de Google | A |
+| ELIM-c | Contenido enviado | La app envía siempre `{ "confirm": "ELIMINAR", "idToken": <ID token de Google reciente> }` (el literal, no lo escrito) | A |
+| ELIM-d | Doble toque | Una sola llamada; botón «Eliminando…» | A |
+| ELIM-e | Error de red, 500, 400 o 413 | Mensaje y «Reintentar»; sesión y texto conservados | A |
+| ELIM-f | 401 | Éxito solo tras un intento incierto previo; en el primer intento, «sesión caducada» | A |
+| ELIM-g | Éxito (204) | Vuelve a Login con aviso de éxito de variante propia; SecureStore, caché, estado y guías limpios; Atrás no regresa a pantallas protegidas | A y D |
+| ELIM-h | Atrás, velo y «Cancelar» | Sin cambios con el campo vacío; diálogo de descarte con texto escrito; todo bloqueado durante la carga | A y D |
+| ELIM-i | Campo | Sin autocorrección ni autocompletado; sin teclado de contraseña (`visible-password`); «Hecho» solo cierra el teclado | A |
+| ELIM-j | TalkBack | Foco inicial en el título; rol, etiqueta y estado del botón; anuncio del error y del resultado | D |
+| ELIM-k | Fuente 130 %, 175 % y 200 % y 320 dp con teclado abierto | Cuerpo desplazable y pie fijo; campo y botones alcanzables; sin recortes | D |
+| ELIM-l | Modo inmersivo con gestos y tres botones | El pie no queda bajo la barra del sistema | D |
+| ELIM-m | Enlaces de política (Login y Más) y de eliminación (hoja) | Abren la URL correcta en el navegador; sin navegador, aviso sin romper la pantalla | A y D |
+| ELIM-n | Usuario sin cuentas y con cuenta archivada | La opción sigue disponible desde la hoja de perfil y desde Más | A |
+| ELIM-o | Regresión de «Cerrar sesión» y «Archivar» | Sin cambios | A |
+| ELIM-p | Relogin con la misma cuenta de Google tras eliminar | Perfil nuevo y vacío; cuenta nueva con 13 categorías | A y D |
+| ELIM-q | Sin apilar `Modal` | `ProfileSheet` se cierra antes de abrir la hoja de eliminación | A y D |
+| ELIM-r | Aviso de éxito | Sin la frase «Ya puedes cerrar la app»; no usa el estilo de advertencia | A |
+
+Casos de API (API-01 a API-14), contrato (CON-01 a CON-06), D1 DEV de solo lectura (D1-01 a D1-08) y solicitud web por correo (WEB-01 a WEB-11 y NEG-01 a NEG-06) en docs/003 «Decisión G1» y en el plan de `qa-engineer` (paso 387).
