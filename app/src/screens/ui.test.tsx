@@ -556,6 +556,34 @@ describe('R4: SummaryTile, MonthArrow y estados', () => {
   });
 });
 
+describe('R6: EmptyState con la alcancía', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('alcancia mide 120 x 120 dp, es decorativa y se oculta con fuente >= 175 %', async () => {
+    mockWindow(360, 1);
+    const view = await render(<EmptyState module="cuenta" art="alcancia" message="Vacío" />);
+    const art = screen.getByTestId('empty-art', HIDDEN);
+    expect(art).toHaveStyle({ width: 120, height: 120, marginBottom: 4 });
+    expect(art.props.accessible).toBe(false);
+    expect(art.props.importantForAccessibility).toBe('no');
+    expect(art.props.accessibilityElementsHidden).toBe(true);
+    await view.unmount();
+    mockWindow(360, 1.75);
+    await render(<EmptyState module="cuenta" art="alcancia" message="Vacío" />);
+    expect(screen.queryByTestId('empty-art', HIDDEN)).toBeNull();
+    expect(screen.getByText('Vacío')).toBeTruthy();
+  });
+
+  it.each(['movimientos', 'filtros', 'reportes'] as const)(
+    '%s sigue midiendo 96 dp',
+    async (name) => {
+      mockWindow(360, 1);
+      await render(<EmptyState module="movimientos" art={name} message="Vacío" />);
+      expect(screen.getByTestId('empty-art', HIDDEN)).toHaveStyle({ width: 96, height: 96 });
+    },
+  );
+});
+
 describe('R4 D6: chips pequeños y margen lateral', () => {
   it('Chip sm: 36 dp de alto, minWidth 48 y hitSlop vertical de 6 dp (zona ≥ 48 × 48)', async () => {
     await render(<Chip label="A" size="sm" selected={false} onPress={() => undefined} />);

@@ -235,12 +235,12 @@ describe('Mis cuentas (J7, J8, J9, J17, J19)', () => {
     expect(guideOf('cuentas-vacio')).toBeNull();
   });
 
-  it('el vacío conserva el círculo con emoji (sin alcancía), título, mensaje y botón de 52 dp', async () => {
+  it('el vacío muestra la alcancía (sin círculo con emoji), título, mensaje y botón de 52 dp', async () => {
     const create = jest.fn();
     await renderAccounts(withList([]), memoryGuideStorage(), { onCreateAccount: create });
     await screen.findByText('Todavía no tienes cuentas');
-    expect(screen.getByText('🐷', { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.queryByTestId('empty-art', { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByText('🐷', { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByTestId('empty-art', { includeHiddenElements: true })).toBeTruthy();
     expect(
       screen.getByText('Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta.'),
     ).toBeTruthy();

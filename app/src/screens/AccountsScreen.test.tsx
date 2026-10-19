@@ -7,7 +7,7 @@ import { Alert, StyleSheet } from 'react-native';
 import { AuthError } from '../lib/auth-types';
 import { ApiRequestError, type Page, type ResourcesApi } from '../lib/resources-api';
 import { account, accountPageOf, fakeResourcesApi, pageOf } from '../resources-test-utils';
-import { controlledPromise, relaxTimeoutsForColdCache } from '../test-utils';
+import { controlledPromise, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import AccountsScreen, { ACCOUNTS_ERROR } from './AccountsScreen';
 
 relaxTimeoutsForColdCache();
@@ -389,5 +389,104 @@ describe('AccountsScreen: detección de apariencia', () => {
     const card = await screen.findByTestId('account-card-acc-1');
     expect(StyleSheet.flatten(card.props.style).backgroundColor).toBe('#FFF6D6');
     expect(within(card).getByText('✈\uFE0F', { includeHiddenElements: true })).toBeTruthy();
+  });
+});
+
+describe('AccountsScreen: alcancía (R6)', () => {
+  const HIDDEN = { includeHiddenElements: true };
+  const header = () => screen.queryByTestId('accounts-header-pig', HIDDEN);
+  const art = () => screen.queryByTestId('empty-art', HIDDEN);
+  afterEach(() => jest.restoreAllMocks());
+
+  it.each([
+    [360, 1, 72],
+    [412, 1, 96],
+    [412, 1.3, 48],
+  ])(
+    'con cuentas a %s dp y fuente %s: alcancía de encabezado de %s dp, sin vacío',
+    async (w, f, size) => {
+      mockWindow(w, f);
+      await renderScreen(withAccounts(two));
+      await screen.findByText('Efectivo');
+      expect(screen.getByTestId('accounts-header-row')).toBeTruthy();
+      expect(header()).toHaveStyle({ width: size, height: size });
+      expect(art()).toBeNull();
+    },
+  );
+
+  it.each([
+    [360, 1.75],
+    [320, 1],
+    [320, 1.3],
+  ])('con cuentas a %s dp y fuente %s: sin alcancía de encabezado', async (w, f) => {
+    mockWindow(w, f);
+    await renderScreen(withAccounts(two));
+    await screen.findByText('Efectivo');
+    expect(header()).toBeNull();
+    expect(art()).toBeNull();
+  });
+
+  it('el encabezado es decorativo', async () => {
+    mockWindow(360, 1);
+    await renderScreen(withAccounts(two));
+    await screen.findByText('Efectivo');
+    expect(header()?.props.accessible).toBe(false);
+    expect(header()?.props.importantForAccessibility).toBe('no');
+    expect(header()?.props.accessibilityElementsHidden).toBe(true);
+  });
+
+  it.each([
+    ['sin cuentas', [] as ReturnType<typeof account>[]],
+    ['solo archivadas', [account({ archivada: true })]],
+  ])(
+    '%s a 360 dp: alcancía de 120 dp en el vacío y ninguna en el encabezado',
+    async (_n, items) => {
+      mockWindow(360, 1);
+      await renderScreen(withAccounts(items));
+      await screen.findByText('Crear mi primera cuenta');
+      expect(art()).toHaveStyle({ width: 120, height: 120 });
+      expect(header()).toBeNull();
+    },
+  );
+
+  it('sin cuentas a 412 dp con fuente 1.75: ninguna alcancía, texto y botón visibles', async () => {
+    mockWindow(412, 1.75);
+    await renderScreen(withAccounts([]));
+    expect(await screen.findByText('Todavía no tienes cuentas')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Crear mi primera cuenta' })).toBeTruthy();
+    expect(art()).toBeNull();
+    expect(header()).toBeNull();
+  });
+
+  it('carga, error y sesión no disponible: sin alcancía de encabezado', async () => {
+    mockWindow(360, 1);
+    const gate = controlledPromise<Page<ReturnType<typeof account>>>();
+    const view = await renderScreen(
+      fakeResourcesApi({ listAccounts: jest.fn(() => gate.promise) }),
+    );
+    expect(header()).toBeNull();
+    await act(async () => gate.reject(new AuthError('server')));
+    await screen.findByText(ACCOUNTS_ERROR);
+    expect(header()).toBeNull();
+    await view.unmount();
+    mockAuthState.status = 'unavailable';
+    await renderScreen(withAccounts(two));
+    expect(header()).toBeNull();
+  });
+
+  it('al pasar de solo archivadas a una cuenta activa no quedan dos alcancías', async () => {
+    mockWindow(360, 1);
+    const listAccounts = jest
+      .fn()
+      .mockResolvedValueOnce(pageOf([account({ archivada: true })]))
+      .mockResolvedValueOnce(pageOf([account({ archivada: false })]));
+    await renderScreen(fakeResourcesApi({ listAccounts }), true);
+    await screen.findByText('Crear mi primera cuenta');
+    expect(art()).toBeTruthy();
+    expect(header()).toBeNull();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Desarchivar Efectivo' }));
+    await screen.findByText('Toca para ver tus movimientos');
+    expect(art()).toBeNull();
+    expect(header()).toBeTruthy();
   });
 });

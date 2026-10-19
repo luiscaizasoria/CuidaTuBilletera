@@ -1,6 +1,6 @@
 // Mis cuentas: pantalla inicial autenticada (docs/007 §5.2; docs/003, Decisiones R0 D1 y R2).
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useGuide, useGuides } from '../hooks/use-guides';
 import { useLoader, useMutation } from '../hooks/use-loader';
@@ -8,12 +8,12 @@ import { activeAccountsTotal, avatarInitial, firstName } from '../lib/accounts';
 import type { GuideId } from '../lib/guides';
 import { formatCents } from '../lib/money';
 import type { Account, ResourcesApi } from '../lib/resources-api';
-import { colors, radii, shadows, tabularNums, typography } from '../theme/tokens';
+import { colors, headerPigSize, radii, shadows, tabularNums, typography } from '../theme/tokens';
 import { AccountCard, balanceText } from './account-ui';
 import SessionBanner from './SessionBanner';
 import { SignOutControl } from './session-ui';
 import { ProfileSheet } from './sheets';
-import { Button, EmptyState, GuideCard } from './ui';
+import { Button, EmptyState, GuideCard, PIG_ART } from './ui';
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
 
@@ -41,6 +41,9 @@ export default function AccountsScreen({
   const [profileOpen, setProfileOpen] = useState(false);
   const unavailable = status === 'unavailable';
   const name = firstName(user?.name);
+  const { width, fontScale } = useWindowDimensions();
+  const [hasActive, setHasActive] = useState(false);
+  const pigSize = headerPigSize(width, fontScale);
 
   return (
     <View style={styles.container}>
@@ -62,13 +65,27 @@ export default function AccountsScreen({
           </Pressable>
         </View>
       </View>
-      <Text numberOfLines={1} style={styles.greeting}>
-        {name ? `Hola, ${name}` : 'Hola'}
-      </Text>
-      <Text accessibilityRole="header" style={styles.title}>
-        Mis cuentas
-      </Text>
-      <View style={styles.underline} {...hidden} />
+      <View testID="accounts-header-row" style={styles.headerRow}>
+        <View style={styles.flex}>
+          <Text numberOfLines={1} style={styles.greeting}>
+            {name ? `Hola, ${name}` : 'Hola'}
+          </Text>
+          <Text accessibilityRole="header" style={styles.title}>
+            Mis cuentas
+          </Text>
+          <View style={styles.underline} {...hidden} />
+        </View>
+        {pigSize > 0 && hasActive ? (
+          <Image
+            testID="accounts-header-pig"
+            source={PIG_ART}
+            style={[styles.headerPig, { width: pigSize, height: pigSize }]}
+            resizeMode="contain"
+            accessible={false}
+            {...hidden}
+          />
+        ) : null}
+      </View>
 
       <SessionBanner />
 
@@ -81,6 +98,7 @@ export default function AccountsScreen({
           onNotify={onNotify}
           initialArchivedOpen={initialArchivedOpen}
           onAppearanceSupport={onAppearanceSupport}
+          onHasActiveChange={setHasActive}
         />
       )}
 
@@ -96,6 +114,7 @@ function AccountsList({
   onNotify,
   initialArchivedOpen,
   onAppearanceSupport,
+  onHasActiveChange,
 }: {
   api: ResourcesApi;
   onOpenAccount: (account: Account) => void;
@@ -103,6 +122,8 @@ function AccountsList({
   onNotify?: (message: string) => void;
   initialArchivedOpen: boolean;
   onAppearanceSupport?: (supported: boolean | null) => void;
+  // Informa si hay cuentas activas (solo con la lista cargada); false al desmontar.
+  onHasActiveChange?: (hasActive: boolean) => void;
 }) {
   const { authorizedCall } = useAuth();
   const [archivedOpen, setArchivedOpen] = useState(initialArchivedOpen);
@@ -122,6 +143,15 @@ function AccountsList({
   useEffect(() => {
     if (state.status === 'ready') supportRef.current?.(state.data.appearanceSupported ?? null);
   }, [state]);
+
+  const hasActiveRef = useRef(onHasActiveChange);
+  hasActiveRef.current = onHasActiveChange;
+  const hasActive =
+    state.status === 'ready' && state.data.items.some((account) => !account.archivada);
+  useEffect(() => {
+    hasActiveRef.current?.(hasActive);
+  }, [hasActive]);
+  useEffect(() => () => hasActiveRef.current?.(false), []);
 
   // Guías (docs/007 §5.12.C): solo con la lista cargada. Con una sola cuenta la pista fija de la
   // tarjeta ya orienta (docs/003, R5 D5), por eso `cuentas-lista` pide dos o más cuentas activas.
@@ -189,11 +219,10 @@ function AccountsList({
       ) : null}
 
       {active.length === 0 ? (
-        // La alcancía queda para R6 (docs/003, R4 D6.5): se conserva el círculo con emoji.
         archived.length === 0 ? (
           <EmptyState
             module="cuenta"
-            glyph="🐷"
+            art="alcancia"
             title="Todavía no tienes cuentas"
             message="Una cuenta es el lugar donde anotas tu dinero: efectivo, banco o tarjeta."
             actionLabel="Crear mi primera cuenta"
@@ -203,7 +232,7 @@ function AccountsList({
         ) : (
           <EmptyState
             module="cuenta"
-            glyph="🐷"
+            art="alcancia"
             message="No tienes cuentas activas. Puedes crear una o desarchivar una de las anteriores."
             actionLabel="Crear mi primera cuenta"
             onAction={onCreateAccount}
@@ -306,6 +335,8 @@ function LoadingSkeleton() {
 const styles = StyleSheet.create({
   container: { gap: 4 },
   flex: { flex: 1 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
+  headerPig: { flexShrink: 0 },
   brandRow: {
     minHeight: 48,
     flexDirection: 'row',

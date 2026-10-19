@@ -20,6 +20,7 @@ import { useSystemInsets } from '../theme/useSystemInsets';
 import {
   colors,
   moduleColors,
+  PIG_HIDDEN_FONT_SCALE,
   radii,
   screenMargin,
   shadows,
@@ -454,7 +455,7 @@ const MODULE_GLYPHS: Record<ModuleKey, string> = {
 // se oculta con fuente ≥ 175 % para dejar el ancho al título. Decorativo.
 export function ModuleTile({ module }: { module: ModuleKey }) {
   const { fontScale } = useWindowDimensions();
-  if (fontScale >= 1.75) return null;
+  if (fontScale >= PIG_HIDDEN_FONT_SCALE) return null;
   const size = fontScale >= 1.3 ? sizes.moduleTileSm : sizes.moduleTile;
   return (
     <View
@@ -621,10 +622,14 @@ const EMPTY_ART = {
   movimientos: require('../../assets/illustrations/vacio-movimientos.png'),
   filtros: require('../../assets/illustrations/vacio-filtros.png'),
   reportes: require('../../assets/illustrations/vacio-reportes.png'),
+  alcancia: require('../../assets/illustrations/vacio-alcancia.png'),
 } as const;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 export type EmptyArt = keyof typeof EMPTY_ART;
+
+// Recurso de la alcancía, compartido con el encabezado de Mis cuentas para no duplicar el require.
+export const PIG_ART = EMPTY_ART.alcancia;
 
 // Vacío con siguiente paso (docs/008 §9.3). Dibujo decorativo de 96 dp (`art`) o, mientras no haya
 // ilustración, círculo con el tinte del módulo y su glifo (`glyph`); ambos se ocultan con fuente
@@ -653,7 +658,7 @@ export function EmptyState({
   testID?: string;
 }) {
   const { fontScale } = useWindowDimensions();
-  const large = fontScale >= 1.75;
+  const large = fontScale >= PIG_HIDDEN_FONT_SCALE;
   const showArt = !compact && !large;
   return (
     <View testID={testID} style={compact ? styles.stateCompact : styles.stateBlock}>
@@ -661,7 +666,7 @@ export function EmptyState({
         <Image
           testID="empty-art"
           source={EMPTY_ART[art]}
-          style={styles.emptyArt}
+          style={art === 'alcancia' ? styles.emptyArtPig : styles.emptyArt}
           resizeMode="contain"
           accessible={false}
           importantForAccessibility="no"
@@ -728,7 +733,7 @@ export function GuideCard({ guide, onDismiss }: { guide: Guide; onDismiss: () =>
       style={[styles.guide, { backgroundColor: palette.tile, opacity }]}
     >
       <View style={styles.guideRow}>
-        {fontScale >= 1.75 ? null : (
+        {fontScale >= PIG_HIDDEN_FONT_SCALE ? null : (
           <View importantForAccessibility="no" accessibilityElementsHidden style={styles.guideBulb}>
             <Text style={styles.guideBulbGlyph}>💡</Text>
           </View>
@@ -980,6 +985,8 @@ const styles = StyleSheet.create({
   stateText: { ...typography.body, color: colors.text2, textAlign: 'center', maxWidth: 320 },
   stateActionWide: { alignSelf: 'stretch', maxWidth: 320, width: '100%' },
   emptyArt: { width: 96, height: 96 },
+  // 120 dp + 4 dp de margen: con el gap de 12 dp deja 16 dp hasta el título.
+  emptyArtPig: { width: sizes.emptyPig, height: sizes.emptyPig, marginBottom: 4 },
   guide: { borderRadius: radii.lg, padding: 16, paddingBottom: 12, marginBottom: 16, gap: 12 },
   guideRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   guideBulb: {

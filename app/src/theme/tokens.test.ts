@@ -2,6 +2,7 @@ import {
   accountPalette,
   brandGoogle,
   colors,
+  headerPigSize,
   moduleColors,
   screenMargin,
   shadows,
@@ -48,7 +49,7 @@ describe('tokens', () => {
       headerPig: 72,
       headerPigWide: 96,
       headerPigLargeFont: 48,
-      pigZoom: 1.4,
+      emptyPig: 120,
       balanceCardMin: 132,
       balanceCardPig: 104,
       moduleTile: 36,
@@ -149,5 +150,28 @@ describe('screenMargin (docs/003 R4 D6)', () => {
     [480, 20],
   ])('ancho %s dp -> margen %s dp', (width, margin) => {
     expect(screenMargin(width)).toBe(margin);
+  });
+});
+
+describe('headerPigSize (alcancía del encabezado)', () => {
+  it('no incluye pigZoom', () => {
+    expect(sizes).not.toHaveProperty('pigZoom');
+  });
+
+  it.each([
+    [320, 1, 0],
+    [340, 1, 0],
+    [341, 1, 72],
+    [360, 1, 72],
+    [399, 1, 72],
+    [400, 1, 96],
+    [412, 1, 96],
+    [360, 1.29, 72],
+    [360, 1.3, 48],
+    [412, 1.74, 48],
+    [360, 1.75, 0],
+    [320, 1.3, 0],
+  ])('ancho %s y fuente %s: %s dp', (width, fontScale, size) => {
+    expect(headerPigSize(width, fontScale)).toBe(size);
   });
 });

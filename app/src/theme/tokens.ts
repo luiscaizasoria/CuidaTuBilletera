@@ -142,7 +142,7 @@ export const sizes = {
   headerPig: 72,
   headerPigWide: 96,
   headerPigLargeFont: 48,
-  pigZoom: 1.4,
+  emptyPig: 120,
   balanceCardMin: 132,
   balanceCardPig: 104,
   moduleTile: 36,
@@ -156,6 +156,18 @@ export const sizes = {
 
 // Margen lateral de las pantallas (docs/003 R4 D6): 16 dp con ancho menor de 400 dp y 20 dp desde 400 dp.
 export const WIDE_SCREEN_DP = 400;
+// Umbrales de la alcancía decorativa (docs/008): ancho estrecho y escalas de fuente del sistema.
+export const NARROW_SCREEN_DP = 340;
+export const PIG_LARGE_FONT_SCALE = 1.3;
+export const PIG_HIDDEN_FONT_SCALE = 1.75;
 export function screenMargin(windowWidth: number): number {
   return windowWidth >= WIDE_SCREEN_DP ? 20 : 16;
+}
+
+// Tamaño de la alcancía del encabezado de Mis cuentas en dp; 0 = no se muestra.
+export function headerPigSize(windowWidth: number, fontScale: number): number {
+  if (windowWidth <= NARROW_SCREEN_DP || fontScale >= PIG_HIDDEN_FONT_SCALE) return 0;
+  if (fontScale >= PIG_LARGE_FONT_SCALE) return sizes.headerPigLargeFont;
+  if (windowWidth >= WIDE_SCREEN_DP) return sizes.headerPigWide;
+  return sizes.headerPig;
 }
