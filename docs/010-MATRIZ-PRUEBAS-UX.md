@@ -1424,18 +1424,18 @@ Estado: R6-10 y R6-11 tienen evidencia automática o de cálculo (paso 374). Los
 | R6-10 | Una sola alcancía por pantalla | Prueba Jest de Mis cuentas (con cuentas, sin cuentas, solo archivadas, fuente 1,75) | Siempre a lo sumo una alcancía, decorativa, con los tamaños de docs/008 §13.2 | A | **aprobada (automática, Jest; 59 suites y 1855 pruebas, paso 374)** |
 | R6-11 | Contraste del amarillo de marca | Calcular `#FFC93C` sobre `#0F5F5A` | Razón registrada (≥ 3:1 como gráfico); el splash no lleva texto | A | **aprobada (cálculo WCAG: 4,87:1, paso 374)** |
 
-## 23. Casos de la conciliación manual (PROPUESTOS, paso 380; docs/003 Decisión 6.1; no implementados)
+## 23. Casos de la conciliación manual (docs/003 Decisión 6.1; implementada en local en el paso 381; CMN-01 a CMN-06 cubiertos por pruebas automáticas; CMN-07 a CMN-11 pendientes en dispositivo)
 
-Sustituyen a los casos CON-01 a CON-21 planteados para una pantalla de conciliación (descartada). Nivel A = automática (Jest o Vitest), D = dispositivo Android real. Todos: **propuesta, pendiente**; ninguno se ha ejecutado.
+Sustituyen a los casos CON-01 a CON-21 planteados para una pantalla de conciliación (descartada). Nivel A = automática (Jest o Vitest), D = dispositivo Android real. Estado paso 381: CMN-01 a CMN-06 tienen pruebas automáticas aprobadas en local (API: 30 archivos y 1305 pruebas; app: 59 suites y 1858 pruebas); la migración se probó sobre el D1 local de Vitest, **no** sobre D1 DEV. CMN-07 a CMN-11 siguen **pendientes en dispositivo**; ninguno se ha ejecutado. Se añade la prueba de la guía `categorias`: texto con «Conciliación», no reaparece si se descartó y se ve con fuente 200 % (automática).
 
 | ID | Caso | Procedimiento | Esperado | Nivel | Estado |
 | --- | --- | --- | --- | --- | --- |
-| CMN-01 | Cuenta nueva con las dos categorías | Crear una cuenta (API) | 13 categorías: «Conciliación» de ingreso y de egreso, `exchange`, `#6366F1`, sin duplicados | A | propuesta, pendiente |
-| CMN-02 | Migración en cuentas existentes | Aplicar la 0005 con cuentas de prueba (sin la categoría, con tilde, sin tilde, mayúsculas, archivada, renombrada, 58/59/60 categorías, dos usuarios) | Se crea solo lo que falta, sin duplicar, respetando el límite de 60; no toca otras filas | A | propuesta, pendiente |
-| CMN-03 | Idempotencia y deriva | Aplicar el SQL dos veces; comparar sus literales con `DEFAULT_CATEGORIES` | Tabla idéntica; nombre, tipo, ícono y color coinciden | A | propuesta, pendiente |
-| CMN-04 | Efecto en el saldo | Gasto y ingreso con «Conciliación» | El gasto resta y el ingreso suma; saldo = inicial + ingresos − gastos | A | propuesta, pendiente |
-| CMN-05 | Aparición en listados | Historial, calendario, reportes y exportación con esos movimientos | Aparecen como cualquier categoría, sin fórmulas nuevas ni línea de ajustes | A | propuesta, pendiente |
-| CMN-06 | Edición de la categoría | Renombrar, archivar y eliminar (sin movimientos) | Como cualquier categoría; con movimientos, 409 `CATEGORY_IN_USE` | A | propuesta, pendiente |
+| CMN-01 | Cuenta nueva con las dos categorías | Crear una cuenta (API) | 13 categorías: «Conciliación» de ingreso y de egreso, `exchange`, `#6366F1`, sin duplicados | A | aprobada (automática, paso 381) |
+| CMN-02 | Migración en cuentas existentes | Aplicar la 0005 con cuentas de prueba (sin la categoría, con tilde, sin tilde, mayúsculas, archivada, renombrada, 58/59/60 categorías, dos usuarios) | Se crea solo lo que falta, sin duplicar, respetando el límite de 60; no toca otras filas | A | aprobada (automática, paso 381) |
+| CMN-03 | Idempotencia y deriva | Aplicar el SQL dos veces; comparar sus literales con `DEFAULT_CATEGORIES` | Tabla idéntica; nombre, tipo, ícono y color coinciden | A | aprobada (automática, paso 381) |
+| CMN-04 | Efecto en el saldo | Gasto y ingreso con «Conciliación» | El gasto resta y el ingreso suma; saldo = inicial + ingresos − gastos | A | aprobada (automática, paso 381) |
+| CMN-05 | Aparición en listados | Historial, calendario, reportes y exportación con esos movimientos | Aparecen como cualquier categoría, sin fórmulas nuevas ni línea de ajustes | A | aprobada (automática, paso 381) |
+| CMN-06 | Edición de la categoría | Renombrar, archivar y eliminar (sin movimientos) | Como cualquier categoría; con movimientos, 409 `CATEGORY_IN_USE` | A | aprobada (automática, paso 381) |
 | CMN-07 | Nombre a 320 dp y fuente grande | Selector de categoría de Nuevo movimiento a 320 dp con fuente 100 % y 130 % (y observar 200 %) | «Conciliación» legible, sin solape con el ícono; registrar el comportamiento a 200 % | D | propuesta, pendiente |
 | CMN-08 | Selector con 9 categorías | Nuevo gasto con teclado abierto | El formulario se desplaza hasta Monto y Guardar | D | propuesta, pendiente |
 | CMN-09 | TalkBack | Seleccionar la categoría | Se lee «Categoría Conciliación, botón de opción, seleccionado» | D | propuesta, pendiente |
