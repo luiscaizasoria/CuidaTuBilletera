@@ -26,7 +26,7 @@ const CHECK = /CHECK constraint failed/;
 
 async function dbUntil0003(): Promise<D1Database> {
   await reset();
-  const before = testEnv.TEST_MIGRATIONS.filter((m) => !m.name.startsWith('0004'));
+  const before = testEnv.TEST_MIGRATIONS.filter((m) => m.name < '0004');
   expect(before).toHaveLength(3);
   await applyD1Migrations(testEnv.DB, before as never);
   return testEnv.DB;
@@ -64,7 +64,8 @@ describe('migración 0004 sobre datos de 0001 a 0003', () => {
       for (const table of ALL_TABLES) before[table] = await dump(db, table);
       expect(before.accounts).toHaveLength(3);
 
-      await applyD1Migrations(db, testEnv.TEST_MIGRATIONS as never);
+      // Solo hasta la 0004: la 0005 inserta categorías y se prueba en conciliacion-migration.test.ts.
+      await applyD1Migrations(db, testEnv.TEST_MIGRATIONS.filter((m) => m.name < '0005') as never);
 
       for (const table of ALL_TABLES.filter((t) => t !== 'accounts')) {
         expect(await dump(db, table)).toEqual(before[table]);

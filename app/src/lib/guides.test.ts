@@ -32,7 +32,7 @@ const EXPECTED = {
   reportes:
     'Aquí ves cuánto entró y cuánto salió en un período. Toca una barra o un total para ver sus movimientos.',
   categorias:
-    'Las categorías ordenan tus gastos e ingresos. Puedes cambiarles el nombre y el color.',
+    'Las categorías ordenan tu dinero. Si tu saldo no coincide con el real, anota la diferencia en Conciliación.',
 } as const;
 
 describe('catálogo', () => {
@@ -41,6 +41,13 @@ describe('catálogo', () => {
     expect(new Set(ids).size).toBe(8);
     expect([...ids].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const guide of GUIDES) expect(guide.text).toBe(EXPECTED[guide.id]);
+  });
+
+  it('la guía de categorías menciona Conciliación y no supera la más larga + 2', () => {
+    const text = GUIDES.find((guide) => guide.id === 'categorias')!.text;
+    const longest = Math.max(...GUIDES.map((guide) => guide.text.length));
+    expect(text).toContain('Conciliación');
+    expect(text.length).toBeLessThanOrEqual(longest + 2);
   });
 
   it('cada guía usa un módulo con color', () => {

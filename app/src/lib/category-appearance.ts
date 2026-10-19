@@ -56,7 +56,7 @@ export interface CategoryIconOption extends CategoryGlyph {
   name: string;
 }
 
-// Íconos de categoría: todo el catálogo único (icon-catalog.ts, 249 entradas). Incluye los 11 slugs de
+// Íconos de categoría: todo el catálogo único (icon-catalog.ts, 249 entradas). Incluye los 12 slugs de
 // las categorías por defecto de la API (api/src/services/default-categories.ts) y `tag`, el valor por
 // defecto de la API. Las 30 claves originales conservan clave, emoji y nombre.
 export const CATEGORY_ICON_OPTIONS: readonly CategoryIconOption[] = iconsForScope('category').map(

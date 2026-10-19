@@ -43,6 +43,7 @@ describe('migración 0002', () => {
       '0002_accounts_categories',
       '0003_transactions',
       '0004_account_appearance',
+      '0005_default_conciliacion',
     ]);
     const { results: objects } = await db
       .prepare("SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")

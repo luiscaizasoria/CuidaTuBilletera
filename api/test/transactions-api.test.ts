@@ -16,7 +16,7 @@ import {
 import { AUTH_ENV } from './helpers';
 import { api, userWithToken } from './resource-helpers';
 
-// Cada prueba crea cuentas con 11 categorías sobre D1 local: con la máquina cargada, los 5 s por
+// Cada prueba crea cuentas con sus categorías iniciales sobre D1 local: con la máquina cargada, los 5 s por
 // defecto no alcanzan.
 vi.setConfig({ testTimeout: 30_000, hookTimeout: DB_HOOK_TIMEOUT_MS });
 
@@ -54,11 +54,13 @@ async function createAccount(
   expect(response.status).toBe(201);
   const created = await json(response);
   const categories = created.categories as Json[];
+  const byName = (nombre: string, tipo: string): string =>
+    categories.find((c) => c.nombre === nombre && c.tipo === tipo)!.id;
   return {
     accountId: created.account.id,
-    expense: categories.find((c) => c.tipo === 'egreso')!.id,
-    expense2: categories.filter((c) => c.tipo === 'egreso')[1]!.id,
-    income: categories.find((c) => c.tipo === 'ingreso')!.id,
+    expense: byName('Alimentación', 'egreso'),
+    expense2: byName('Transporte', 'egreso'),
+    income: byName('Sueldo', 'ingreso'),
   };
 }
 

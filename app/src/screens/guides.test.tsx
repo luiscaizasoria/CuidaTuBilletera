@@ -654,7 +654,7 @@ describe('Categorías (J8, J17)', () => {
     expect(await screen.findByTestId('guide-categorias')).toBeTruthy();
     expect(
       screen.getByText(
-        'Las categorías ordenan tus gastos e ingresos. Puedes cambiarles el nombre y el color.',
+        'Las categorías ordenan tu dinero. Si tu saldo no coincide con el real, anota la diferencia en Conciliación.',
       ),
     ).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Nueva categoría' }));
@@ -664,6 +664,24 @@ describe('Categorías (J8, J17)', () => {
     await waitFor(() => expect(guideOf('categorias')).toBeNull());
     await settle();
     expect(seenIn(storage)).toEqual(['categorias']);
+  });
+
+  it('guía de categorías ya descartada no reaparece', async () => {
+    const storage = memoryGuideStorage({ [KEY]: guideRecord('categorias') });
+    await renderCategories(fakeResourcesApi(), storage);
+    await screen.findByRole('button', { name: 'Nueva categoría' });
+    await settle();
+    expect(guideOf('categorias')).toBeNull();
+  });
+
+  it('con fontScale 2 la guía conserva texto, cierre y Entendido; el texto es un solo nodo', async () => {
+    mockWindow(360, 2);
+    await renderCategories(fakeResourcesApi(), memoryGuideStorage());
+    expect(await screen.findByTestId('guide-categorias')).toBeTruthy();
+    const text = guideById('categorias').text;
+    expect(screen.getAllByText(text)).toHaveLength(1);
+    expect(closeButton()).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Entendido' })).toBeTruthy();
   });
 
   it('vacío de categorías conserva el círculo con 🏷️ (sin etiqueta ilustrada) y textos exactos', async () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
+import { DEFAULT_CATEGORIES } from '../src/services/default-categories';
 import { ACCOUNT_COLORS, ACCOUNT_ICONS } from '../src/lib/account-appearance';
 import {
   DB_HOOK_TIMEOUT_MS,
@@ -97,7 +98,7 @@ describe('POST /accounts con apariencia', () => {
     expect((await rowOf(db, 'accounts', account.id))?.icono).toBe(icono);
   });
 
-  it('devuelve ambos junto con el resto del DTO y las 11 categorías', async () => {
+  it('devuelve ambos junto con el resto del DTO y las categorías iniciales', async () => {
     const response = await call('POST', '/accounts', token, {
       nombre: 'Ahorros',
       saldoInicial: 100,
@@ -116,7 +117,7 @@ describe('POST /accounts con apariencia', () => {
       createdAt: iso(NOW),
       updatedAt: iso(NOW),
     });
-    expect(body.categories).toHaveLength(11);
+    expect(body.categories).toHaveLength(DEFAULT_CATEGORIES.length);
   });
 
   it.each([
