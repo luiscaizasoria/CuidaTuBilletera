@@ -26,26 +26,27 @@ export const DELETE_WILL_KEEP =
 export const DELETE_ALTERNATIVE =
   'Si solo quieres dejar de usar una cuenta, puedes archivarla; si quieres salir de la app, cierra sesión. Antes de eliminar, te sugerimos exportar tus datos.';
 export const DELETE_REAUTH_NOTICE =
-  'Después te pediremos elegir tu cuenta de Google para confirmar que eres tú.';
+  'Después te pediremos elegir tu cuenta de Google para verificar la cuenta.';
 export const DELETE_FIELD_LABEL = 'Para confirmar, escribe ELIMINAR';
 export const DELETE_FIELD_ACCESSIBILITY = 'Escribe ELIMINAR para confirmar';
 export const DELETE_CONFIRM_LABEL = 'Eliminar definitivamente';
 export const DELETE_BUSY_LABEL = 'Eliminando…';
 export const DELETE_RETRY_LABEL = 'Comprobar y reintentar';
 export const DELETE_CANCEL_LABEL = 'Cancelar';
-export const DELETE_REAUTH_PROGRESS = 'Confirma con tu cuenta de Google';
+export const DELETE_REAUTH_PROGRESS = 'Elige tu cuenta de Google para verificar la cuenta';
 export const DELETE_DISCARD_TITLE = '¿Descartar la eliminación?';
 export const DELETE_DISCARD_MESSAGE = 'Lo que escribiste se perderá y no se eliminará nada.';
 
 export const DELETE_CANCELLED_MESSAGE =
-  'No se eliminó nada. Para continuar, confirma con tu cuenta de Google.';
+  'No se eliminó nada. Para continuar, elige de nuevo tu cuenta de Google.';
 export const DELETE_UNCERTAIN_MESSAGE =
   'No pudimos confirmar si se eliminó tu cuenta. Comprueba tu conexión y toca «Comprobar y reintentar».';
 
 // `{correo}` se sustituye por el correo de la sesión (o se omite si no se conoce).
 export const DELETE_FAILURE_MESSAGES = {
   'reauth-required':
-    'Usa la cuenta de Google con la que iniciaste sesión ({correo}). No se eliminó nada.',
+    'No pudimos verificar tu cuenta de Google. Elige la cuenta con la que iniciaste sesión ({correo}) e inténtalo de nuevo. No se eliminó nada.',
+  timeout: 'No recibimos respuesta de Google a tiempo. No se eliminó nada. Inténtalo de nuevo.',
   network:
     'No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo. No se eliminó nada.',
   server:

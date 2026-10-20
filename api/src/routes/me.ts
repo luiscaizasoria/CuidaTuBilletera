@@ -17,7 +17,7 @@ const deleteSchema = z.strictObject({
   idToken: z.string().min(1).max(8192),
 });
 
-// Mismo mensaje para cualquier fallo de reautenticación: no revela si el sub coincide.
+// Mismo mensaje para cualquier fallo de la verificación de identidad con Google: no revela si el sub coincide.
 const reauthRequired = () =>
   new ApiError(
     401,

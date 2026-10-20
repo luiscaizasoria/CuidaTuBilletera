@@ -35,6 +35,7 @@ describe('textos de eliminación', () => {
   const reasons: DeleteAccountFailureReason[] = [
     'reauth-required',
     'network',
+    'timeout',
     'server',
     'invalid-request',
     'play-services',
@@ -54,11 +55,18 @@ describe('textos de eliminación', () => {
 
   it('reauth-required nombra el correo de la sesión, o lo omite sin correo', () => {
     expect(deleteFailureMessage('reauth-required', false, 'ana@example.com')).toBe(
-      'Usa la cuenta de Google con la que iniciaste sesión (ana@example.com). No se eliminó nada.',
+      'No pudimos verificar tu cuenta de Google. Elige la cuenta con la que iniciaste sesión (ana@example.com) e inténtalo de nuevo. No se eliminó nada.',
     );
     expect(deleteFailureMessage('reauth-required', false)).toBe(
-      'Usa la cuenta de Google con la que iniciaste sesión. No se eliminó nada.',
+      'No pudimos verificar tu cuenta de Google. Elige la cuenta con la que iniciaste sesión e inténtalo de nuevo. No se eliminó nada.',
     );
+  });
+
+  it('timeout tiene texto propio y distinto del de red', () => {
+    expect(deleteFailureMessage('timeout', false)).toBe(
+      'No recibimos respuesta de Google a tiempo. No se eliminó nada. Inténtalo de nuevo.',
+    );
+    expect(deleteFailureMessage('timeout', false)).not.toBe(deleteFailureMessage('network', false));
   });
 
   it('el correo se inserta literal aunque contenga patrones de reemplazo como $& (D-3)', () => {
@@ -74,7 +82,7 @@ describe('textos de eliminación', () => {
 
   it('la cancelación es neutra', () => {
     expect(DELETE_CANCELLED_MESSAGE).toBe(
-      'No se eliminó nada. Para continuar, confirma con tu cuenta de Google.',
+      'No se eliminó nada. Para continuar, elige de nuevo tu cuenta de Google.',
     );
   });
 

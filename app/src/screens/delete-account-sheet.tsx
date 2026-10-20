@@ -1,9 +1,10 @@
 // Hoja «Eliminar mi cuenta y mis datos» (G1; docs/003 Decisión G1, docs/010 §24). Se monta solo
 // mientras está abierta (estado, guard y listener de Atrás viven con ella). Cuerpo desplazable y pie
 // fijo con el campo de confirmación y los botones. Nunca se abre junto a otro `Modal`.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
+  type LayoutChangeEvent,
   Keyboard,
   ScrollView,
   StyleSheet,
@@ -29,6 +30,7 @@ import {
   DELETE_REAUTH_NOTICE,
   DELETE_REAUTH_PROGRESS,
   DELETE_RETRY_LABEL,
+  DELETE_UNCERTAIN_MESSAGE,
   DELETE_SHEET_TITLE,
   DELETE_WILL_KEEP,
   DELETE_WILL_KEEP_TITLE,
@@ -78,7 +80,26 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
   // Sin espacio suficiente (teclado o fuente grande) todo el contenido vive dentro del scroll.
   const inline = compact || fontScale >= STACKED_FONT_SCALE;
   const scrollRef = useRef<ScrollView>(null);
-  const scrollToEnd = () => scrollRef.current?.scrollToEnd?.({ animated: true });
+  // Posiciones medidas (onLayout) dentro del contenido del scroll: inicio del bloque del pie integrado
+  // y de su mensaje (la `y` del mensaje es relativa al pie, que la suma).
+  const footerY = useRef(0);
+  const scrollToY = useCallback((y: number) => {
+    scrollRef.current?.scrollTo?.({ y: Math.max(0, y), animated: true });
+  }, []);
+  const onFooterLayout = (event: LayoutChangeEvent) => {
+    footerY.current = event.nativeEvent.layout.y;
+  };
+  // Etiqueta y campo arriba de la zona visible; se espera a que termine el diseño con el teclado.
+  const scrollToField = useCallback(() => {
+    const frame = requestAnimationFrame(() => scrollToY(footerY.current));
+    return () => cancelAnimationFrame(frame);
+  }, [scrollToY]);
+  // El progreso o el mensaje nuevo se miden al montarse y el scroll lleva su inicio a la vista.
+  const onStatusLayout = (event: LayoutChangeEvent) => {
+    if (!inline) return;
+    const y = footerY.current + event.nativeEvent.layout.y;
+    requestAnimationFrame(() => scrollToY(y));
+  };
 
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -96,10 +117,11 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
     };
   }, []);
 
-  // En modo integrado, un mensaje nuevo o el teclado llevan el scroll al final (campo y botones).
+  // En modo integrado, al abrirse el teclado (keyboardDidShow, tras su animación) el campo sube.
   useEffect(() => {
-    if (inline && (message || busy || keyboardOpen)) scrollToEnd();
-  }, [inline, message, busy, keyboardOpen]);
+    if (inline && keyboardOpen) return scrollToField();
+    return undefined;
+  }, [inline, keyboardOpen, scrollToField]);
 
   const { accountDeletionUrl } = readLegalLinks();
   const matches = matchesConfirmation(text);
@@ -134,6 +156,7 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
     Keyboard.dismiss();
     setBusy(true);
     setMessage(null);
+    const wasUncertain = uncertain;
     let failure: { reason: Parameters<typeof deleteFailureMessage>[0]; uncertain: boolean } | null =
       null;
     let cancelled = false;
@@ -153,12 +176,15 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
     }
     if (!mounted.current) return;
     if (cancelled) {
-      setUncertain(false);
-      setMessage(DELETE_CANCELLED_MESSAGE);
+      // Tras un intento incierto, cancelar el selector no aclara si el envío anterior borró la cuenta.
+      setUncertain(wasUncertain);
+      setMessage(wasUncertain ? DELETE_UNCERTAIN_MESSAGE : DELETE_CANCELLED_MESSAGE);
     } else if (failure) {
-      // El servicio conserva `uncertain` en modo afterUncertain cuando el fallo es transitorio.
-      setUncertain(failure.uncertain);
-      setMessage(deleteFailureMessage(failure.reason, failure.uncertain, user?.email));
+      // La marca solo se limpia con un resultado cierto tras el sondeo; un fallo previo al envío
+      // (timeout del selector, red) no la limpia si el intento anterior era incierto.
+      const stillUncertain = failure.uncertain || wasUncertain;
+      setUncertain(stillUncertain);
+      setMessage(deleteFailureMessage(failure.reason, stillUncertain, user?.email));
     }
   }
 
@@ -214,7 +240,7 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
         />
       ) : null}
       {linkError ? (
-        <Text accessibilityRole="alert" style={styles.error}>
+        <Text accessibilityRole="alert" accessibilityLiveRegion="assertive" style={styles.error}>
           {OPEN_LINK_ERROR}
         </Text>
       ) : null}
@@ -229,7 +255,7 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
         placeholderTextColor={colors.text2}
         value={text}
         onChangeText={setText}
-        onFocus={inline ? () => setTimeout(scrollToEnd, 50) : undefined}
+        onFocus={inline ? () => void scrollToField() : undefined}
         editable={!busy}
         autoCapitalize="characters"
         autoCorrect={false}
@@ -242,12 +268,22 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
         style={s.input}
       />
       {busy ? (
-        <Text accessibilityRole="alert" style={styles.progress}>
+        <Text
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          onLayout={onStatusLayout}
+          style={styles.progress}
+        >
           {DELETE_REAUTH_PROGRESS}
         </Text>
       ) : null}
       {message ? (
-        <Text accessibilityRole="alert" style={styles.error}>
+        <Text
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+          onLayout={onStatusLayout}
+          style={styles.error}
+        >
           {message}
         </Text>
       ) : null}
@@ -286,7 +322,11 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
         {inline ? title : null}
         {body}
         {inline ? (
-          <View testID="delete-account-inline-footer" style={styles.inlineFooter}>
+          <View
+            testID="delete-account-inline-footer"
+            onLayout={onFooterLayout}
+            style={styles.inlineFooter}
+          >
             {footerContent}
           </View>
         ) : null}

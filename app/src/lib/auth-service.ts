@@ -34,6 +34,7 @@ export interface AuthState {
 export type DeleteAccountFailureReason =
   | 'reauth-required' // 401 REAUTH_REQUIRED: cuenta de Google distinta o ID token antiguo
   | 'network'
+  | 'timeout' // el selector de Google no respondió a tiempo (motivo interno del cliente)
   | 'server'
   | 'invalid-request' // 400 o 413
   | 'play-services'
@@ -71,8 +72,10 @@ export interface AuthService {
   restore(): Promise<void>;
   signIn(): Promise<void>;
   signOut(): Promise<LogoutOutcome>;
-  // Elimina la cuenta y los datos del usuario (DELETE /me con reautenticación de Google). Un solo
-  // vuelo a la vez. No usa authorizedCall ni la recuperación con Google: no debe recrear la cuenta.
+  // Elimina la cuenta y los datos del usuario (DELETE /me con verificación de identidad con Google:
+  // acredita una sesión de Google de la misma cuenta con un token reciente, no una reautenticación
+  // con contraseña o biometría). Un solo vuelo a la vez. No usa authorizedCall ni la
+  // recuperación con Google: no debe recrear la cuenta.
   deleteAccount(options?: DeleteAccountOptions): Promise<DeleteAccountResult>;
   // Ejecuta una llamada autenticada: renueva con POST /auth/refresh si el access token está por
   // vencer y, ante un 401, renueva una vez y reintenta una vez. Un segundo 401 se propaga sin
@@ -146,9 +149,14 @@ function causeToError(result: Extract<CycleResult, { ok: false }>): AuthError {
 // Espera acotada: si Google no responde a tiempo se rechaza como error transitorio de red. El
 // resultado tardío de Google se descarta aquí mismo (nadie lo consume), de modo que un ID token
 // que llegue tarde jamás se intercambia ni se persiste. Usa los temporizadores globales.
-function withTimeout<T>(call: () => Promise<T>, ms: number): Promise<T> {
+// `onTimeout` permite distinguir el plazo vencido de un fallo real de red (por defecto, 'network').
+function withTimeout<T>(
+  call: () => Promise<T>,
+  ms: number,
+  onTimeout: () => unknown = () => new AuthError('network'),
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new AuthError('network')), ms);
+    const timer = setTimeout(() => reject(onTimeout()), ms);
     // En Node/Jest un plazo pendiente no debe mantener vivo el proceso.
     (timer as { unref?: () => void }).unref?.();
     let pending: Promise<T>;
@@ -1182,9 +1190,15 @@ export function createAuthService({
     }
 
     let reauth;
+    const timedOut = new Error('reauthenticate-timeout');
     try {
-      reauth = await withTimeout(() => google.reauthenticate(), GOOGLE_INTERACTIVE_TIMEOUT_MS);
+      reauth = await withTimeout(
+        () => google.reauthenticate(),
+        GOOGLE_INTERACTIVE_TIMEOUT_MS,
+        () => timedOut,
+      );
     } catch (error) {
+      if (error === timedOut) return failed('timeout', afterUncertain);
       const kind = kindOf(error);
       if (kind === 'play-services' || kind === 'config' || kind === 'in-progress') {
         return failed(kind, false);

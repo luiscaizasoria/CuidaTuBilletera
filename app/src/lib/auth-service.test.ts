@@ -4415,6 +4415,44 @@ describe('eliminar cuenta', () => {
     expect(ctx2.storage.session()).not.toBeNull();
   });
 
+  it('tras REAUTH_REQUIRED, el reintento vuelve a abrir el selector y envía el ID token NUEVO', async () => {
+    const api = fakeApi({ deleteAccount: rejectOnce(reauthRequired()) });
+    const google = fakeGoogle({
+      reauthenticate: jest
+        .fn()
+        .mockResolvedValueOnce({ status: 'success', idToken: 'token-viejo' })
+        .mockResolvedValueOnce({ status: 'success', idToken: 'token-nuevo' }),
+    });
+    const ctx = await signedIn({ api, google });
+    await expect(ctx.service.deleteAccount()).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'reauth-required',
+    });
+    await expect(ctx.service.deleteAccount()).resolves.toEqual({ status: 'deleted' });
+    expect(google.reauthenticate).toHaveBeenCalledTimes(2);
+    expect(api.deleteAccount).toHaveBeenCalledTimes(2);
+    expect((api.deleteAccount as jest.Mock).mock.calls[0][1]).toBe('token-viejo');
+    expect((api.deleteAccount as jest.Mock).mock.calls[1][1]).toBe('token-nuevo');
+  });
+
+  it('timeout del selector tras un intento incierto conserva uncertain=true', async () => {
+    jest.useFakeTimers();
+    try {
+      const google = fakeGoogle({ reauthenticate: jest.fn(() => new Promise(() => undefined)) });
+      const ctx = await signedIn({ google });
+      const pending = ctx.service.deleteAccount({ afterUncertain: true });
+      await jest.advanceTimersByTimeAsync(GOOGLE_INTERACTIVE_TIMEOUT_MS + 1);
+      await expect(pending).resolves.toEqual({
+        status: 'failed',
+        reason: 'timeout',
+        uncertain: true,
+      });
+      expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('401 INVALID_TOKEN en el primer intento: sesión caducada, sin afirmar eliminación', async () => {
     const api = fakeApi({ deleteAccount: rejectOnce(invalidToken()) });
     const ctx = await signedIn({ api });
@@ -4477,18 +4515,24 @@ describe('eliminar cuenta', () => {
     expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
   });
 
-  it('el selector que no responde a tiempo falla como red sin enviar el DELETE', async () => {
+  it('el selector que no responde a tiempo falla como timeout (no red) sin enviar el DELETE, y su resultado tardío se descarta', async () => {
     jest.useFakeTimers();
     try {
-      const google = fakeGoogle({ reauthenticate: jest.fn(() => new Promise(() => undefined)) });
+      let late!: (value: unknown) => void;
+      const google = fakeGoogle({
+        reauthenticate: jest.fn(() => new Promise((resolve) => (late = resolve))),
+      });
       const ctx = await signedIn({ google });
       const pending = ctx.service.deleteAccount();
       await jest.advanceTimersByTimeAsync(GOOGLE_INTERACTIVE_TIMEOUT_MS + 1);
       await expect(pending).resolves.toEqual({
         status: 'failed',
-        reason: 'network',
+        reason: 'timeout',
         uncertain: false,
       });
+      // Resultado tardío del selector: se descarta, nunca se envía el DELETE.
+      late({ status: 'success', idToken: 'late-token' });
+      await jest.advanceTimersByTimeAsync(10);
       expect(ctx.api.deleteAccount).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();

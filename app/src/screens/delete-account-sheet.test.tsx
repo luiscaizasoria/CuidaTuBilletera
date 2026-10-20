@@ -1,13 +1,15 @@
 // Hoja «Eliminar mi cuenta y mis datos» (G1; docs/010 §24: ELIM-b a ELIM-d, e, h, i, m, r).
 import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
-import { Alert, BackHandler, Keyboard, Linking } from 'react-native';
+import { Alert, BackHandler, Keyboard, Linking, ScrollView } from 'react-native';
 import {
   DELETE_CANCELLED_MESSAGE,
+  DELETE_REAUTH_PROGRESS,
   DELETE_UNCERTAIN_MESSAGE,
   deleteFailureMessage,
 } from '../lib/account-deletion-messages';
 import type { DeleteAccountResult } from '../lib/auth-service';
 import { controlledPromise, mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
+import { OPEN_LINK_ERROR } from '../lib/external-link';
 import DeleteAccountSheet from './delete-account-sheet';
 
 relaxTimeoutsForColdCache();
@@ -60,9 +62,7 @@ describe('DeleteAccountSheet: contenido', () => {
     expect(screen.getByText(/archivos que ya exportaste y tu cuenta de Google/)).toBeTruthy();
     expect(screen.getByText(/archivarla.*cierra sesión.*exportar/)).toBeTruthy();
     expect(
-      screen.getByText(
-        'Después te pediremos elegir tu cuenta de Google para confirmar que eres tú.',
-      ),
+      screen.getByText('Después te pediremos elegir tu cuenta de Google para verificar la cuenta.'),
     ).toBeTruthy();
     expect(screen.queryByText(/cerrar la app/)).toBeNull();
   });
@@ -142,7 +142,7 @@ describe('DeleteAccountSheet: envío', () => {
     expect(mockDelete).toHaveBeenCalledTimes(1);
     expect(mockDelete).toHaveBeenCalledWith(undefined);
     expect(screen.getByText('Eliminando…')).toBeTruthy();
-    expect(screen.getByText('Confirma con tu cuenta de Google')).toBeTruthy();
+    expect(screen.getByText('Elige tu cuenta de Google para verificar la cuenta')).toBeTruthy();
     expect(confirmButton().props.accessibilityState).toMatchObject({ disabled: true, busy: true });
     expect(field().props.editable).toBe(false);
     await act(async () => gate.resolve({ status: 'deleted' }));
@@ -162,6 +162,7 @@ describe('DeleteAccountSheet: envío', () => {
   it.each([
     'reauth-required',
     'network',
+    'timeout',
     'server',
     'invalid-request',
     'play-services',
@@ -221,16 +222,48 @@ describe('DeleteAccountSheet: envío', () => {
     expect(mockDelete).toHaveBeenNthCalledWith(3, { afterUncertain: true });
   });
 
-  it('tras un incierto, un resultado con certeza vuelve al botón normal', async () => {
-    mockDelete.mockResolvedValueOnce(failed('server', true));
+  it.each([
+    ['cancelled', { status: 'cancelled' } as DeleteAccountResult],
+    ['timeout del selector', failed('timeout')],
+    ['red previa al envío', failed('network')],
+  ])(
+    'tras un incierto, «%s» conserva la marca: mensaje de incierto y «Comprobar y reintentar» (D3)',
+    async (_name, result) => {
+      mockDelete.mockResolvedValueOnce(failed('server', true));
+      await open();
+      await type('ELIMINAR');
+      await fireEvent.press(confirmButton());
+      await screen.findByText(DELETE_UNCERTAIN_MESSAGE);
+      mockDelete.mockResolvedValueOnce(result);
+      await fireEvent.press(screen.getByRole('button', { name: 'Comprobar y reintentar' }));
+      expect(await screen.findByText(DELETE_UNCERTAIN_MESSAGE)).toBeTruthy();
+      expect(screen.queryByText(DELETE_CANCELLED_MESSAGE)).toBeNull();
+      mockDelete.mockResolvedValueOnce({ status: 'deleted' });
+      await fireEvent.press(screen.getByRole('button', { name: 'Comprobar y reintentar' }));
+      expect(mockDelete).toHaveBeenLastCalledWith({ afterUncertain: true });
+    },
+  );
+
+  it('sin intento incierto previo, «cancelled» muestra el texto neutro y no marca incierto', async () => {
+    mockDelete.mockResolvedValueOnce({ status: 'cancelled' });
     await open();
     await type('ELIMINAR');
     await fireEvent.press(confirmButton());
-    await screen.findByText(DELETE_UNCERTAIN_MESSAGE);
-    mockDelete.mockResolvedValueOnce({ status: 'cancelled' });
-    await fireEvent.press(screen.getByRole('button', { name: 'Comprobar y reintentar' }));
     await screen.findByText(DELETE_CANCELLED_MESSAGE);
-    expect(confirmButton()).toBeTruthy();
+    expect(screen.queryByText('Comprobar y reintentar')).toBeNull();
+  });
+
+  it('el motivo "timeout" tiene texto propio, distinto del de red', async () => {
+    mockDelete.mockResolvedValue(failed('timeout'));
+    await open();
+    await type('ELIMINAR');
+    await fireEvent.press(confirmButton());
+    expect(
+      await screen.findByText(
+        'No recibimos respuesta de Google a tiempo. No se eliminó nada. Inténtalo de nuevo.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/No se pudo conectar con el servidor/)).toBeNull();
   });
 
   it('éxito o sesión caducada: no pinta errores (la app ya vuelve al Login)', async () => {
@@ -344,6 +377,74 @@ describe('DeleteAccountSheet: distribución', () => {
         name: 'Eliminar definitivamente',
       }),
     ).toBeNull();
+  });
+
+  it('live regions: progreso polite, mensaje y error del enlace assertive (D4)', async () => {
+    mockLinks.accountDeletionUrl = 'https://ejemplo.test/eliminar';
+    jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('x'));
+    const gate = controlledPromise<DeleteAccountResult>();
+    mockDelete.mockReturnValue(gate.promise);
+    await open();
+    await fireEvent.press(
+      screen.getByRole('button', { name: 'Ver cómo solicitar la eliminación sin la app' }),
+    );
+    expect((await screen.findByText(OPEN_LINK_ERROR)).props.accessibilityLiveRegion).toBe(
+      'assertive',
+    );
+    await type('ELIMINAR');
+    await fireEvent.press(confirmButton());
+    const progress = await screen.findByText(DELETE_REAUTH_PROGRESS);
+    expect(progress.props.accessibilityLiveRegion).toBe('polite');
+    await act(async () => gate.resolve(failed('server')));
+    const message = await screen.findByText(deleteFailureMessage('server', false));
+    expect(message.props.accessibilityLiveRegion).toBe('assertive');
+  });
+
+  describe('scroll a posiciones medidas (D1)', () => {
+    const layout = (y: number) => ({
+      nativeEvent: { layout: { x: 0, y, width: 300, height: 40 } },
+    });
+    let scrollTo: jest.Mock;
+    let onShow: (() => void) | undefined;
+    const openCompact = async () => {
+      mockWindow(320, 2, 568);
+      // El mock de ScrollView de Jest comparte un jest.fn de `scrollTo` en el prototipo.
+      scrollTo = (ScrollView.prototype as unknown as { scrollTo: jest.Mock }).scrollTo;
+      scrollTo.mockClear();
+      jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, h: () => void) => {
+        if (event === 'keyboardDidShow') onShow = h;
+        return { remove: jest.fn() };
+      }) as never);
+      await open();
+      await fireEvent(screen.getByTestId('delete-account-inline-footer'), 'layout', layout(500));
+    };
+    const frames = () =>
+      act(async () => new Promise<void>((r) => requestAnimationFrame(() => r())));
+
+    it('al enfocar el campo desplaza a la y medida del pie (no al final)', async () => {
+      await openCompact();
+      await fireEvent(field(), 'focus');
+      await frames();
+      expect(scrollTo).toHaveBeenCalledWith({ y: 500, animated: true });
+    });
+
+    it('al abrirse el teclado (keyboardDidShow) desplaza a la y del pie', async () => {
+      await openCompact();
+      await act(async () => onShow?.());
+      await frames();
+      expect(scrollTo).toHaveBeenCalledWith({ y: 500, animated: true });
+    });
+
+    it('el mensaje de error desplaza a su inicio (y del pie + y del mensaje)', async () => {
+      await openCompact();
+      mockDelete.mockResolvedValue(failed('server'));
+      await type('ELIMINAR');
+      await fireEvent.press(confirmButton());
+      const message = await screen.findByText(deleteFailureMessage('server', false));
+      await fireEvent(message, 'layout', layout(120));
+      await frames();
+      expect(scrollTo).toHaveBeenCalledWith({ y: 620, animated: true });
+    });
   });
 
   it('cuerpo desplazable y pie fijo con el campo y los botones', async () => {

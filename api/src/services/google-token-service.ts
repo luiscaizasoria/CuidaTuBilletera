@@ -37,7 +37,7 @@ export async function verifyGoogleIdToken(
   keys: JWTVerifyGetKey,
   currentDate?: Date,
   // Opcional: exige un token recién emitido (iat entre now - maxAgeSeconds y now + 60 s). El login
-  // no lo usa; las operaciones sensibles (DELETE /me) piden una reautenticación reciente.
+  // no lo usa; las operaciones sensibles (DELETE /me) piden una verificación de identidad con Google (token reciente; no equivale a reautenticar con contraseña o biometría).
   maxAgeSeconds?: number,
 ): Promise<GoogleIdentity> {
   try {

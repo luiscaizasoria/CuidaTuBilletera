@@ -126,9 +126,7 @@ describe('App: eliminar la cuenta', () => {
     await render(<App service={service} resourcesApi={fakeResourcesApi()} />);
     await openDeleteSheet();
     await confirm();
-    expect(
-      await screen.findByText(/Usa la cuenta de Google con la que iniciaste sesión/),
-    ).toBeTruthy();
+    expect(await screen.findByText(/Elige la cuenta con la que iniciaste sesión/)).toBeTruthy();
     expect(screen.getByTestId('delete-account-sheet')).toBeTruthy();
     expect(storage.session()).not.toBeNull();
   });
@@ -156,7 +154,9 @@ describe('App: eliminar la cuenta', () => {
     await render(<App service={service} resourcesApi={fakeResourcesApi()} />);
     await openDeleteSheet();
     await confirm();
-    expect(await screen.findByText('Confirma con tu cuenta de Google')).toBeTruthy();
+    expect(
+      await screen.findByText('Elige tu cuenta de Google para verificar la cuenta'),
+    ).toBeTruthy();
     await act(async () => {
       gate.resolve({ status: 'success', idToken: 'google-id-token' });
     });

@@ -37,7 +37,7 @@ export type GoogleIdTokenResult =
 export interface GoogleProvider {
   signIn(): Promise<GoogleIdTokenResult>;
   signInSilently(): Promise<GoogleIdTokenResult>;
-  // Reautenticación interactiva para acciones destructivas: cierra la sesión de Google del
+  // Verificación de identidad con Google para acciones destructivas: cierra la sesión de Google del
   // dispositivo y abre SIEMPRE el selector de cuentas (nunca la renovación silenciosa).
   reauthenticate(): Promise<GoogleIdTokenResult>;
   signOut(): Promise<void>;
