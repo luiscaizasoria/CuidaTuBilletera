@@ -447,6 +447,74 @@ describe('DeleteAccountSheet: distribución', () => {
     });
   });
 
+  // Regresión del bug en Android: al enfocar el campo el teclado aparecía y se cerraba de inmediato
+  // porque el TextInput cambiaba de padre (y se remontaba) al abrirse el teclado o reducirse la
+  // ventana. Jest NO demuestra el comportamiento del teclado físico: solo verifica que el campo
+  // conserva la misma instancia y el mismo padre; la validación real es en dispositivo.
+  describe('el campo no se remonta al abrir o cerrar el teclado', () => {
+    const listeners: Record<string, () => void> = {};
+    const spyKeyboard = () =>
+      jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, h: () => void) => {
+        listeners[event] = h;
+        return { remove: jest.fn() };
+      }) as never);
+    const instance = () => field() as unknown;
+    const cycleKeyboard = async (view: { rerender: (ui: React.ReactElement) => unknown }) => {
+      await act(async () => listeners.keyboardDidShow?.());
+      mockWindow(411, listeners.fontScale ? 1.3 : 1, 400);
+      await view.rerender(<DeleteAccountSheet visible onClose={onClose} onNotify={onNotify} />);
+      await act(async () => listeners.keyboardDidHide?.());
+    };
+
+    it('fuente normal: misma instancia y mismo padre (pie fijo) con teclado y ventana < 480', async () => {
+      spyKeyboard();
+      const view = await open();
+      const before = instance();
+      expect(before).toBeTruthy();
+      await cycleKeyboard(view);
+      expect(instance()).toBe(before);
+      expect(
+        within(screen.getByTestId('delete-account-footer')).getByLabelText(
+          'Escribe ELIMINAR para confirmar',
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByTestId('delete-account-inline-footer')).toBeNull();
+    });
+
+    it('escribir «eliminar» tras abrirse el teclado conserva el texto y habilita el botón', async () => {
+      spyKeyboard();
+      const view = await open();
+      const before = instance();
+      await act(async () => listeners.keyboardDidShow?.());
+      mockWindow(411, 1, 400);
+      await view.rerender(<DeleteAccountSheet visible onClose={onClose} onNotify={onNotify} />);
+      await type('eliminar');
+      expect(instance()).toBe(before);
+      expect(field().props.value).toBe('eliminar');
+      expect(confirmButton().props.accessibilityState).toMatchObject({ disabled: false });
+      await act(async () => listeners.keyboardDidHide?.());
+      expect(instance()).toBe(before);
+      expect(field().props.value).toBe('eliminar');
+    });
+
+    it('fuente >= 1,3: el campo permanece en el pie integrado y no se remonta', async () => {
+      mockWindow(411, 1.3, 800);
+      spyKeyboard();
+      listeners.fontScale = () => undefined;
+      const view = await open();
+      const before = instance();
+      await cycleKeyboard(view);
+      expect(instance()).toBe(before);
+      expect(
+        within(screen.getByTestId('delete-account-inline-footer')).getByLabelText(
+          'Escribe ELIMINAR para confirmar',
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByTestId('delete-account-footer')).toBeNull();
+      delete listeners.fontScale;
+    });
+  });
+
   it('cuerpo desplazable y pie fijo con el campo y los botones', async () => {
     await open();
     expect(screen.getByTestId('delete-account-scroll')).toBeTruthy();

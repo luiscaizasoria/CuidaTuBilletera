@@ -46,7 +46,8 @@ import { colors, typography } from '../theme/tokens';
 import { Sheet } from './sheets';
 import { Button, screenStyles as s } from './ui';
 
-// Ventana baja, teclado abierto o fuente muy grande: la hoja usa casi toda la ventana.
+// Ventana baja, teclado abierto o fuente muy grande: la hoja usa casi toda la ventana. Esto solo
+// cambia estilos (altura máxima, botón alto, botones apilados); nunca el padre del campo.
 const COMPACT_WINDOW_DP = 480;
 const COMPACT_FONT_SCALE = 1.75;
 const STACKED_FONT_SCALE = 1.3;
@@ -77,8 +78,12 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
   }, []);
   const compact = height < COMPACT_WINDOW_DP || keyboardOpen || fontScale >= COMPACT_FONT_SCALE;
   const stacked = !compact || fontScale >= STACKED_FONT_SCALE;
-  // Sin espacio suficiente (teclado o fuente grande) todo el contenido vive dentro del scroll.
-  const inline = compact || fontScale >= STACKED_FONT_SCALE;
+  // REGLA: el campo de confirmación no debe cambiar de padre mientras se escribe. Abrir el teclado
+  // reduce la ventana y activa `compact`; si `inline` dependiera de eso, el TextInput se desmontaría
+  // al enfocarlo, perdería el foco y Android cerraría el teclado de inmediato. Por eso `inline` solo
+  // depende de la fuente del sistema, estable durante la sesión de escritura. Con fuente grande todo
+  // el contenido vive dentro del scroll; si no, el pie fijo (fuera del scroll) queda visible.
+  const inline = fontScale >= STACKED_FONT_SCALE;
   const scrollRef = useRef<ScrollView>(null);
   // Posiciones medidas (onLayout) dentro del contenido del scroll: inicio del bloque del pie integrado
   // y de su mensaje (la `y` del mensaje es relativa al pie, que la suma).
@@ -117,7 +122,8 @@ function OpenDeleteSheet({ onClose, onNotify }: SheetProps) {
     };
   }, []);
 
-  // En modo integrado, al abrirse el teclado (keyboardDidShow, tras su animación) el campo sube.
+  // Solo en modo integrado (fuente grande) el campo sube al abrirse el teclado (keyboardDidShow, tras
+  // su animación); en modo fijo el pie ya queda visible. No cambia el árbol: solo hace scroll.
   useEffect(() => {
     if (inline && keyboardOpen) return scrollToField();
     return undefined;
