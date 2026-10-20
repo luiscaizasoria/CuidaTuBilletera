@@ -134,6 +134,10 @@ Decisiones pendientes en docs/003 «Decisión L1». Ruta crítica: verificación
 - Credenciales: respaldo cifrado de la upload key y de las contraseñas fuera del repositorio; si se pierde la upload key, Play permite restablecerla.
 - Pruebas especiales no bloqueantes pendientes: TalkBack, fuente ampliada, 320 dp, otros dispositivos y validación de ícono temático y splash en `preview`.
 
+## Registro del despliegue DEV de `DELETE /me` (paso 390; 2026-10-20)
+
+Solo `controlgastos-api-dev` (`--env dev`, con el binding a `controlgastos-db-dev` comprobado en el dry-run), VersionId `afbd3ac3-538a-47d1-b2bd-fd2b4bb47373`. Antes: 0 migraciones pendientes y respaldo con `d1 export` fuera del repositorio (SHA-256 `b9fd288994479348a86c1505da1d80452a78eeda80baaaf216882d288a8734f4`, 112 sentencias INSERT) más el bookmark de Time Travel anotado. Después: `GET /health` 200 y `DELETE /me` sin credenciales 401. Todos los comandos pasaron por el envoltorio `cwrangler`. No se desplegó producción ni se aplicaron migraciones. Las consultas de solo lectura posteriores a la prueba Android y su límite (sin id conservado ni perfil nuevo corroborado) están en docs/003.
+
 ## Eliminación de datos por solicitud (procedimiento operativo, BORRADOR del paso 387; nada ejecutado)
 
 Aplica a quien ya no tiene la app. Dentro de la app la eliminación se hace con `DELETE /me` (docs/003 «Decisión G1»). **No existe endpoint público que borre con solo un correo.** Plazo comprometido y correo de soporte: decisión del usuario (recomendado: acuse en 7 días y ejecución en 30 días como máximo).
