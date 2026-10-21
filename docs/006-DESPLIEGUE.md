@@ -136,7 +136,27 @@ Decisiones pendientes en docs/003 «Decisión L1». Ruta crítica: verificación
 
 ## Registro del despliegue DEV de `DELETE /me` (paso 390; 2026-10-20)
 
-Solo `controlgastos-api-dev` (`--env dev`, con el binding a `controlgastos-db-dev` comprobado en el dry-run), VersionId `afbd3ac3-538a-47d1-b2bd-fd2b4bb47373`. Antes: 0 migraciones pendientes y respaldo con `d1 export` fuera del repositorio (SHA-256 `b9fd288994479348a86c1505da1d80452a78eeda80baaaf216882d288a8734f4`, 112 sentencias INSERT) más el bookmark de Time Travel anotado. Después: `GET /health` 200 y `DELETE /me` sin credenciales 401. Todos los comandos pasaron por el envoltorio `cwrangler`. No se desplegó producción ni se aplicaron migraciones. Las consultas de solo lectura posteriores a la prueba Android y su límite (sin id conservado ni perfil nuevo corroborado) están en docs/003.
+Solo `controlgastos-api-dev` (`--env dev`, con el binding a `controlgastos-db-dev` comprobado en el dry-run), VersionId `afbd3ac3-538a-47d1-b2bd-fd2b4bb47373`. Antes: 0 migraciones pendientes y respaldo con `d1 export` fuera del repositorio (SHA-256 `b9fd288994479348a86c1505da1d80452a78eeda80baaaf216882d288a8734f4`, 112 sentencias INSERT) más el bookmark de Time Travel anotado. Después: `GET /health` 200 y `DELETE /me` sin credenciales 401. Todos los comandos pasaron por el envoltorio `cwrangler`. No se desplegó producción ni se aplicaron migraciones. Las consultas de solo lectura posteriores a la prueba Android, el E2E corroborado (dos eliminaciones y perfil recreado persistente) y lo no reconstruible están en docs/003.
+
+## Plan de publicación de las páginas legales con GitHub Pages (paso 398; PLAN, nada publicado)
+
+**Estado:** GitHub Pages inactivo y ninguna página legal publicada. Los textos siguen siendo borradores con marcadores `[PENDIENTE: …]` en `docs/borradores-legales/`. Este plan no crea carpetas públicas ni activa nada.
+
+**Advertencia:** el repositorio es público, así que todo lo que está en él ya es legible, incluidos `docs/` y los borradores. Pages no añade ese riesgo, pero publica un sitio con URL estable: por eso su origen debe ser una carpeta aparte con solo el contenido definitivo, nunca `docs/` ni la raíz.
+
+| Interno (no se publica) | Público definitivo (único contenido del sitio) |
+| --- | --- |
+| `docs/001` a `docs/010`, `docs/borradores-legales/`, respaldos y exportaciones de D1, identificadores de recursos de Cloudflare, archivos `.env`, `.dev.vars` y de DEV, informes de QA | Política de privacidad y página de eliminación de cuenta, ya aprobadas y sin marcadores, en HTML o Markdown mínimo, más una página de índice si hace falta |
+
+**Procedimiento propuesto (por ejecutar solo con autorización expresa):**
+1. Rellenar y aprobar los textos (ver la lista de información necesaria abajo) y copiar solo las versiones definitivas a una carpeta de origen nueva (por ejemplo `site/`), en un PR aparte.
+2. Comprobar que `site/` no contiene `[PENDIENTE`, correos de desarrollo, ids, rutas internas ni referencias a DEV (`grep` y revisión de `mobile-ux-qa`/`architect`).
+3. Activar Pages (Settings → Pages) con ese origen o con un workflow que suba solo `site/` como artefacto; no usar `docs/`.
+4. Verificar con `curl -I` que las dos URL responden 200 sin iniciar sesión y que no se ve nada de lo interno.
+5. Configurar `EXPO_PUBLIC_PRIVACY_POLICY_URL` y `EXPO_PUBLIC_ACCOUNT_DELETION_URL` (EAS, variables públicas) y registrar las URL en Play Console (política de privacidad y URL de eliminación de datos).
+6. Rollback: deshabilitar Pages y revertir el PR; las URL dejan de responder.
+
+**Información que debe aportar el responsable (no se inventa):** nombre o razón social del responsable tal como figura en Play Console; jurisdicción; correo de soporte real y que lo atenderá de forma manual; plazo de respuesta a solicitudes y su compromiso; edad mínima; plan real de Cloudflare en producción (7 o 30 días de copias de Time Travel) y región de la base de datos; si habrá registros del servidor y su retención; datos que deba conservar por obligación legal (hoy ninguno identificado); aprobación final del texto, con revisión legal si la desea; y coincidencia con el formulario «Seguridad de los datos» y con el manifiesto de la AAB.
 
 ## Eliminación de datos por solicitud (procedimiento operativo, BORRADOR del paso 387; nada ejecutado)
 

@@ -9,3 +9,5 @@ Advertencias:
 - Si se activa GitHub Pages con la carpeta `docs/` como origen, estos borradores quedarían publicados: elegir otra carpeta de origen (por ejemplo `site/`) o mover el texto aprobado allí.
 - El texto final lo revisa y aprueba el usuario (y, si lo considera, un asesor legal). Debe coincidir con el formulario «Seguridad de los datos» de Play Console y con el comportamiento real de la app.
 - Fuente de los datos descritos: esquema D1 (`api/migrations/0001` a `0005`), `api/src` y `app/src`, verificados en el paso 387.
+
+Plan de publicación con GitHub Pages (carpeta de origen aparte, lista de información faltante y rollback): docs/006-DESPLIEGUE.md, sección «Plan de publicación de las páginas legales». Sigue sin publicarse nada.
