@@ -23,5 +23,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:scripts
+      - run: npm run verificar:wrangler
       - run: npm run build --workspace api
       - run: npm run build --workspace controlgastos-app
