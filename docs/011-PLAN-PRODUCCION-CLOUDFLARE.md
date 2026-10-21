@@ -137,6 +137,8 @@ Aplicación a v1.0 (estimación propia): decenas a cientos de usuarios caben hol
 | D10 | Mitigaciones de abuso | rate limiting, `MAX_USERS`, tope de movimientos, purga | al menos alertas y un plan de apagado; implementar lo demás por separado con pruebas |
 | D11 | Exigir `https` en `readConfig` | cambio pequeño con pruebas | hacerlo antes de G4 |
 
+**Decisiones confirmadas por el usuario (paso 408):** estructura `env.prod` explícita (D1); Workers **Paid** antes de abrir al público (D2); API en `workers.dev` con `workers_dev` habilitado en PROD (D3); credenciales OAuth de producción independientes de DEV (D4); ubicación candidata de la D1 `enam`, **pendiente de aprobación final y de medir la latencia desde Ecuador**, y recordando que el hint no está garantizado y es irreversible (D9). Siguen pendientes: D5 (la lista de clientes Android ya está implementada; falta registrar las huellas y crear los clientes), D6 a D8, D10 y D11 (HTTPS ya implementado). Ningún recurso productivo se ha creado ni modificado.
+
 Corrección pendiente de documentación: docs/003 (línea de Decisión L1 sobre el consentimiento en modo Testing) debe revisarse con la ayuda de Google (https://support.google.com/cloud/answer/15549945), que indica que las solicitudes limitadas a `openid`, `userinfo.email` y `userinfo.profile` quedan exentas de la lista de usuarios de prueba y de la caducidad de 7 días; aun así se recomienda publicar el consentimiento «En producción».
 
 ## 10. Cómo se produjo este plan
@@ -190,3 +192,13 @@ Un ID token con `iat` ≤ 300 s no demuestra una autenticación interactiva reci
 | (e) biometría o PIN del dispositivo antes del selector | prueba de presencia local (no verificable por el servidor) | dependencia nueva (`expo-local-authentication`, detalles **[NO VERIFICADO]**), una pantalla del sistema más |
 
 **Propuesta por capas (no depende solo de `iat`):** capa 0, vigente: sesión + confirmación `ELIMINAR` + `sub` coincidente + `iat` ≤ 300 s + borrado atómico; añadir el limitador de `DELETE /me` por `user.id` (apartado 13) y mantener el texto honesto («verificación de identidad con Google», no «reautenticación»). Capa 1, decisión del usuario: (e) como prueba de presencia, para v1.0 o v1.1. No recomendadas para v1.0: (b), (c) y (d). Si se adopta (e), actualizar primero docs/001 (§7 menciona «reautenticarse con Google»), registrar la dependencia en docs/003 y revisar con `mobile-ux-qa`. Para v1.0, aceptar la capa 0 con la limitación explícita requiere tu decisión. Alternativa futura: si la librería pasara a una API con nonce, añadir (a) encima.
+
+## 16. Pendientes de seguridad, por separado (paso 408)
+
+**A. Protección ante abuso (no implementada; sin autorización de implementación):**
+1. Rate limiting de autenticación (`POST /auth/google`, `POST /auth/refresh`) y de exportaciones (`GET /export`) con el binding de Workers; confirmar antes su disponibilidad en el plan, los valores de partida y el manejo de `429` con `Retry-After` (apartado 13). Hay que ampliar `ApiError` para admitir cabeceras.
+2. Alertas de consumo (solicitudes, CPU, filas de D1 y errores 5xx): no se confirmó ninguna alerta nativa; decidir revisión manual o un monitor programado.
+3. Posible límite temporal de usuarios (`MAX_USERS`) durante las pruebas y el arranque: **no se implementa sin autorización expresa** del usuario, junto con su valor, si es variable o secreto y el mensaje 403 de la app.
+4. Purga de `refresh_tokens` y tope de movimientos por usuario (apartado 4).
+
+**B. `DELETE /me` — limitación de reautenticación interactiva:** un ID token con `iat` ≤ 300 s acredita que quien llama controla en ese momento una sesión de Google de la **misma cuenta**, pero no demuestra una autenticación interactiva reciente (el SDK heredado no admite `nonce` y `auth_time` no es fiable). **Este punto NO se declara aprobado para el lanzamiento público**: sigue pendiente la decisión expresa del usuario de aceptar el riesgo residual o de adoptar la capa adicional (biometría o PIN del dispositivo, que exige una dependencia nueva y no se ha añadido). Mientras tanto se mantiene la verificación actual, el texto honesto («verificación de identidad con Google») y la constancia en docs/003 y docs/011 §15. No se añadió biometría ni ninguna dependencia nueva.
