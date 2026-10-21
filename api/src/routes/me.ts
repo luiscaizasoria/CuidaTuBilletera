@@ -2,7 +2,12 @@ import { Hono } from 'hono';
 import type { JWTVerifyGetKey } from 'jose';
 import { z } from 'zod';
 import { findUserById } from '../db/user-repository';
-import { requireDb, requireGoogleWebClientId, requireJwtSecret } from '../lib/auth-config';
+import {
+  requireAndroidClientIds,
+  requireDb,
+  requireGoogleWebClientId,
+  requireJwtSecret,
+} from '../lib/auth-config';
 import { authMiddleware, type AuthEnv } from '../lib/auth-middleware';
 import { ApiError } from '../lib/errors';
 import { readJsonBody } from '../lib/json-body';
@@ -34,11 +39,13 @@ export function meRoutes(now?: () => Date, googleKeys?: JWTVerifyGetKey) {
     requireDb(c.env);
     requireJwtSecret(c.env);
     requireGoogleWebClientId(c.env);
+    requireAndroidClientIds(c.env);
     await next();
   });
   routes.delete('/me', authMiddleware(now), async (c) => {
     const db = requireDb(c.env);
     const webClientId = requireGoogleWebClientId(c.env);
+    const androidClientIds = requireAndroidClientIds(c.env);
     const user = c.get('user');
 
     const parsed = deleteSchema.safeParse(await readJsonBody(c.req.raw));
@@ -49,10 +56,7 @@ export function meRoutes(now?: () => Date, googleKeys?: JWTVerifyGetKey) {
     try {
       const identity = await verifyGoogleIdToken(
         parsed.data.idToken,
-        {
-          webClientId,
-          androidClientId: c.env.GOOGLE_ANDROID_CLIENT_ID?.trim() || undefined,
-        },
+        { webClientId, androidClientIds },
         googleKeys ?? googleRemoteKeys(),
         requestNow,
         REAUTH_MAX_AGE_SECONDS,

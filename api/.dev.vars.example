@@ -6,6 +6,14 @@
 GOOGLE_WEB_CLIENT_ID=
 # ID de cliente OAuth tipo Android (público). Opcional: activa la política azp.
 GOOGLE_ANDROID_CLIENT_ID=
+# Alternativa EXCLUYENTE de GOOGLE_ANDROID_CLIENT_ID (definir ambas es CONFIG_ERROR): lista de
+# 1 a 4 clientes Android separados por comas, sin espacios internos, duplicados ni comodines,
+# con formato <numero>-<texto-en-minusculas>.apps.googleusercontent.com y distintos del cliente Web.
+# Ejemplo con marcadores: REEMPLAZAR_CLIENTE_ANDROID_1,REEMPLAZAR_CLIENTE_ANDROID_2
+GOOGLE_ANDROID_CLIENT_IDS=
+# ATENCIÓN: `wrangler.jsonc` ya define GOOGLE_ANDROID_CLIENT_ID para DEV. Si rellenas aquí
+# GOOGLE_ANDROID_CLIENT_IDS mientras la variable heredada también está definida (por la configuración
+# o por este archivo), la API responde 500 CONFIG_ERROR. Usa una sola de las dos.
 # Clave de firma del JWT propio: mínimo 32 caracteres aleatorios.
 # Genérala con: node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 JWT_SECRET=

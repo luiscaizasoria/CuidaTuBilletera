@@ -1,7 +1,12 @@
 import { Hono } from 'hono';
 import type { JWTVerifyGetKey } from 'jose';
 import { z } from 'zod';
-import { requireDb, requireGoogleWebClientId, requireJwtSecret } from '../lib/auth-config';
+import {
+  requireAndroidClientIds,
+  requireDb,
+  requireGoogleWebClientId,
+  requireJwtSecret,
+} from '../lib/auth-config';
 import type { AuthEnv } from '../lib/auth-middleware';
 import { ApiError } from '../lib/errors';
 import { readJsonBody } from '../lib/json-body';
@@ -47,6 +52,7 @@ export function authRoutes({ googleKeys, now, idGenerator, randomBytes }: AuthRo
     // Sin configuración válida no se emite ninguna sesión.
     const webClientId = requireGoogleWebClientId(c.env);
     const secret = requireJwtSecret(c.env);
+    const androidClientIds = requireAndroidClientIds(c.env);
     const db = requireDb(c.env);
 
     const parsed = loginSchema.safeParse(await readJsonBody(c.req.raw));
@@ -55,10 +61,7 @@ export function authRoutes({ googleKeys, now, idGenerator, randomBytes }: AuthRo
     const requestNow = requestInstant();
     const identity = await verifyGoogleIdToken(
       parsed.data.idToken,
-      {
-        webClientId,
-        androidClientId: c.env.GOOGLE_ANDROID_CLIENT_ID?.trim() || undefined,
-      },
+      { webClientId, androidClientIds },
       googleKeys ?? googleRemoteKeys(),
       requestNow,
     );

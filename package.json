@@ -17,6 +17,7 @@
     "typecheck": "node scripts/run-workspaces.js typecheck",
     "test": "node scripts/run-workspaces.js test",
     "format": "prettier --check .",
+    "verificar:wrangler": "node scripts/verificar-config-wrangler.js",
     "respaldos:auditar": "node scripts/respaldos-d1.js auditar",
     "test:scripts": "node --test \"scripts/**/*.test.js\""
   },

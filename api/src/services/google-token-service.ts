@@ -15,7 +15,8 @@ export interface GoogleIdentity {
 
 export interface GoogleAudience {
   webClientId: string;
-  androidClientId?: string;
+  // Vacía = política azp desactivada. `aud` siempre es solo webClientId.
+  androidClientIds: readonly string[];
 }
 
 export function invalidTokenError(): ApiError {
@@ -64,8 +65,8 @@ export async function verifyGoogleIdToken(
 
     // OpenID Connect: azp identifica al cliente que pidió el token. Si viene y hay un cliente
     // Android configurado, solo se aceptan los clientes conocidos (Android o Web).
-    if (payload.azp !== undefined && audience.androidClientId) {
-      const known = [audience.androidClientId, audience.webClientId];
+    if (payload.azp !== undefined && audience.androidClientIds.length > 0) {
+      const known = [...audience.androidClientIds, audience.webClientId];
       if (typeof payload.azp !== 'string' || !known.includes(payload.azp)) {
         throw invalidTokenError();
       }

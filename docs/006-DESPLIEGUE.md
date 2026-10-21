@@ -14,12 +14,14 @@ Guía operativa del despliegue continuo (CD) del Worker `controlgastos-api`. Com
 2. El job solo se ejecuta si la referencia es `refs/heads/main`. En otra rama se omite.
 3. El job usa el Environment `production`, que exige la aprobación de un revisor antes de empezar y es donde viven el token y las variables.
 4. Comprueba que el SHA de la ejecución sigue siendo el último commit de `main`. Si `main` avanzó, falla y hay que volver a ejecutar.
-5. Instala dependencias con `npm ci` y ejecuta lint, typecheck de la API, pruebas de la API y el build sin despliegue (`wrangler deploy --dry-run`). Estos pasos no usan credenciales.
-6. Publica con la versión de Wrangler fijada en el lockfile (`npx --no-install wrangler deploy`), con `--message` (SHA y número de ejecución) y `--tag` (SHA corto).
+5. Instala dependencias con `npm ci` y ejecuta lint, typecheck de la API, pruebas de la API y el build sin despliegue (`wrangler deploy --dry-run --env prod`), la verificación estricta de configuración y un dry-run con comprobación del binding de la D1. Estos pasos no usan credenciales.
+6. Publica con la versión de Wrangler fijada en el lockfile (`npx --no-install wrangler deploy --env prod`), con `--message` (SHA y número de ejecución) y `--tag` (SHA corto).
 7. Si `WORKER_URL` está configurada, comprueba `GET /health` y exige exactamente `{"status":"ok"}`.
 8. Escribe un resumen con SHA, ejecución, actor, resultado de la publicación y resultado de la verificación HTTP.
 
 El resumen distingue entre **publicación exitosa** y **verificación HTTP**. Si `WORKER_URL` no existe, la verificación queda como **PENDIENTE** y no se considera aprobada.
+
+> **Nota (desde el paso 407):** el despliegue es `wrangler deploy --env prod`. El nivel superior de `api/wrangler.jsonc` es un centinela (`controlgastos-api-sin-entorno`, sin `main`, D1 ni variables) y `wrangler deploy` sin `--env` falla a propósito. `npm run verificar:wrangler` comprueba los invariantes (en CI, modo normal; en el despliegue, `--estricto`, que falla mientras queden marcadores `REEMPLAZAR_*`). Detalle y fases en docs/011.
 
 ## Seguridad del workflow
 
@@ -72,8 +74,8 @@ En el repositorio: Settings → Environments → New environment → `production
 
 Opción A, desde la línea de comandos con credenciales del propietario:
 
-1. Listar versiones: `npx wrangler deployments list` (dentro de `api/`).
-2. Volver a una versión: `npx wrangler rollback <VERSION_ID> --message "motivo"`.
+1. Listar versiones: `npx wrangler deployments list --env prod` (dentro de `api/`; **sin `--env` apunta al Worker centinela**).
+2. Volver a una versión: `npx wrangler rollback <VERSION_ID> --env prod --message "motivo"`.
 
 Opción B, corregir hacia adelante: el workflow solo publica el SHA vigente de `main`, por lo que no sirve para volver a un commit anterior. La vía es un Pull Request `fix:` o `revert:` hacia `main` y un nuevo despliegue manual.
 
@@ -115,12 +117,14 @@ Decisión y requisitos en docs/003 «Decisión L1»; alcance en docs/001 §3 y d
 | --- | --- | --- | --- | --- | --- | --- |
 | **G0** Integrar Fase 6 | PR #17 | Confirmar `main` y CI; pasar los docs pendientes a una rama `chore/` desde `main`; descartar o ignorar `tsconfig.json` de la raíz | API de GitHub: `main` `a482048`, PR #17 fusionado, CI correcto (**ya cumplido**) | CI verde y árbol limpio | revert del PR de docs | Sí, para commit, push y PR de docs |
 | **G1** Bloqueos de Play | G0 y decisiones (cuenta de Play, norma de eliminación, política, correo) | Aprobar la norma en docs/001 y 003; implementar `DELETE /me` (API), «Eliminar mi cuenta y mis datos» (app, sin pantallas nuevas) con pruebas (aislamiento, cascada completa con anulados y archivados, tokens inválidos tras borrar, doble llamada, error de red, relogin con perfil vacío); política de privacidad y página de eliminación en una URL pública; enlace a la política en la app; ficha: ícono 512, imagen destacada 1024×500, capturas reales sin datos personales, descripciones; cuenta de revisión | Pruebas verdes, `curl -I` 200 sin login a las dos URL, capturas, revisión de `mobile-ux-qa` | Usuario aprueba textos legales y norma | revertir los PR; deshabilitar Pages | Sí |
-| **G2** Cloudflare PROD aprobado | G1 | Decidir estructura (nivel superior como producción recomendado, o `env.prod`); aprobar el cambio de `wrangler.jsonc` (D1 propia, `vars` GOOGLE_*, `observability`); política de `JWT_SECRET` (nuevo, ≥32 caracteres, distinto de DEV, custodia del usuario); token de CI con permisos mínimos | diff de configuración sin valores sensibles | Usuario aprueba cada operación | no aplicar | Sí |
+| **G2** Cloudflare PROD aprobado | G1 | Estructura decidida e implementada localmente en el paso 407: `env.prod` con el nivel superior como centinela (docs/011); aprobar el cambio de `wrangler.jsonc` (D1 propia, `vars` GOOGLE_*, `observability`); política de `JWT_SECRET` (nuevo, ≥32 caracteres, distinto de DEV, custodia del usuario); token de CI con permisos mínimos | diff de configuración sin valores sensibles | Usuario aprueba cada operación | no aplicar | Sí |
 | **G3** Backend PROD | G2 | `d1 create` (nombre propio); anotar bookmark de Time Travel; migraciones 0001 a 0005 (`migrations apply --remote`, con `list` antes y después; en una base vacía la 0005 inserta 0 filas); `secret put JWT_SECRET`; PR de `wrangler.jsonc`; «Deploy API» con aprobación del Environment; smoke tests: `/health`, 401 sin token con `no-store`, 413 y 400, login real con dos identidades `QA-A` y `QA-B` (0 fugas), cuenta nueva con 13 categorías, conciliación, reportes, exportación, `DELETE /me` con una tercera identidad, PDF de 2000 filas con `wrangler tail`, PROD no apunta a la D1 DEV | VersionId, bookmark, `migrations list`, resultados | Todo en verde; sin 5xx; aislamiento sin fugas | `cwrangler rollback <VERSION_ID>`; Time Travel y exportación previa para datos | Sí, por cada paso remoto |
 | **G4** AAB de producción | G3 | Variables de EAS `production` (`EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, visibilidad `plaintext`); PR de `eas.json` (`environment` en `preview` y `production`, perfil `production-apk`) y de `app.json` (`android.blockedPermissions` según el manifiesto real); upload key generada por EAS y respaldada; build `preview` (APK) con variables de producción; después build `production` (AAB; versionCode siguiente al remoto, que hoy es 2) | `eas build:list`; manifiesto de la AAB (`targetSdk` 36, permisos, sin `cleartext`); sin `devlauncher`; conteo del host DEV en el bundle = 0 | QA aprueba el checklist | no publicar el artefacto; build nueva con versionCode mayor | Sí, por cada build |
 | **G5** Sin Metro | G4 | Instalar el APK equivalente y la pista de prueba interna de Play: ícono, nombre, splash, ausencia del launcher, login (sin `DEVELOPER_ERROR`; SHA-1 de la upload key y de la clave de firma de Play en el cliente OAuth Android), sesión tras cerrar la app, flujo completo con conciliación, reportes, exportación, eliminación de cuenta y relogin, modo avión | guion firmado por el usuario | sin crash; login con la firma de Play | detener la pista | Sí |
 | **G6** Play Console | G5 | Seguridad de los datos, IARC, público objetivo (pendiente de decisión; ver bloqueo 4 de la sección de páginas legales), anuncios «No», funciones financieras, categoría Finanzas, acceso de revisión con cuenta de prueba, ficha; primer upload manual; prueba cerrada si la cuenta lo exige (≥12 testers con opt-in, 14 días continuos; recomendable 15 a 20) con seguimiento diario y recogida de fallos (Android Vitals, informe previo al lanzamiento, formulario) | capturas de cada formulario aceptado, contador de testers | sin defectos altos o críticos abiertos | corregir y subir versionCode mayor | Sí |
 | **G7** Producción | G6 | Solicitar acceso a producción; lanzamiento escalonado si se desea; revisar Android Vitals a las 48 h y `wrangler tail` | estado «disponible» en Play, sin picos de crash | umbrales de Vitals | pausar el despliegue; versionCode mayor | Sí |
+
+**Plan ejecutable de producción (paso 406):** arquitectura PROD, variables y secretos, seguridad, costos Free/Paid, runbook F1 a F10 con puertas de autorización, rollback y decisiones D1 a D11 en [docs/011-PLAN-PRODUCCION-CLOUDFLARE.md](011-PLAN-PRODUCCION-CLOUDFLARE.md). Es un plan: nada de lo que describe se ha creado ni ejecutado.
 
 Enlaces legales de la app (G1): las variables públicas opcionales `EXPO_PUBLIC_PRIVACY_POLICY_URL` y `EXPO_PUBLIC_ACCOUNT_DELETION_URL` (solo `https://`) se incrustan al empaquetar el JavaScript; sin una URL válida la app no muestra el enlace correspondiente y no se bloquea.
 
@@ -128,7 +132,7 @@ Enlaces legales de la app (G1): las variables públicas opcionales `EXPO_PUBLIC_
 Decisiones pendientes en docs/003 «Decisión L1». Ruta crítica: verificación de desarrollador, `DELETE /me` y política, 14 días de prueba cerrada si la cuenta es personal y posterior a noviembre de 2023 (por confirmar) y revisión de Google. Estimación orientativa: 5 a 7 semanas con prueba cerrada y 2 a 3 sin ella; reunir los testers es el riesgo más subestimado. El primer upload a Play siempre es manual; después `eas submit` con cuenta de servicio (JSON fuera del repositorio).
 
 ### Copias y rollback
-- Worker: `cwrangler deployments list` y `cwrangler rollback <VERSION_ID> --message "motivo"`, o corregir hacia adelante con PR `fix:` o `revert:`; no revierte datos ni esquema.
+- Worker: `cwrangler deployments list --env prod` y `cwrangler rollback <VERSION_ID> --env prod --message "motivo"`, o corregir hacia adelante con PR `fix:` o `revert:`; no revierte datos ni esquema.
 - D1: exportar antes de cada migración (`d1 export ... --output` fuera del repositorio; contiene datos de usuarios) y registrar el bookmark de Time Travel (7 días en el plan gratuito, 30 en el de pago); migraciones compatibles hacia atrás.
 - Android: el `versionCode` no baja; se corrige publicando uno mayor, o se pausa el despliegue.
 - Credenciales: respaldo cifrado de la upload key y de las contraseñas fuera del repositorio; si se pierde la upload key, Play permite restablecerla.

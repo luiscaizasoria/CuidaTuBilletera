@@ -45,8 +45,30 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck --workspace api
       - run: npm test --workspace api
-      # Build sin despliegue (wrangler deploy --dry-run). No usa credenciales.
+      # Invariantes de api/wrangler.jsonc en modo estricto (docs/011): sin marcadores
+      # REEMPLAZAR_*, ids con formato válido y PROD separado de DEV. Falla mientras queden
+      # marcadores. No usa credenciales.
+      - name: Verificar configuración de wrangler (estricto)
+        run: node scripts/verificar-config-wrangler.js --estricto
+
+      # Build sin despliegue (script `build` de api: wrangler deploy --dry-run --env prod).
+      # No usa credenciales.
       - run: npm run build --workspace api
+
+      - name: Comprobar el entorno prod con dry-run
+        working-directory: api
+        shell: bash
+        run: |
+          npx --no-install wrangler deploy --dry-run --env prod \
+            --outdir "${RUNNER_TEMP}/dry-run-prod" 2>&1 | tee "${RUNNER_TEMP}/dry-run.log"
+          if ! grep -qF 'env.DB (controlgastos-db)' "${RUNNER_TEMP}/dry-run.log"; then
+            echo "::error::El dry-run de --env prod no enlaza env.DB con controlgastos-db."
+            exit 1
+          fi
+          if grep -qF 'controlgastos-db-dev' "${RUNNER_TEMP}/dry-run.log"; then
+            echo "::error::El dry-run de --env prod referencia la base de DEV (controlgastos-db-dev)."
+            exit 1
+          fi
 
       - name: Publicar Worker
         id: deploy
@@ -57,11 +79,11 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           short="${GITHUB_SHA:0:7}"
-          npx --no-install wrangler deploy \
+          npx --no-install wrangler deploy --env prod \
             --message "gh-actions ${GITHUB_SHA} run ${GITHUB_RUN_ID}" \
             --tag "${short}" 2>&1 | tee "${RUNNER_TEMP}/deploy.log"
 
-      - name: Verificar GET /health
+      - name: Verificar GET /health y GET /me
         id: smoke
         if: success() && steps.deploy.outcome == 'success'
         shell: bash
@@ -90,6 +112,22 @@ jobs:
             echo "::error::Respuesta inesperada de /health."
             exit 1
           fi
+          # Distingue el Worker nuevo (con la ruta /me) del anterior del 2026-10-11; NO
+          # distingue PROD de DEV: WORKER_URL debe ser la URL de PROD (se comprueba además
+          # en la fase F6 del plan). Sin token debe responder 401 con Cache-Control: no-store.
+          status="$(curl --silent --show-error --max-time 10 \
+            --retry 5 --retry-delay 3 --retry-all-errors \
+            --output "${RUNNER_TEMP}/me.body" --dump-header "${RUNNER_TEMP}/me.headers" \
+            --write-out '%{http_code}' "${WORKER_URL%/}/me")"
+          echo "GET /me sin token: HTTP ${status}"
+          if [ "${status}" != "401" ]; then
+            echo "::error::GET /me sin token debía responder 401 (respuesta: ${status})."
+            exit 1
+          fi
+          if ! tr -d '\r' < "${RUNNER_TEMP}/me.headers" | grep -iqE '^cache-control:.*no-store'; then
+            echo "::error::GET /me sin token no devolvió Cache-Control: no-store."
+            exit 1
+          fi
           echo "result=passed" >> "${GITHUB_OUTPUT}"
 
       - name: Resumen del despliegue
@@ -114,11 +152,13 @@ jobs:
           {
             echo "## Despliegue de controlgastos-api"
             echo ""
+            echo "- Entorno: prod"
+            echo "- Worker: controlgastos-api"
             echo "- SHA: \`${GITHUB_SHA}\`"
             echo "- Ejecución: ${GITHUB_RUN_ID} (intento ${GITHUB_RUN_ATTEMPT})"
             echo "- Lanzado por: ${GITHUB_ACTOR}"
             echo "- Publicación: ${publication}"
-            echo "- Verificación HTTP de /health: ${http}"
+            echo "- Verificación HTTP de /health y /me: ${http}"
             if [ -n "${version}" ]; then echo "- ${version}"; fi
             if [ "${DEPLOY_OUTCOME}" = "failure" ] || [ "${SMOKE_RESULT}" = "failed" ]; then
               echo ""

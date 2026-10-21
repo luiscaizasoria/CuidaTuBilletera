@@ -14,7 +14,10 @@ function without(claims: JWTPayload, key: string): JWTPayload {
   return copy;
 }
 
-const audience = { webClientId: WEB_CLIENT_ID, androidClientId: ANDROID_CLIENT_ID };
+const audience: GoogleAudience = {
+  webClientId: WEB_CLIENT_ID,
+  androidClientIds: [ANDROID_CLIENT_ID],
+};
 const verify = (token: string, aud: GoogleAudience = audience) =>
   verifyGoogleIdToken(token, aud, fx.keys, NOW);
 const rejected = (token: string, aud: GoogleAudience = audience) =>
@@ -85,7 +88,46 @@ describe('verifyGoogleIdToken', () => {
 
   it('no valida azp si no hay cliente Android configurado', async () => {
     const token = await fx.sign({ ...fx.validClaims(), azp: 'cliente-ajeno' });
-    await verify(token, { webClientId: WEB_CLIENT_ID });
+    await verify(token, { webClientId: WEB_CLIENT_ID, androidClientIds: [] });
+  });
+
+  describe('lista de clientes Android (azp)', () => {
+    const LIST = [
+      '1-a.apps.googleusercontent.com',
+      '2-b.apps.googleusercontent.com',
+      '3-c.apps.googleusercontent.com',
+      '4-d.apps.googleusercontent.com',
+    ];
+    const aud: GoogleAudience = { webClientId: WEB_CLIENT_ID, androidClientIds: LIST };
+
+    it.each(LIST.map((id, i) => [i, id] as const))(
+      'acepta azp en la posición %i de la lista',
+      async (_i, azp) => {
+        await verify(await fx.sign({ ...fx.validClaims(), azp }), aud);
+      },
+    );
+
+    it('acepta azp igual al cliente Web y token sin azp', async () => {
+      await verify(await fx.sign({ ...fx.validClaims(), azp: WEB_CLIENT_ID }), aud);
+      await verify(await fx.sign(without(fx.validClaims(), 'azp')), aud);
+    });
+
+    it('rechaza azp ajeno y azp que no es string', async () => {
+      await rejected(await fx.sign({ ...fx.validClaims(), azp: 'ajeno' }), aud);
+      await rejected(await fx.sign({ ...fx.validClaims(), azp: 123 }), aud);
+      await rejected(await fx.sign({ ...fx.validClaims(), azp: [LIST[0]] }), aud);
+    });
+
+    it('con lista vacía (política desactivada) acepta cualquier azp, como hoy', async () => {
+      const off: GoogleAudience = { webClientId: WEB_CLIENT_ID, androidClientIds: [] };
+      await verify(await fx.sign({ ...fx.validClaims(), azp: 'ajeno' }), off);
+      await verify(await fx.sign({ ...fx.validClaims(), azp: 123 }), off);
+    });
+
+    it('aud sigue siendo solo el cliente Web aunque azp esté en la lista', async () => {
+      await rejected(await fx.sign({ ...fx.validClaims(), aud: LIST[0], azp: LIST[0] }), aud);
+      await rejected(await fx.sign({ ...fx.validClaims(), aud: 'otro', azp: LIST[1] }), aud);
+    });
   });
 
   it('rechaza texto que no es un JWT', async () => {
