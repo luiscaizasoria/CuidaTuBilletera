@@ -122,6 +122,8 @@ Decisión y requisitos en docs/003 «Decisión L1»; alcance en docs/001 §3 y d
 | **G6** Play Console | G5 | Seguridad de los datos, IARC, público objetivo (pendiente de decisión; ver bloqueo 4 de la sección de páginas legales), anuncios «No», funciones financieras, categoría Finanzas, acceso de revisión con cuenta de prueba, ficha; primer upload manual; prueba cerrada si la cuenta lo exige (≥12 testers con opt-in, 14 días continuos; recomendable 15 a 20) con seguimiento diario y recogida de fallos (Android Vitals, informe previo al lanzamiento, formulario) | capturas de cada formulario aceptado, contador de testers | sin defectos altos o críticos abiertos | corregir y subir versionCode mayor | Sí |
 | **G7** Producción | G6 | Solicitar acceso a producción; lanzamiento escalonado si se desea; revisar Android Vitals a las 48 h y `wrangler tail` | estado «disponible» en Play, sin picos de crash | umbrales de Vitals | pausar el despliegue; versionCode mayor | Sí |
 
+**Plan ejecutable de producción (paso 406):** arquitectura PROD, variables y secretos, seguridad, costos Free/Paid, runbook F1 a F10 con puertas de autorización, rollback y decisiones D1 a D11 en [docs/011-PLAN-PRODUCCION-CLOUDFLARE.md](011-PLAN-PRODUCCION-CLOUDFLARE.md). Es un plan: nada de lo que describe se ha creado ni ejecutado.
+
 Enlaces legales de la app (G1): las variables públicas opcionales `EXPO_PUBLIC_PRIVACY_POLICY_URL` y `EXPO_PUBLIC_ACCOUNT_DELETION_URL` (solo `https://`) se incrustan al empaquetar el JavaScript; sin una URL válida la app no muestra el enlace correspondiente y no se bloquea.
 
 ### Decisiones y calendario
