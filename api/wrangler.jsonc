@@ -34,7 +34,7 @@
           "binding": "DB",
           "database_name": "controlgastos-db",
           // MARCADOR no definitivo: se sustituye en el PR de la fase F4 (docs/011).
-          "database_id": "REEMPLAZAR_CON_ID_D1_PROD",
+          "database_id": "28389243-8297-4854-872a-ec3dc12c02d6",
           "migrations_dir": "migrations",
         },
       ],
