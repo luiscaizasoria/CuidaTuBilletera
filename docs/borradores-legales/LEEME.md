@@ -10,4 +10,4 @@ Advertencias:
 - El texto final lo revisa y aprueba el usuario (y, si lo considera, un asesor legal). Debe coincidir con el formulario «Seguridad de los datos» de Play Console y con el comportamiento real de la app.
 - Fuente de los datos descritos: esquema D1 (`api/migrations/0001` a `0005`), `api/src` y `app/src`, verificados en el paso 387.
 
-Plan de publicación con GitHub Pages (carpeta de origen aparte, lista de información faltante y rollback): docs/006-DESPLIEGUE.md, sección «Plan de publicación de las páginas legales». Sigue sin publicarse nada.
+**Paso 399:** las versiones publicables (sin marcadores, con el correo de soporte confirmado) están en `site/`; estos borradores quedan como histórico y no se publican. Plan de publicación, URL propuestas y pendientes: docs/006-DESPLIEGUE.md, sección «Páginas legales para Google Play». Sigue sin publicarse nada.

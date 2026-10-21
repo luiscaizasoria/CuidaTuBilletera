@@ -138,33 +138,57 @@ Decisiones pendientes en docs/003 «Decisión L1». Ruta crítica: verificación
 
 Solo `controlgastos-api-dev` (`--env dev`, con el binding a `controlgastos-db-dev` comprobado en el dry-run), VersionId `afbd3ac3-538a-47d1-b2bd-fd2b4bb47373`. Antes: 0 migraciones pendientes y respaldo con `d1 export` fuera del repositorio (SHA-256 `b9fd288994479348a86c1505da1d80452a78eeda80baaaf216882d288a8734f4`, 112 sentencias INSERT) más el bookmark de Time Travel anotado. Después: `GET /health` 200 y `DELETE /me` sin credenciales 401. Todos los comandos pasaron por el envoltorio `cwrangler`. No se desplegó producción ni se aplicaron migraciones. Las consultas de solo lectura posteriores a la prueba Android, el E2E corroborado (dos eliminaciones y perfil recreado persistente) y lo no reconstruible están en docs/003.
 
-## Plan de publicación de las páginas legales con GitHub Pages (paso 398; PLAN, nada publicado)
+## Páginas legales para Google Play: archivos preparados y plan de publicación (paso 399; PREPARADO, NADA PUBLICADO)
 
-**Estado:** GitHub Pages inactivo y ninguna página legal publicada. Los textos siguen siendo borradores con marcadores `[PENDIENTE: …]` en `docs/borradores-legales/`. Este plan no crea carpetas públicas ni activa nada.
+**Estado:** los archivos públicos están preparados en `site/` (índice, `privacidad/` y `eliminar-cuenta/`, con `estilos.css` y `.nojekyll`), sin marcadores pendientes y con el correo de soporte confirmado por el usuario. **GitHub Pages sigue inactivo y ninguna URL está disponible**; no se afirma que exista hasta comprobarla con `curl -I` desde fuera. Los borradores internos con marcadores siguen en `docs/borradores-legales/` y quedan como histórico. Ver también docs/003 «Decisión G1».
 
-**Advertencia:** el repositorio es público, así que todo lo que está en él ya es legible, incluidos `docs/` y los borradores. Pages no añade ese riesgo, pero publica un sitio con URL estable: por eso su origen debe ser una carpeta aparte con solo el contenido definitivo, nunca `docs/` ni la raíz.
+**Interno (no se publica):** `docs/`, `docs/borradores-legales/`, respaldos y exportaciones de D1, ids de recursos de Cloudflare, `.env`, `.dev.vars`, archivos de DEV e informes de QA. **Público definitivo:** solo el contenido de `site/`. El repositorio es público (todo lo que contiene ya es legible), por eso el origen de Pages debe ser `site/`, nunca la raíz ni `docs/`.
 
-| Interno (no se publica) | Público definitivo (único contenido del sitio) |
-| --- | --- |
-| `docs/001` a `docs/010`, `docs/borradores-legales/`, respaldos y exportaciones de D1, identificadores de recursos de Cloudflare, archivos `.env`, `.dev.vars` y de DEV, informes de QA | Política de privacidad y página de eliminación de cuenta, ya aprobadas y sin marcadores, en HTML o Markdown mínimo, más una página de índice si hace falta |
+**Rutas y URL finales propuestas** (repositorio `luiscaizasoria/CuidaTuBilletera`, página de proyecto con el prefijo del repositorio; **no verificadas hasta publicar**):
 
-**Procedimiento propuesto (por ejecutar solo con autorización expresa):**
-1. Rellenar y aprobar los textos (ver la lista de información necesaria abajo) y copiar solo las versiones definitivas a una carpeta de origen nueva (por ejemplo `site/`), en un PR aparte.
-2. Comprobar que `site/` no contiene `[PENDIENTE`, correos de desarrollo, ids, rutas internas ni referencias a DEV (`grep` y revisión de `mobile-ux-qa`/`architect`).
-3. Activar Pages (Settings → Pages) con ese origen o con un workflow que suba solo `site/` como artefacto; no usar `docs/`.
-4. Verificar con `curl -I` que las dos URL responden 200 sin iniciar sesión y que no se ve nada de lo interno.
-5. Configurar `EXPO_PUBLIC_PRIVACY_POLICY_URL` y `EXPO_PUBLIC_ACCOUNT_DELETION_URL` (EAS, variables públicas) y registrar las URL en Play Console (política de privacidad y URL de eliminación de datos).
-6. Rollback: deshabilitar Pages y revertir el PR; las URL dejan de responder.
+| Documento | Archivo | URL propuesta |
+| --- | --- | --- |
+| Índice | `site/index.html` | `https://luiscaizasoria.github.io/CuidaTuBilletera/` |
+| Política de privacidad | `site/privacidad/index.html` | `https://luiscaizasoria.github.io/CuidaTuBilletera/privacidad/` |
+| Eliminar cuenta y datos | `site/eliminar-cuenta/index.html` | `https://luiscaizasoria.github.io/CuidaTuBilletera/eliminar-cuenta/` |
 
-**Información que debe aportar el responsable (no se inventa):** nombre o razón social del responsable tal como figura en Play Console; jurisdicción; correo de soporte real y que lo atenderá de forma manual; plazo de respuesta a solicitudes y su compromiso; edad mínima; plan real de Cloudflare en producción (7 o 30 días de copias de Time Travel) y región de la base de datos; si habrá registros del servidor y su retención; datos que deba conservar por obligación legal (hoy ninguno identificado); aprobación final del texto, con revisión legal si la desea; y coincidencia con el formulario «Seguridad de los datos» y con el manifiesto de la AAB.
+Los enlaces entre páginas y la hoja de estilos son **relativos** (`../privacidad/`, `../estilos.css`), así que funcionan con el prefijo `/CuidaTuBilletera/` y sin él.
+
+**Configuración propuesta de GitHub Pages.** «Deploy from a branch» solo permite la raíz o `/docs`, por lo que **no sirve para `site/`**. Se propone la fuente «GitHub Actions» con un workflow que suba únicamente `site/` (esbozo para aprobar; no existe en `.github/workflows/` y requiere su propio PR y la revisión de `devops-engineer`; al implementarlo, fijar las acciones por SHA y dar permisos mínimos):
+
+```yaml
+on: { workflow_dispatch: {} }
+permissions: { contents: read, pages: write, id-token: write }
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: ${{ steps.d.outputs.page_url }} }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+      - id: d
+        uses: actions/deploy-pages@v4
+```
+
+**Pasos de publicación (solo con autorización expresa; nada ejecutado):** (1) aprobar los textos y los datos de la lista siguiente; (2) PR con `site/` y, aparte, con el workflow; (3) en Settings → Pages elegir «GitHub Actions» y lanzar el workflow; (4) `curl -I` 200 de las tres URL sin sesión y revisión visual en móvil; (5) configurar las URL en EAS y en Play Console (abajo); (6) rollback: deshabilitar Pages (Settings → Pages) y revertir el PR; las URL dejan de responder.
+
+**Integración futura (no hecha; sin URL ficticias en builds de distribución).**
+- *App:* ya lee `EXPO_PUBLIC_PRIVACY_POLICY_URL` y `EXPO_PUBLIC_ACCOUNT_DELETION_URL` (`app/src/lib/config.ts`); sin una URL https válida no muestra el enlace. Tras comprobar las URL públicas, crear ambas variables en EAS (visibilidad pública) para los entornos de distribución (`production` y, si se usa, `preview`) con las URL finales; no definirlas en builds de distribución antes de que respondan 200, ni usar URL de prueba.
+- *Play Console:* política de privacidad = URL de `privacidad/`; en «Seguridad de los datos» la URL para solicitar la eliminación de datos = URL de `eliminar-cuenta/`; correo de contacto de la ficha = `luis.caiza.soria@gmail.com`. El formulario «Seguridad de los datos» debe coincidir con el comportamiento real (correo, nombre e identificador de usuario, información financiera introducida por el usuario, datos cifrados en tránsito, eliminación disponible) y con el manifiesto de la AAB final (permisos), que **aún no se ha verificado**.
+
+**Información y decisiones aún pendientes del responsable (no se inventan; no bloquean el borrador de `site/` pero sí la publicación):** (a) aprobar el plazo máximo de 30 días para responder y completar solicitudes por correo, tal como está escrito en `site/`; (b) aprobar la edad mínima de 18 años y el público objetivo en Play Console; (c) nombre del desarrollador exacto en Play Console (la página lo remite a la ficha en vez de repetirlo); (d) confirmar el plan real de Cloudflare en producción (7 o 30 días de copias: el texto dice «hasta 30 días como máximo», que es cierto en ambos planes) y que no se activarán registros del servidor con datos personales; (e) aprobación del texto, con revisión legal si se desea (alcance de la Ley Orgánica de Protección de Datos Personales del Ecuador y la autoridad ante la que reclamar); (f) región de D1 de producción (la política no la afirma); (g) confirmar con el manifiesto de la AAB que no se piden permisos de ubicación, contactos, cámara ni micrófono; (h) aprobar la regla operativa de que **todo export de D1 hecho con `d1 export` (antes de migraciones o para respaldos) se elimina como máximo a los 30 días**, que respalda lo que dice la política («hasta 30 días como máximo»), y que los correos de solicitudes de eliminación se conservan solo el tiempo necesario para atenderlas y acreditarlo; (i) verificar que `EXPO_PUBLIC_API_URL` de producción sea https (la app solo valida https en las URL legales); (j) la revisión legal del texto sobre la Ley Orgánica de Protección de Datos Personales y la autoridad de reclamo.
+
+**Soporte de solicitudes por correo (`luis.caiza.soria@gmail.com`).** El buzón no recibe solicitudes automáticas ni envía códigos. El procedimiento operativo interno de más abajo es la guía para atenderlas. La página pública describe la verificación; nunca se piden contraseñas, códigos de Google, tokens ni documentos de identidad.
 
 ## Eliminación de datos por solicitud (procedimiento operativo, BORRADOR del paso 387; nada ejecutado)
 
-Aplica a quien ya no tiene la app. Dentro de la app la eliminación se hace con `DELETE /me` (docs/003 «Decisión G1»). **No existe endpoint público que borre con solo un correo.** Plazo comprometido y correo de soporte: decisión del usuario (recomendado: acuse en 7 días y ejecución en 30 días como máximo).
+Aplica a quien ya no tiene la app. Dentro de la app la eliminación se hace con `DELETE /me` (docs/003 «Decisión G1»). **No existe endpoint público que borre con solo un correo.** Correo de soporte confirmado: `luis.caiza.soria@gmail.com`. Plazo publicado: respuesta y ejecución en 30 días como máximo (pendiente de la aprobación del usuario; recomendado además un acuse en 7 días).
 1. Recepción: abrir un número de caso `ELIM-AAAAMMDD-n`; no copiar el contenido de la solicitud al repositorio.
 2. Validar el correo antes de usarlo en SQL (`^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$`; `d1 execute --command` no admite parámetros).
 3. Buscar: `SELECT id, created_at FROM users WHERE lower(email) = lower('<EMAIL>')` con `cwrangler d1 execute <DB> --remote --json --command ...` (con `--env dev` solo en DEV). 0 filas: responder que no hay datos y no borrar; más de 1: no borrar y pedir aclaración (el correo no es único; `google_sub` sí).
-4. Verificar identidad: responder desde el buzón de soporte pidiendo que contesten **desde la misma dirección de su cuenta de Google** con la frase exacta «CONFIRMO ELIMINAR» y un código de un solo uso generado para el caso; comprobar SPF y DKIM en `Authentication-Results`; sin confirmación en 14 días, cerrar el caso.
+4. Verificar identidad: comprobar que el mensaje llega desde la misma dirección de la cuenta registrada y revisar SPF y DKIM en `Authentication-Results`; responder a esa dirección pidiendo la frase exacta «CONFIRMO ELIMINAR» (no se envían códigos automáticos) y, si hace falta, un dato que solo el titular sabría sobre lo que creó (por ejemplo, el nombre de una de sus cuentas; nunca montos ni contraseñas); no pedir contraseñas, códigos de Google, tokens ni documentos de identidad; sin confirmación en 14 días, cerrar el caso.
 5. Contar antes (cuentas, categorías, movimientos, `refresh_tokens` del `id` obtenido; el `id` sale del SELECT y se valida con la expresión regular de UUID en minúsculas `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` (igual que el CHECK de las migraciones), nunca del correo del solicitante; el archivo SQL no es transaccional: una caída a mitad deja un perfil parcialmente borrado hasta relanzarlo y la verificación posterior —conteos en 0— lo detecta; las tablas hijas se borran antes que `users` porque `categories` tiene RESTRICT desde `transactions`) y anotar el bookmark de `d1 time-travel info`.
 6. Ejecutar un único archivo SQL revisado dos veces, fuera del repositorio, con cinco sentencias por `id`: `DELETE FROM transactions WHERE account_id IN (SELECT id FROM accounts WHERE user_id = '<ID>')`, `DELETE FROM categories WHERE account_id IN (...)`, `DELETE FROM accounts WHERE user_id = '<ID>'`, `DELETE FROM refresh_tokens WHERE user_id = '<ID>'`, `DELETE FROM users WHERE id = '<ID>'`, con `cwrangler d1 execute <DB> --remote --file <archivo>`. **La atomicidad de `--file` está por verificar** en DEV con un archivo que falle a mitad; mientras tanto el archivo es relanzable (de hijas a padres, idempotente).
 7. Verificar (conteos en 0 y los demás usuarios sin cambios), registrar sin datos personales (caso, fechas, cifras por tabla, bookmark, resultado de la verificación de identidad; nunca correo, nombre ni identificadores), responder al solicitante y destruir el archivo SQL y el código. Los exports manuales de D1 que contengan datos de usuarios se eliminan al terminar.
