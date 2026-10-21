@@ -16,7 +16,9 @@
     "lint": "eslint . --no-error-on-unmatched-pattern",
     "typecheck": "node scripts/run-workspaces.js typecheck",
     "test": "node scripts/run-workspaces.js test",
-    "format": "prettier --check ."
+    "format": "prettier --check .",
+    "respaldos:auditar": "node scripts/respaldos-d1.js auditar",
+    "test:scripts": "node --test \"scripts/**/*.test.js\""
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
