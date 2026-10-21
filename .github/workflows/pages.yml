@@ -9,11 +9,13 @@ name: Pages legales
 # aparte, tras autorizacion expresa del propietario. No se usa pull_request ni schedule.
 #
 # ESTADO: PREPARADO, NO ACTIVADO. Antes de ejecutarlo el propietario debe configurar en
-# GitHub (Settings; este archivo no lo hace):
-#   - Settings > Pages > Source: «GitHub Actions».
-#   - Settings > Environments > github-pages: revisores requeridos (aprobacion manual) y
-#     restriccion de ramas a main (Deployment branches: Selected branches = main).
-#   - Proteccion de la rama main y CODEOWNERS para site/ y .github/workflows/.
+# GitHub (Settings; este archivo no lo hace), EN ESTE ORDEN:
+#   1. Settings > Environments > github-pages: revisores requeridos (aprobacion manual) y
+#      restriccion de ramas a main (Deployment branches: Selected branches = main).
+#   2. Solo despues, Settings > Pages > Source: «GitHub Actions».
+#   3. Verificar ambos en la interfaz antes de lanzar el workflow. SI EL ENTORNO NO TIENE
+#      REVISORES, EL DESPLIEGUE NO PEDIRA APROBACION: el unico freno seria el `if` de main.
+#   4. Proteccion de la rama main y CODEOWNERS para site/ y .github/workflows/.
 # No usa secretos ni Cloudflare y no ejecuta migraciones.
 on:
   workflow_dispatch:
@@ -96,6 +98,13 @@ jobs:
             fi
           done < <(find "${SITE_DIR}" -mindepth 1 -print0)
 
+          # 2b. Ningun archivo puede contener bytes NUL (grep -I los omitiria como binarios).
+          while IFS= read -r -d '' f; do
+            if [ "$(LC_ALL=C tr -d '\000' < "$f" | wc -c)" -ne "$(wc -c < "$f")" ]; then
+              falla "Archivo con bytes NUL no permitido: ${f}"
+            fi
+          done < <(find "${SITE_DIR}" -type f -print0)
+
           # 3. Textos prohibidos en el contenido publicable.
           buscar() { # buscar <descripcion> <opciones de grep> <patron>
             local desc="$1" opts="$2" patron="$3" salida
@@ -115,6 +124,7 @@ jobs:
           buscar "UUID" "-I -i" '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
           buscar "identificador (cadena hexadecimal larga)" "-I -i" '[0-9a-f]{32,}'
           buscar "identificador de recurso" "-I -i" 'database_id|account_id|user_id|google_sub'
+          buscar "contenido activo o remoto" "-I -i" '<script|<iframe|<object|<embed|<form|@import|url\([[:space:]]*["'"'"']?https?:'
 
           # 4. Ningun correo distinto del de soporte.
           while IFS= read -r correo; do
