@@ -145,15 +145,15 @@ describe('CLI: casos positivos', () => {
     });
     assert.equal(cli(['--config', escribir(cfg), '--estricto']).code, 0);
   });
-  test('api/wrangler.jsonc real pasa en modo normal e informa marcadores', () => {
+  test('api/wrangler.jsonc real pasa en modo normal sin marcadores pendientes', () => {
     const r = cli([]);
     assert.equal(r.code, 0, r.out);
-    assert.match(r.out, /marcadores pendientes: [1-9]/);
+    assert.match(r.out, /marcadores pendientes: 0/);
   });
-  test('api/wrangler.jsonc real falla en estricto por los marcadores', () => {
+  test('api/wrangler.jsonc real pasa en estricto sin marcadores', () => {
     const r = cli(['--estricto']);
-    assert.equal(r.code, 1, r.out);
-    assert.match(r.out, /REEMPLAZAR_/);
+    assert.equal(r.code, 0, r.out);
+    assert.doesNotMatch(r.out, /REEMPLAZAR_/);
   });
 });
 

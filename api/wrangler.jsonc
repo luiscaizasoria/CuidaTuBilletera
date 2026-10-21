@@ -33,15 +33,15 @@
         {
           "binding": "DB",
           "database_name": "controlgastos-db",
-          // MARCADOR no definitivo: se sustituye en el PR de la fase F4 (docs/011).
           "database_id": "28389243-8297-4854-872a-ec3dc12c02d6",
           "migrations_dir": "migrations",
         },
       ],
       "vars": {
-        // MARCADORES no definitivos: se sustituyen en el PR de la fase F4 (docs/011).
-        "GOOGLE_WEB_CLIENT_ID": "REEMPLAZAR_CON_CLIENTE_WEB_PROD",
-        "GOOGLE_ANDROID_CLIENT_IDS": "REEMPLAZAR_CON_CLIENTES_ANDROID_PROD",
+        // IDs públicos de los clientes OAuth de PROD (proyecto cuidatubilletera-prod); no son secretos.
+        // El cliente Android corresponde a la firma de Google Play (docs/011).
+        "GOOGLE_WEB_CLIENT_ID": "354384947762-52bi1smmu5kdl19pmg1me8o5iajir3vh.apps.googleusercontent.com",
+        "GOOGLE_ANDROID_CLIENT_IDS": "354384947762-1kas80dtritnta9h9e9dc5vll9k9qo2u.apps.googleusercontent.com",
       },
     },
   },

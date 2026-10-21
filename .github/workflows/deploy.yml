@@ -83,6 +83,44 @@ jobs:
             --message "gh-actions ${GITHUB_SHA} run ${GITHUB_RUN_ID}" \
             --tag "${short}" 2>&1 | tee "${RUNNER_TEMP}/deploy.log"
 
+          # Control posterior: la versión REALMENTE activa (100 %) debe incluir el binding
+          # JWT_SECRET. Solo se leen metadatos (nombre y tipo del binding); nunca el valor.
+          # Distingue «no se pudo verificar» de «binding ausente». Corre en este paso porque
+          # es el único que tiene el token de Cloudflare.
+          npx --no-install wrangler deployments status --env prod --json \
+            > "${RUNNER_TEMP}/deployment.json" 2> "${RUNNER_TEMP}/deployment.err" || {
+            echo "::error::No se pudo verificar JWT_SECRET: falló la lectura del despliegue activo."
+            cat "${RUNNER_TEMP}/deployment.err"
+            exit 1
+          }
+          active="$(node -e '
+            const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const v = (d.versions || []).find((x) => x.percentage === 100);
+            process.stdout.write(v ? String(v.version_id || v.id || "") : "");
+          ' "${RUNNER_TEMP}/deployment.json")" || active=""
+          if ! printf '%s' "${active}" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+            echo "::error::No se pudo verificar JWT_SECRET: no se identificó una versión activa al 100 %."
+            exit 1
+          fi
+          echo "Versión activa: ${active}"
+          npx --no-install wrangler versions view "${active}" --env prod --json \
+            > "${RUNNER_TEMP}/version.json" 2> "${RUNNER_TEMP}/version.err" || {
+            echo "::error::No se pudo verificar JWT_SECRET: falló la lectura de la versión ${active}."
+            cat "${RUNNER_TEMP}/version.err"
+            exit 1
+          }
+          if node -e '
+            const v = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const b = (v.resources && v.resources.bindings) || [];
+            const ok = b.some((x) => x.name === "JWT_SECRET" && x.type === "secret_text");
+            process.exit(ok ? 0 : 3);
+          ' "${RUNNER_TEMP}/version.json"; then
+            echo "JWT_SECRET (secret_text) presente en la versión activa ${active}."
+          else
+            echo "::error::La versión activa ${active} NO incluye el binding JWT_SECRET. Crea el secreto con «wrangler versions secret put» y vuelve a desplegar (docs/011)."
+            exit 1
+          fi
+
       - name: Verificar GET /health y GET /me
         id: smoke
         if: success() && steps.deploy.outcome == 'success'
@@ -126,6 +164,20 @@ jobs:
           fi
           if ! tr -d '\r' < "${RUNNER_TEMP}/me.headers" | grep -iqE '^cache-control:.*no-store'; then
             echo "::error::GET /me sin token no devolvió Cache-Control: no-store."
+            exit 1
+          fi
+          # Sonda de configuración sin token de Google: la API valida cliente Web, JWT_SECRET
+          # (≥ 32 caracteres), lista Android y existencia del binding DB antes de leer el
+          # cuerpo. Un cuerpo vacío da 400 con esa configuración y 500 CONFIG_ERROR si falta
+          # algo. No prueba el contenido de la lista Android (lo cubre el verificador estricto)
+          # ni que D1 sea la base correcta. No llama a Google ni escribe en D1.
+          status="$(curl --silent --show-error --max-time 10 \
+            --retry 5 --retry-delay 3 --retry-all-errors \
+            --request POST --header 'Content-Type: application/json' --data '{}' \
+            --output /dev/null --write-out '%{http_code}' "${WORKER_URL%/}/auth/google")"
+          echo "POST /auth/google con cuerpo vacío: HTTP ${status}"
+          if [ "${status}" != "400" ]; then
+            echo "::error::POST /auth/google con cuerpo vacío debía responder 400 (respuesta: ${status}); 500 indica configuración incompleta."
             exit 1
           fi
           echo "result=passed" >> "${GITHUB_OUTPUT}"
