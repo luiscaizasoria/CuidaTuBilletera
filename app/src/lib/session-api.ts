@@ -130,6 +130,10 @@ function parseTokens(data: Record<string, unknown>): RefreshedSession {
   return { accessToken, expiresIn, refreshToken, refreshExpiresAt };
 }
 
+// Texto exacto que exige la API (docs/001 §6, DELETE /me). La app lo envía siempre, sea cual sea lo
+// que el usuario escribió en el campo de confirmación.
+export const DELETE_CONFIRMATION = 'ELIMINAR';
+
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
 export function createSessionApi(baseUrl: string, fetchImpl: typeof fetch = fetch): SessionApi {
@@ -173,6 +177,18 @@ export function createSessionApi(baseUrl: string, fetchImpl: typeof fetch = fetc
       });
       if (!response.ok) throw await failure(response);
       return parseUser((await readBody(response)).user);
+    },
+
+    async deleteAccount(accessToken, idToken): Promise<void> {
+      const response = await request(fetchImpl, `${baseUrl}/me`, {
+        method: 'DELETE',
+        headers: { ...JSON_HEADERS, Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ confirm: DELETE_CONFIRMATION, idToken }),
+      });
+      if (response.status === 204) return;
+      // status y code se conservan: el servicio decide por ellos (REAUTH_REQUIRED vs INVALID_TOKEN).
+      if (!response.ok) throw await failure(response);
+      throw new AuthError('unknown'); // 2xx distinto de 204: no confirma la eliminación
     },
   };
 }

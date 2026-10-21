@@ -204,6 +204,26 @@ Estado (paso 381): **implementada en local** en la rama `feat/categoria-concilia
 
 ---
 
+# Alcance de la versión 1.0 (paso 386, 2026-10-19; decisión del usuario)
+
+El usuario decidió **cerrar la versión actual y publicarla oficialmente en Google Play**, sin Expo Tunnel ni Metro.
+
+- **Incluido en v1.0:** funcionalidades originales (autenticación con Google, cuentas, categorías, movimientos, historial, calendario, reportes y exportación CSV y PDF), el rediseño UX/UI R0 a R6 (PR #16) y la conciliación manual mediante la categoría «Conciliación» (Fase 6, PR #17), ambos fusionados en `main` (`a482048`, CI verde), más lo imprescindible para publicar en Google Play (docs/001 §3, docs/003 «Decisión L1»).
+- **Excluido (futuro, no iniciado, sin cambios):** F-A (versiones y actualización avanzada: EAS Update, `runtimeVersion`, canales, avisos de versión) y F-B (multidioma). El versionado mínimo para publicar (`version` 1.0.0 y `versionCode` creciente por EAS) no es F-A.
+- **Sin funcionalidades nuevas de producto:** solo correcciones imprescindibles de publicación, privacidad, seguridad o estabilidad, que no se implementan sin autorización.
+- **Estado (verificado el 2026-10-19 en solo lectura):** no hay D1 productiva ni `JWT_SECRET` de producción; el Worker `controlgastos-api` de las ejecuciones manuales del 2026-10-11 es código antiguo sin D1 ni variables; EAS solo tiene Development Builds (versionCode 1 y 2) y sus variables `production` y `preview` están vacías; el Environment `production` de GitHub existe; GitHub Pages inactivo; cuenta de Play Console no verificada. **Nada productivo se ha creado ni modificado.**
+- **API 36:** el proyecto genera `targetSdk` 36 por defecto (React Native 0.86.3 y el plugin raíz de Expo); sin actualización de SDK; a confirmar en el manifiesto de la AAB final.
+- **Puertas de lanzamiento (detalle y criterios en docs/006):**
+  - [x] **G0** Fase 6 integrada en `main` con CI verde (PR #17).
+  - [ ] **G1** Bloqueos de Google Play. **Eliminación de cuenta y datos: implementada y probada en local (paso 388; `DELETE /me` con confirmación y verificación de identidad con Google (ID token emitido hace ≤ 300 s; no equivale a reautenticar con contraseña o biometría: docs/003, revisión del paso 389, pendiente de tu aceptación); app: sección «PRIVACIDAD Y DATOS»; sin validación en dispositivo ni en D1 remota; docs/003 «Decisión G1»).** Pendiente: política de privacidad pública y su enlace (variables `EXPO_PUBLIC_PRIVACY_POLICY_URL` y `EXPO_PUBLIC_ACCOUNT_DELETION_URL`, borradores no publicables en `docs/borradores-legales/`), URL web de eliminación y procedimiento por correo verificado, recursos de ficha, cuenta de revisión, validación en una cuenta QA desechable de DEV (con autorización). Rama local: `chore/g1-privacidad-eliminacion`. **Estado tras el paso 395 (2026-10-20):** corrección del teclado de la confirmación (`04e9e39`); Worker DEV desplegado con `DELETE /me` (VersionId `afbd3ac3-538a-47d1-b2bd-fd2b4bb47373`) y respaldo previo verificado; el usuario confirma en Android que una eliminación se completó contra DEV y que la app volvió a Login; las consultas D1 de solo lectura del 2026-10-21 corroboran el E2E: el usuario eliminó dos veces el perfil de pruebas de la cuenta del criadero y se registró de nuevo; el perfil recreado existe (creado 2026-10-21 01:36:56 UTC), tiene 0 cuentas, 0 categorías y 0 movimientos, la otra cuenta conserva 3 cuentas, 41 categorías y 6 movimientos, 0 huérfanos y 0 violaciones de claves foráneas (docs/003; lo no reconstruible históricamente también está allí); la causa de los rechazos previos de la verificación con Google no se determinó; diagnósticos temporales retirados. G1 sigue **abierto**. Aprobado: eliminación de cuenta, cierre de sesión, registro nuevo, perfil vacío persistente, integridad y aislamiento. Pendiente: publicar la política de privacidad y la página externa de eliminación (preparadas en `site/` con el responsable y el correo de soporte confirmados y plazos aprobados de 15 días, 12 meses de correos y 7 días de respaldos manuales; workflow de Pages preparado en `.github/workflows/pages.yml` (revisión de seguridad hecha) y no activado; respaldo temporal del paso 390 eliminado con autorización, directorio privado y hoja de control creados (sin recordatorios aún); GitHub Pages NO publicado; bloqueos restantes y plan en docs/006; Play Console en configuración de la primera app según el usuario), ELIM-j/k/l y TalkBack en dispositivo, y la decisión de seguridad sobre la verificación de identidad para producción.
+  - [ ] **G2** Cloudflare producción aprobada: estructura, D1 propia, secretos y política.
+  - [ ] **G3** Backend productivo desplegado y comprobado (smoke, aislamiento, `DELETE /me`).
+  - [ ] **G4** AAB de producción (variables de EAS, perfiles, permisos, upload key).
+  - [ ] **G5** Instalación y pruebas sin Metro (APK equivalente y pista interna; login con la firma de Play).
+  - [ ] **G6** Play Console completa y prueba cerrada si la cuenta lo exige (12 testers, 14 días).
+  - [ ] **G7** Publicación en producción y verificación de disponibilidad.
+- **Riesgo documentado S1 (Dependabot):** `braces`, `node-forge`, `sprintf-js` sin parche y `uuid` bloqueado por `xcode`; excepción con revisión el 2026-11-19 (docs/003 Decisión S1).
+
 # Fase 7 - Preparación entrega
 
 [ ] Pruebas completas.

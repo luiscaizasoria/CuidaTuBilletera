@@ -13,6 +13,14 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useLoader } from '../hooks/use-loader';
+import {
+  DELETE_ACCOUNT_HINT,
+  DELETE_ACCOUNT_LABEL,
+  PRIVACY_POLICY_HINT,
+  PRIVACY_POLICY_LABEL,
+} from '../lib/account-deletion-messages';
+import { readLegalLinks } from '../lib/config';
+import { OPEN_LINK_ERROR, openExternal } from '../lib/external-link';
 import { accountColorsFor, accountIconFor, avatarInitial } from '../lib/accounts';
 import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, depth, radii, shadows, tabularNums, typography } from '../theme/tokens';
@@ -99,9 +107,25 @@ export function Sheet({
   );
 }
 
-// Hoja de perfil (docs/007 14.17 a): nombre, correo y «Cerrar sesión» sin confirmación.
-export function ProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+// Hoja de perfil (docs/007 14.17 a): nombre, correo y «Cerrar sesión» sin confirmación. Con
+// `onDeleteAccount` ofrece «Eliminar mi cuenta y mis datos»: el llamador cierra ESTA hoja y abre la de
+// eliminación después (nunca dos `Modal` a la vez). Con URL válida ofrece la política de privacidad.
+export function ProfileSheet({
+  visible,
+  onClose,
+  onDeleteAccount,
+  onNotify,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onDeleteAccount?: () => void;
+  onNotify?: (message: string) => void;
+}) {
   const { user } = useAuth();
+  const { privacyPolicyUrl } = readLegalLinks();
+  async function openPolicy() {
+    if (privacyPolicyUrl && !(await openExternal(privacyPolicyUrl))) onNotify?.(OPEN_LINK_ERROR);
+  }
   return (
     <Sheet
       visible={visible}
@@ -120,6 +144,35 @@ export function ProfileSheet({ visible, onClose }: { visible: boolean; onClose: 
       </View>
       <View style={styles.actions}>
         <SignOutControl variant="button" />
+        {privacyPolicyUrl || onDeleteAccount ? (
+          // Separado de «Cerrar sesión» para evitar toques accidentales en la acción destructiva.
+          <View style={styles.privacyGroup}>
+            {privacyPolicyUrl ? (
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={PRIVACY_POLICY_LABEL}
+                accessibilityHint={PRIVACY_POLICY_HINT}
+                onPress={() => void openPolicy()}
+                style={styles.textAction}
+              >
+                <Text style={styles.textActionLabel}>{PRIVACY_POLICY_LABEL}</Text>
+              </Pressable>
+            ) : null}
+            {onDeleteAccount ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={DELETE_ACCOUNT_LABEL}
+                accessibilityHint={DELETE_ACCOUNT_HINT}
+                onPress={onDeleteAccount}
+                style={styles.textAction}
+              >
+                <Text style={[styles.textActionLabel, styles.dangerLabel]}>
+                  {DELETE_ACCOUNT_LABEL}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         <Button label="Cerrar" variant="ghost" onPress={onClose} />
       </View>
     </Sheet>
@@ -280,6 +333,15 @@ const styles = StyleSheet.create({
   error: { ...typography.body, color: colors.expenseText, textAlign: 'center' },
   negative: { color: colors.expenseText },
   actions: { gap: 8 },
+  privacyGroup: { marginTop: 8 },
+  textAction: {
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  textActionLabel: { fontSize: 15, fontWeight: '700', color: colors.text },
+  dangerLabel: { color: colors.expenseText },
   profileHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   profileAvatar: {
     width: 48,

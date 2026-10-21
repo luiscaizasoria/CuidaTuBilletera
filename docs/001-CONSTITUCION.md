@@ -12,7 +12,7 @@ Aplicación móvil Android para llevar gastos e ingresos diarios, organizados en
 2. **Gratis por diseño.** Toda la infraestructura debe caber en las capas gratuitas de Cloudflare y GitHub. La única herramienta de pago es Claude Code.
 3. **El servidor manda.** La app es solo online. Toda regla de negocio se valida en la API; la app valida solo para dar mejor experiencia.
 4. **Dinero correcto.** Montos como enteros en centavos. Nunca decimales de punto flotante.
-5. **Historial auditable.** Los movimientos anulados se conservan para auditoría y dejan de afectar los saldos. Las cuentas se archivan y las categorías vinculadas a movimientos no se eliminan físicamente. La conciliación manual se registra como un movimiento normal de ingreso o gasto con la categoría «Conciliación».
+5. **Historial auditable.** Los movimientos anulados se conservan para auditoría y dejan de afectar los saldos. Las cuentas se archivan y las categorías vinculadas a movimientos no se eliminan físicamente. La conciliación manual se registra como un movimiento normal de ingreso o gasto con la categoría «Conciliación». **Excepción aprobada (paso 388):** la eliminación total del perfil, a solicitud explícita de su titular, borra de forma definitiva todos sus datos (ver §5, «Eliminación del perfil»).
 6. **Probado y automatizado.** Nada se fusiona sin pruebas ni sin pasar la integración continua.
 7. **Reproducible.** Cualquier persona o máquina levanta el proyecto con un comando dentro de un contenedor.
 8. **Preparado para crecer sin construir de más.** Se dejan puntos de extensión baratos (por ejemplo la columna `plan`), no funciones.
@@ -42,10 +42,13 @@ Aplicación móvil Android para llevar gastos e ingresos diarios, organizados en
 - Sin movimientos recurrentes.
 - Sin planes de pago. La app es completamente gratuita.
 
+### Publicación en Google Play (alcance de la v1.0 por decisión del usuario, paso 386)
+
+La v1.0 se publica oficialmente en Google Play Store (AAB firmado con Play App Signing, pruebas cerradas cuando la cuenta lo exija y producción). Esto incluye los requisitos de Google Play: política de privacidad con URL pública, declaraciones de Play Console (seguridad de los datos, clasificación de contenido, público objetivo, anuncios, funciones financieras, acceso de revisión) y **eliminación de la cuenta del usuario y de sus datos** dentro de la app y mediante una URL web. La norma de eliminación (frente a «los datos históricos se archivan, no se eliminan») y el contrato del endpoint se definen en docs/003 «Decisión L1» y, una vez aprobados por el usuario, se incorporan aquí antes de implementar. Sin anuncios, sin planes de pago y sin funcionalidades nuevas de producto.
+
 ### Fuera de alcance de la v1 (fases posteriores)
 
 - Anuncios de Google (AdMob).
-- Publicación en Google Play Store y todo lo que implica (política de privacidad pública, eliminación de cuenta desde la app y por web, pruebas cerradas, formularios de Play Console, firma de Play App Signing).
 - Planes de pago y Google Play Billing.
 - iOS.
 - Modo offline, multimoneda, cuentas compartidas, recurrencias, transferencias.
@@ -132,6 +135,14 @@ Todos los identificadores son UUID en texto. Todas las tablas tienen `created_at
 - Un movimiento puede anularse lógicamente sin límite de antigüedad. La anulación establece `deleted_at`, lo excluye del saldo, reportes e historial habitual, y conserva el registro para auditoría.
 - Un movimiento anulado sigue contando como referencia a su categoría para impedir la eliminación física de esta.
 
+### Eliminación del perfil (excepción aprobada, paso 388)
+
+- El titular puede solicitar la eliminación total de su perfil y de todos sus datos con `DELETE /me`. Es la única vía de borrado físico de cuentas y movimientos y es **irreversible**. No debe confundirse con cerrar sesión (reversible), archivar una cuenta, anular un movimiento o eliminar una categoría sin movimientos (operativos; conservan el historial).
+- Exige: JWT válido; confirmación textual `ELIMINAR`; y una **verificación de identidad con Google**: la app solicita un ID token nuevo y la API comprueba firma, emisor, audiencia y `exp`, correo verificado, que el token fue emitido hace como máximo 300 segundos y que su `sub` coincide con el del usuario del JWT. Esto acredita que quien llama controla en ese momento una sesión de Google de la **misma cuenta**; **no equivale a una reautenticación del usuario con contraseña o biometría**, que el SDK de Google Sign-In heredado no permite exigir (`iat` es el instante de emisión del token, no de la autenticación del usuario; no hay `nonce` ni `auth_time` en ese flujo). El usuario sale exclusivamente de la identidad autenticada; ningún identificador de usuario viaja en el cuerpo.
+- Elimina en una única transacción atómica los movimientos (incluidos los anulados), las categorías y las cuentas (incluidas las archivadas) del usuario, sus sesiones y refresh tokens y el propio usuario. No se conserva copia en la API. Toda tabla nueva con datos de usuario debe incorporarse a este borrado (una prueba de contrato lo exige).
+- Tras eliminar, un nuevo inicio de sesión con la misma cuenta de Google crea un usuario nuevo y vacío. Las copias de recuperación de D1 (Time Travel: 7 días en el plan gratuito y 30 en el de pago) pueden conservar los datos hasta que expiren; la política de privacidad debe decirlo. Los archivos exportados por el usuario quedan fuera del control de la API.
+- Quien ya no tiene la app lo solicita por la vía web/correo de docs/006 (procedimiento operativo con verificación de titularidad); **no existe ningún endpoint público que elimine datos con solo un correo**.
+
 ### Categorías por defecto
 
 Al crear una cuenta, la API copia un conjunto inicial editable.
@@ -159,7 +170,7 @@ Después cada cuenta administra sus categorías de forma independiente.
 
 ## 6. API
 
-Todas las rutas, salvo las de autenticación, exigen JWT. Las respuestas de `/auth/*` y `/me` (incluidos los errores) llevan `Cache-Control: no-store`. Fechas en UTC ISO-8601; `refreshExpiresAt` es el vencimiento del refresh token emitido. Todos los listados paginan. Los errores usan un formato único: `{ "error": { "code": "...", "message": "..." } }`. Los cuerpos JSON de `/auth/*` se limitan a 16 KiB: si se exceden, 413 `PAYLOAD_TOO_LARGE`.
+Todas las rutas, salvo las de autenticación, exigen JWT. Las respuestas de `/auth/*` y `/me` (incluidos los errores y `DELETE /me`) llevan `Cache-Control: no-store`. Fechas en UTC ISO-8601; `refreshExpiresAt` es el vencimiento del refresh token emitido. Todos los listados paginan. Los errores usan un formato único: `{ "error": { "code": "...", "message": "..." } }`. Los cuerpos JSON de `/auth/*` se limitan a 16 KiB: si se exceden, 413 `PAYLOAD_TOO_LARGE`.
 
 | Ruta | Función |
 | --- | --- |
@@ -167,6 +178,7 @@ Todas las rutas, salvo las de autenticación, exigen JWT. Las respuestas de `/au
 | `POST /auth/refresh` | Rota el refresh token y devuelve `{ accessToken, tokenType, expiresIn, refreshToken, refreshExpiresAt }`. Errores: 400 `INVALID_REQUEST` (formato), 401 `INVALID_REFRESH_TOKEN` (inexistente, vencido, revocado o reutilizado), 409 `REFRESH_CONFLICT` (reutilización dentro de la gracia de 30 s, sin credenciales ni revocación) |
 | `POST /auth/logout` | Revoca la familia del refresh token recibido. Responde 204 sin cuerpo siempre que la solicitud sea válida (idempotente), exista o no el token; 400 `INVALID_REQUEST` si el cuerpo es inválido |
 | `GET /me` | Datos del usuario y configuración. Lee al usuario de D1 por el `sub` (UUID) del JWT v2; usuario inexistente o JWT inválido (incluido v1): 401 `INVALID_TOKEN` |
+| `DELETE /me` | Elimina al usuario autenticado y todos sus datos (§5, «Eliminación del perfil»). Cuerpo `{ "confirm": "ELIMINAR", "idToken": <ID token de Google reciente> }` (16 KiB máx.; campos extra o `confirm` distinto: 400 `INVALID_REQUEST`; exceso: 413 `PAYLOAD_TOO_LARGE`). Responde 204 sin cuerpo y con `Cache-Control: no-store`. 401 `UNAUTHORIZED` o `INVALID_TOKEN` si no hay sesión válida o el usuario ya no existe; 401 `REAUTH_REQUIRED` si el ID token no es válido, es antiguo (más de 5 minutos) o pertenece a otra cuenta de Google (nunca borra ni revela si el `sub` coincide). Sin 409. Idempotente: una segunda llamada recibe 401. El ID token solo se verifica; no se guarda ni se registra |
 | `GET /accounts`, `POST /accounts`, `PATCH /accounts/:id` | Gestión de cuentas (incluye archivar) |
 | `GET /accounts/:id/balance` | Saldo calculado |
 | `GET /accounts/:id/categories`, `POST /accounts/:id/categories`, `PATCH /categories/:id`, `DELETE /categories/:id` | Gestión de categorías por cuenta; eliminación solo si no tienen movimientos asociados |
@@ -217,7 +229,7 @@ Estructura aprobada en el rediseño UX/UI (Decisión R0 de docs/003). El detalle
 
 ### Archivado en lugar de eliminación
 
-- La app no ofrece eliminar cuentas, solo archivarlas (docs/001 §5). Archivar exige una confirmación que muestra el nombre de la cuenta.
+- La app no ofrece eliminar cuentas financieras, solo archivarlas (docs/001 §5). Archivar exige una confirmación que muestra el nombre de la cuenta. La eliminación del **perfil completo** es otra acción (Más → Privacidad y datos → «Eliminar mi cuenta y mis datos»): exige escribir ELIMINAR y reautenticarse con Google, y es irreversible (§5).
 - Una cuenta archivada se consulta en Mis cuentas > Archivadas, puede desarchivarse, conserva su historial y no admite movimientos nuevos (cómo se presenta en el Detalle, p. ej. «Nuevo movimiento» deshabilitado con su explicación, está pendiente: docs/007 14.12).
 - Sin movimientos, cada categoría puede eliminarse; con movimientos solo puede archivarse (docs/001 §5).
 

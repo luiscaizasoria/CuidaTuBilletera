@@ -37,6 +37,9 @@ export type GoogleIdTokenResult =
 export interface GoogleProvider {
   signIn(): Promise<GoogleIdTokenResult>;
   signInSilently(): Promise<GoogleIdTokenResult>;
+  // Verificación de identidad con Google para acciones destructivas: cierra la sesión de Google del
+  // dispositivo y abre SIEMPRE el selector de cuentas (nunca la renovación silenciosa).
+  reauthenticate(): Promise<GoogleIdTokenResult>;
   signOut(): Promise<void>;
 }
 
@@ -94,4 +97,7 @@ export interface SessionApi {
   // Resuelve solo con 204; cualquier otro resultado rechaza.
   logout(refreshToken: string): Promise<void>;
   getMe(accessToken: string): Promise<AuthUser>;
+  // DELETE /me con el literal de confirmación y un ID token reciente de Google. Resuelve solo con
+  // 204; los fallos conservan status y code. El ID token nunca se registra ni se propaga.
+  deleteAccount(accessToken: string, idToken: string): Promise<void>;
 }

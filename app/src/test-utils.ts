@@ -182,6 +182,7 @@ export function fakeGoogle(
   return {
     signIn: jest.fn(async () => ok),
     signInSilently: jest.fn(async () => ok),
+    reauthenticate: jest.fn(async () => ok),
     signOut: jest.fn(async () => undefined),
     ...overrides,
   };
@@ -217,6 +218,7 @@ export function fakeApi(overrides: Partial<Record<keyof SessionApi, jest.Mock>> 
     refresh: jest.fn(async () => refreshed()),
     logout: jest.fn(async () => undefined),
     getMe: jest.fn(async () => USER),
+    deleteAccount: jest.fn(async () => undefined),
     ...overrides,
   };
 }

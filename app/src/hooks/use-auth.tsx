@@ -37,7 +37,7 @@ export function AuthProvider({ service, children }: { service: AuthService; chil
 }
 
 export function useAuth(): AuthState &
-  Pick<AuthService, 'signIn' | 'signOut' | 'restore' | 'authorizedCall'> {
+  Pick<AuthService, 'signIn' | 'signOut' | 'deleteAccount' | 'restore' | 'authorizedCall'> {
   const service = useContext(AuthContext);
   if (!service) throw new Error('useAuth debe usarse dentro de AuthProvider.');
   const state = useSyncExternalStore(service.subscribe, service.getState, service.getState);
@@ -45,6 +45,7 @@ export function useAuth(): AuthState &
     ...state,
     signIn: service.signIn,
     signOut: service.signOut,
+    deleteAccount: service.deleteAccount,
     restore: service.restore,
     authorizedCall: service.authorizedCall,
   };

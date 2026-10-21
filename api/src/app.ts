@@ -39,7 +39,7 @@ export function createApp(deps: AppDeps = {}) {
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
   app.route('/', authRoutes(deps));
-  app.route('/', meRoutes(deps.now));
+  app.route('/', meRoutes(deps.now, deps.googleKeys));
   const resourceDeps: Partial<ResourceDeps> = {
     now: deps.now,
     idGenerator: deps.idGenerator,

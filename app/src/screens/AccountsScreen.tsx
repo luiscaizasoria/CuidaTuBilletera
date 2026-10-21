@@ -10,12 +10,16 @@ import { formatCents } from '../lib/money';
 import type { Account, ResourcesApi } from '../lib/resources-api';
 import { colors, headerPigSize, radii, shadows, tabularNums, typography } from '../theme/tokens';
 import { AccountCard, balanceText } from './account-ui';
+import DeleteAccountSheet from './delete-account-sheet';
 import SessionBanner from './SessionBanner';
 import { SignOutControl } from './session-ui';
 import { ProfileSheet } from './sheets';
 import { Button, EmptyState, GuideCard, PIG_ART } from './ui';
 
 const hidden = { importantForAccessibility: 'no', accessibilityElementsHidden: true } as const;
+
+// Espera tras cerrar la hoja de perfil antes de abrir la de eliminación (animación de salida).
+const PROFILE_CLOSE_DELAY_MS = 250;
 
 export const ACCOUNTS_ERROR =
   'No pudimos cargar tus cuentas. Revisa tu conexión e inténtalo de nuevo.';
@@ -39,6 +43,23 @@ export default function AccountsScreen({
 }) {
   const { status, user } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  // «Eliminar mi cuenta y mis datos» desde la hoja de perfil: primero se cierra ésta y, ya cerrada y
+  // pasada su animación, se abre la de eliminación (nunca dos `Modal` a la vez).
+  const [deletePending, setDeletePending] = useState(false);
+  useEffect(() => {
+    // Perfil reabierto antes del retardo: la solicitud pendiente se descarta.
+    if (deletePending && profileOpen) {
+      setDeletePending(false);
+      return;
+    }
+    if (!deletePending || profileOpen) return;
+    const timer = setTimeout(() => {
+      setDeletePending(false);
+      setDeleteOpen(true);
+    }, PROFILE_CLOSE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [deletePending, profileOpen]);
   const unavailable = status === 'unavailable';
   const name = firstName(user?.name);
   const { width, fontScale } = useWindowDimensions();
@@ -102,7 +123,20 @@ export default function AccountsScreen({
         />
       )}
 
-      <ProfileSheet visible={profileOpen} onClose={() => setProfileOpen(false)} />
+      <ProfileSheet
+        visible={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        onDeleteAccount={() => {
+          setDeletePending(true);
+          setProfileOpen(false);
+        }}
+        onNotify={onNotify}
+      />
+      <DeleteAccountSheet
+        visible={deleteOpen && !profileOpen}
+        onClose={() => setDeleteOpen(false)}
+        onNotify={onNotify}
+      />
     </View>
   );
 }

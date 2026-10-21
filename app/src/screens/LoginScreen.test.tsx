@@ -1,13 +1,19 @@
 // Login R5.1 (criterios R51-01 a R51-06, docs/007 §5.13 H). El flujo de Google no cambia: se
 // verifica la presentación, el botón con el logotipo oculto a TalkBack y los estados.
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Linking, StyleSheet, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { AUTH_ERROR_MESSAGES, LOGOUT_NOTICE_MESSAGES } from '../lib/auth-messages';
 import { mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
 import { brandGoogle, colors, sizes } from '../theme/tokens';
 import LoginScreen, { LOGIN_MESSAGE, LOGIN_PRIVACY } from './LoginScreen';
 
 relaxTimeoutsForColdCache();
+
+const mockLinks = {
+  privacyPolicyUrl: null as string | null,
+  accountDeletionUrl: null as string | null,
+};
+jest.mock('../lib/config', () => ({ readLegalLinks: () => mockLinks }));
 
 const mockAuth: Record<string, unknown> = {};
 jest.mock('../hooks/use-auth', () => ({ useAuth: () => mockAuth }));
@@ -16,6 +22,8 @@ const signIn = jest.fn();
 beforeEach(() => {
   mockWindow(360, 1);
   signIn.mockReset();
+  mockLinks.privacyPolicyUrl = null;
+  mockLinks.accountDeletionUrl = null;
   for (const key of Object.keys(mockAuth)) delete mockAuth[key];
   Object.assign(mockAuth, {
     busy: false,
@@ -191,5 +199,64 @@ describe('LoginScreen: avisos y errores (R51-05)', () => {
     expect(tree.indexOf('Continuar con Google')).toBeLessThan(
       tree.indexOf('No vemos tu contraseña'),
     );
+  });
+});
+
+describe('LoginScreen: eliminación de cuenta y política (G1; ELIM-g, m, r)', () => {
+  const DELETED =
+    'Tu cuenta y tus datos se eliminaron. Si vuelves a ingresar con Google, empezarás con una cuenta nueva y vacía.';
+
+  it('account-deleted: aviso de éxito propio (✓ en colores de ingreso, role alert)', async () => {
+    mockAuth.signedOutReason = 'account-deleted';
+    await render(<LoginScreen />);
+    const message = screen.getByText(DELETED);
+    expect(message.props.accessibilityRole).toBe('alert');
+    expect(flat(message).color).toBe(colors.incomeText);
+    expect(screen.getByText('✓', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.queryByText('⚠', { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByText(/cerrar la app/i)).toBeNull();
+    const banner = message.parent!;
+    expect(flat(banner).backgroundColor).toBe(colors.incomeSoft);
+  });
+
+  it('con además un aviso de almacenamiento muestra ambos', async () => {
+    mockAuth.signedOutReason = 'account-deleted';
+    mockAuth.notice = 'logout-storage-error';
+    await render(<LoginScreen />);
+    expect(screen.getByText(DELETED)).toBeTruthy();
+    expect(screen.getByText(LOGOUT_NOTICE_MESSAGES['logout-storage-error'])).toBeTruthy();
+  });
+
+  it('el aviso de éxito no aparece con otros motivos de cierre', async () => {
+    mockAuth.signedOutReason = 'signed-out';
+    await render(<LoginScreen />);
+    expect(screen.queryByText(DELETED)).toBeNull();
+    expect(screen.queryByText('✓', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('sin URL válida no hay enlace de política ni «próximamente»', async () => {
+    await render(<LoginScreen />);
+    expect(screen.queryByText('Política de privacidad')).toBeNull();
+    expect(screen.queryByText(/próximamente/i)).toBeNull();
+  });
+
+  it('con URL: enlace de al menos 48 dp bajo la nota de privacidad que abre el navegador', async () => {
+    mockLinks.privacyPolicyUrl = 'https://ejemplo.test/privacidad';
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    await render(<LoginScreen />);
+    const link = screen.getByRole('link', { name: 'Política de privacidad' });
+    expect(flat(link).minHeight).toBeGreaterThanOrEqual(48);
+    await fireEvent.press(link);
+    expect(openURL).toHaveBeenCalledWith('https://ejemplo.test/privacidad');
+    expect(screen.queryByText('No pudimos abrir el enlace.')).toBeNull();
+  });
+
+  it('si el navegador no abre, muestra una línea breve y la pantalla sigue operativa', async () => {
+    mockLinks.privacyPolicyUrl = 'https://ejemplo.test/privacidad';
+    jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('sin navegador'));
+    await render(<LoginScreen />);
+    await fireEvent.press(screen.getByRole('link', { name: 'Política de privacidad' }));
+    expect(await screen.findByText('No pudimos abrir el enlace.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Continuar con Google' })).toBeTruthy();
   });
 });

@@ -1,0 +1,222 @@
+name: Pages legales
+
+# Publica UNICAMENTE el contenido de site/ (politica de privacidad y eliminacion de
+# cuenta para Google Play) con las acciones oficiales de GitHub Pages.
+# Ver docs/006-DESPLIEGUE.md (seccion de paginas legales).
+#
+# Disparador: solo workflow_dispatch (primera publicacion controlada). La publicacion
+# automatica en push a main con filtro `paths: [site/**]` solo se habilitara en un PR
+# aparte, tras autorizacion expresa del propietario. No se usa pull_request ni schedule.
+#
+# ESTADO: PREPARADO, NO ACTIVADO. Antes de ejecutarlo el propietario debe configurar en
+# GitHub (Settings; este archivo no lo hace), EN ESTE ORDEN:
+#   1. Settings > Environments > github-pages: revisores requeridos (aprobacion manual) y
+#      restriccion de ramas a main (Deployment branches: Selected branches = main).
+#   2. Solo despues, Settings > Pages > Source: «GitHub Actions».
+#   3. Verificar ambos en la interfaz antes de lanzar el workflow. SI EL ENTORNO NO TIENE
+#      REVISORES, EL DESPLIEGUE NO PEDIRA APROBACION: el unico freno seria el `if` de main.
+#   4. Proteccion de la rama main y CODEOWNERS para site/ y .github/workflows/.
+# No usa secretos ni Cloudflare y no ejecuta migraciones.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    name: verificar
+    # Solo se publica desde main. En otra rama el job se omite.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Comprobar que el SHA es el vigente de main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          current="$(gh api "repos/${REPO}/commits/refs/heads/main" --jq .sha)"
+          echo "SHA a publicar: ${GITHUB_SHA}"
+          echo "SHA vigente de main: ${current}"
+          if [ "${GITHUB_SHA}" != "${current}" ]; then
+            echo "::error::main avanzó después de iniciar la ejecución. Vuelve a ejecutar el workflow."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verificar el contenido de site/
+        shell: bash
+        env:
+          SITE_DIR: site
+          CORREO_PERMITIDO: luis.caiza.soria@gmail.com
+        run: |
+          set -uo pipefail
+          errores=0
+          falla() {
+            echo "::error::$1"
+            errores=$((errores + 1))
+          }
+
+          if [ ! -d "${SITE_DIR}" ]; then
+            echo "::error::No existe el directorio ${SITE_DIR}/."
+            exit 1
+          fi
+
+          # 1. Archivos obligatorios.
+          for f in index.html privacidad/index.html eliminar-cuenta/index.html .nojekyll; do
+            [ -f "${SITE_DIR}/${f}" ] || falla "Falta ${SITE_DIR}/${f}."
+          done
+
+          # 2. Solo se permiten archivos .html, .css y .nojekyll, y los dos
+          #    directorios esperados. Cualquier otro elemento (enlaces simbolicos
+          #    incluidos) hace fallar la verificacion.
+          while IFS= read -r -d '' item; do
+            rel="${item#"${SITE_DIR}"/}"
+            if [ -L "${item}" ]; then
+              falla "Enlace simbólico no permitido: ${rel}"
+            elif [ -d "${item}" ]; then
+              case "${rel}" in
+                privacidad | eliminar-cuenta) ;;
+                *) falla "Directorio inesperado: ${rel}" ;;
+              esac
+            elif [ -f "${item}" ]; then
+              case "${rel}" in
+                *.html | *.css | .nojekyll | */.nojekyll) ;;
+                *) falla "Archivo no permitido (solo .html, .css y .nojekyll): ${rel}" ;;
+              esac
+            else
+              falla "Elemento no permitido: ${rel}"
+            fi
+          done < <(find "${SITE_DIR}" -mindepth 1 -print0)
+
+          # 2b. Ningun archivo puede contener bytes NUL (grep -I los omitiria como binarios).
+          while IFS= read -r -d '' f; do
+            if [ "$(LC_ALL=C tr -d '\000' < "$f" | wc -c)" -ne "$(wc -c < "$f")" ]; then
+              falla "Archivo con bytes NUL no permitido: ${f}"
+            fi
+          done < <(find "${SITE_DIR}" -type f -print0)
+
+          # 3. Textos prohibidos en el contenido publicable.
+          buscar() { # buscar <descripcion> <opciones de grep> <patron>
+            local desc="$1" opts="$2" patron="$3" salida
+            salida="$(grep -rnE ${opts} -e "${patron}" "${SITE_DIR}" 2>/dev/null | cut -c1-160)"
+            if [ -n "${salida}" ]; then
+              falla "Texto prohibido (${desc}):"
+              echo "${salida}"
+            fi
+          }
+          buscar "PENDIENTE" "-I" 'PENDIENTE'
+          buscar "TODO (marcador)" "-I" '(^|[^A-Za-z])TODO([^A-Za-z]|$)'
+          buscar "SQL" "-I -i" 'INSERT INTO|DELETE FROM'
+          buscar "workers.dev" "-I -i" 'workers\.dev'
+          buscar "localhost" "-I -i" 'localhost'
+          buscar "http:// (usa https://)" "-I -i" 'http://'
+          buscar "ruta absoluta en enlaces internos" "-I -i" '(href|src|action)[[:space:]]*=[[:space:]]*["'"'"']/'
+          buscar "UUID" "-I -i" '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+          buscar "identificador (cadena hexadecimal larga)" "-I -i" '[0-9a-f]{32,}'
+          buscar "identificador de recurso" "-I -i" 'database_id|account_id|user_id|google_sub'
+          buscar "contenido activo o remoto" "-I -i" '<script|<iframe|<object|<embed|<form|@import|url\([[:space:]]*["'"'"']?https?:'
+
+          # 4. Ningun correo distinto del de soporte.
+          while IFS= read -r correo; do
+            if [ "${correo,,}" != "${CORREO_PERMITIDO}" ]; then
+              falla "Correo no permitido: ${correo}"
+            fi
+          done < <(grep -rhoiE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' "${SITE_DIR}" 2>/dev/null | sort -u)
+
+          # 5. Cada pagina: lang="es" y un solo <h1>.
+          while IFS= read -r -d '' pagina; do
+            grep -qE '<html[^>]*[[:space:]]lang="es"' "${pagina}" \
+              || falla "${pagina}: falta lang=\"es\" en <html>."
+            h1="$(grep -oiE '<h1([[:space:]>])' "${pagina}" | wc -l)"
+            [ "${h1}" -eq 1 ] || falla "${pagina}: debe tener exactamente un <h1> (tiene ${h1})."
+          done < <(find "${SITE_DIR}" -type f -name '*.html' -print0)
+
+          if [ "${errores}" -gt 0 ]; then
+            echo "::error::La verificación de ${SITE_DIR}/ falló con ${errores} problema(s). No se publica nada."
+            exit 1
+          fi
+          echo "Verificación de ${SITE_DIR}/ correcta."
+
+      # Solo se sube site/ (nunca la raiz ni docs/).
+      - name: Subir artefacto de Pages
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  desplegar:
+    name: desplegar
+    needs: verificar
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # El entorno github-pages debe tener revisores requeridos y restriccion de ramas
+    # a main, configurados por el propietario en Settings > Environments.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Comprobar que el SHA sigue siendo el vigente de main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          current="$(gh api "repos/${REPO}/commits/refs/heads/main" --jq .sha)"
+          echo "SHA a publicar: ${GITHUB_SHA}"
+          echo "SHA vigente de main: ${current}"
+          if [ "${GITHUB_SHA}" != "${current}" ]; then
+            echo "::error::main avanzó después de iniciar la ejecución. Vuelve a ejecutar el workflow."
+            exit 1
+          fi
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Publicar en Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      - name: Verificar las URL publicadas (HTTP 200)
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -uo pipefail
+          case "${PAGE_URL}" in
+            https://*) ;;
+            *)
+              echo "::error::page_url no es una URL https:// válida: '${PAGE_URL}'"
+              exit 1
+              ;;
+          esac
+          base="${PAGE_URL%/}/"
+          fallos=0
+          for url in "${base}" "${base}privacidad/" "${base}eliminar-cuenta/"; do
+            codigo=""
+            for intento in 1 2 3 4 5 6; do
+              codigo="$(curl -fsSI --max-time 15 -o /dev/null -w '%{http_code}' "${url}" 2>/dev/null)" || codigo="${codigo:-error}"
+              [ "${codigo}" = "200" ] && break
+              echo "Intento ${intento}/6: ${url} devolvió ${codigo}; reintentando en 10 s."
+              sleep 10
+            done
+            if [ "${codigo}" = "200" ]; then
+              echo "OK 200: ${url}"
+            else
+              echo "::error::${url} no devolvió 200 (último resultado: ${codigo})."
+              fallos=$((fallos + 1))
+            fi
+          done
+          [ "${fallos}" -eq 0 ] || exit 1

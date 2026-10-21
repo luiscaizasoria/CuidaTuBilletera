@@ -4,6 +4,8 @@ import { ApiError } from '../lib/errors';
 export const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 export const GOOGLE_ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
 const CLOCK_TOLERANCE_SECONDS = 5;
+// Un iat en el futuro se tolera solo hasta este margen cuando se exige frescura (maxAgeSeconds).
+const MAX_IAT_FUTURE_SECONDS = 60;
 
 export interface GoogleIdentity {
   sub: string;
@@ -34,6 +36,9 @@ export async function verifyGoogleIdToken(
   audience: GoogleAudience,
   keys: JWTVerifyGetKey,
   currentDate?: Date,
+  // Opcional: exige un token recién emitido (iat entre now - maxAgeSeconds y now + 60 s). El login
+  // no lo usa; las operaciones sensibles (DELETE /me) piden una verificación de identidad con Google (token reciente; no equivale a reautenticar con contraseña o biometría).
+  maxAgeSeconds?: number,
 ): Promise<GoogleIdentity> {
   try {
     const { payload } = await jwtVerify(idToken, keys, {
@@ -46,6 +51,14 @@ export async function verifyGoogleIdToken(
     });
 
     if (typeof payload.sub !== 'string' || payload.sub === '') throw invalidTokenError();
+    if (maxAgeSeconds !== undefined) {
+      const nowSeconds = Math.floor((currentDate ?? new Date()).getTime() / 1000);
+      const iat = payload.iat;
+      if (typeof iat !== 'number' || !Number.isFinite(iat)) throw invalidTokenError();
+      if (iat < nowSeconds - maxAgeSeconds || iat > nowSeconds + MAX_IAT_FUTURE_SECONDS) {
+        throw invalidTokenError();
+      }
+    }
     if (payload.email_verified !== true) throw invalidTokenError();
     if (typeof payload.email !== 'string' || payload.email === '') throw invalidTokenError();
 

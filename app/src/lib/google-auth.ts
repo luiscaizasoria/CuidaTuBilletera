@@ -58,6 +58,23 @@ export function createGoogleProvider(webClientId: string): GoogleProvider {
       }
     },
 
+    async reauthenticate(): Promise<GoogleIdTokenResult> {
+      try {
+        // Best-effort: fuerza el selector de cuentas en lugar de reutilizar la cuenta anterior.
+        try {
+          await GoogleSignin.signOut();
+        } catch {
+          // un fallo aquí no impide pedir la cuenta
+        }
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        const response = await GoogleSignin.signIn();
+        if (!isSuccessResponse(response)) return { status: 'cancelled' };
+        return { status: 'success', idToken: idTokenOf(response.data) };
+      } catch (error) {
+        throw toAuthError(error);
+      }
+    },
+
     async signOut(): Promise<void> {
       await GoogleSignin.signOut();
     },

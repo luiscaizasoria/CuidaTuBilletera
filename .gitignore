@@ -19,3 +19,7 @@ credentials*.json
 .claude/settings.local.json
 CLAUDE.local.md
 .claude/worktrees/
+
+# Respaldos manuales de D1 (docs/006): nunca deben subirse al repositorio publico.
+respaldo-*
+**/registro.tsv
