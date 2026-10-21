@@ -1,0 +1,9 @@
+{
+  // Configuración mínima SOLO para vitest (api/vitest.config.ts). El wrangler.jsonc real no
+  // tiene `main` en el nivel superior (freno contra despliegue accidental), pero las pruebas
+  // necesitan el punto de entrada. Sin ids, variables ni bindings reales: la D1 de prueba se
+  // declara en vitest.config.ts. No se usa para desplegar.
+  "name": "controlgastos-api-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+}

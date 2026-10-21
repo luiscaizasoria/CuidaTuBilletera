@@ -1,25 +1,48 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "controlgastos-api",
-  "main": "src/index.ts",
+  // Freno contra despliegue accidental: el nivel superior es un CENTINELA sin `main`, D1 ni
+  // variables. `wrangler deploy` sin `--env` falla con «Missing entry-point» en lugar de
+  // publicar algo. Todo despliegue exige --env dev o --env prod.
+  "name": "controlgastos-api-sin-entorno",
   "compatibility_date": "2026-10-01",
-  "workers_dev": true,
-  "preview_urls": false,
   "env": {
     "dev": {
       "name": "controlgastos-api-dev",
+      "main": "src/index.ts",
+      "workers_dev": true,
+      "preview_urls": false,
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "controlgastos-db-dev",
           "database_id": "ed52c4cb-a375-42a3-b0db-f1a2a4bab50a",
-          "migrations_dir": "migrations"
-        }
+          "migrations_dir": "migrations",
+        },
       ],
       "vars": {
         "GOOGLE_WEB_CLIENT_ID": "441178517157-d2cfm6jre3hoepj9ltnaqmlrk57negkv.apps.googleusercontent.com",
-        "GOOGLE_ANDROID_CLIENT_ID": "441178517157-kdiehkv9jrt4mo4fq7shpt02955e3mkg.apps.googleusercontent.com"
-      }
-    }
+        "GOOGLE_ANDROID_CLIENT_ID": "441178517157-kdiehkv9jrt4mo4fq7shpt02955e3mkg.apps.googleusercontent.com",
+      },
+    },
+    "prod": {
+      "name": "controlgastos-api",
+      "main": "src/index.ts",
+      "workers_dev": true,
+      "preview_urls": false,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "controlgastos-db",
+          // MARCADOR no definitivo: se sustituye en el PR de la fase F4 (docs/011).
+          "database_id": "REEMPLAZAR_CON_ID_D1_PROD",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "vars": {
+        // MARCADORES no definitivos: se sustituyen en el PR de la fase F4 (docs/011).
+        "GOOGLE_WEB_CLIENT_ID": "REEMPLAZAR_CON_CLIENTE_WEB_PROD",
+        "GOOGLE_ANDROID_CLIENT_IDS": "REEMPLAZAR_CON_CLIENTES_ANDROID_PROD",
+      },
+    },
   },
 }
