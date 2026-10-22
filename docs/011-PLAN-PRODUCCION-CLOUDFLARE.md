@@ -202,3 +202,28 @@ Un ID token con `iat` ≤ 300 s no demuestra una autenticación interactiva reci
 4. Purga de `refresh_tokens` y tope de movimientos por usuario (apartado 4).
 
 **B. `DELETE /me` — limitación de reautenticación interactiva:** un ID token con `iat` ≤ 300 s acredita que quien llama controla en ese momento una sesión de Google de la **misma cuenta**, pero no demuestra una autenticación interactiva reciente (el SDK heredado no admite `nonce` y `auth_time` no es fiable). **Este punto NO se declara aprobado para el lanzamiento público**: sigue pendiente la decisión expresa del usuario de aceptar el riesgo residual o de adoptar la capa adicional (biometría o PIN del dispositivo, que exige una dependencia nueva y no se ha añadido). Mientras tanto se mantiene la verificación actual, el texto honesto («verificación de identidad con Google») y la constancia en docs/003 y docs/011 §15. No se añadió biometría ni ninguna dependencia nueva.
+
+## 17. Estado de F4 y despliegue seguro en dos fases
+
+**F4 completada (primer despliegue, manual):** se hizo con `wrangler versions upload` y `wrangler versions deploy`, no con el workflow. Versión activa `0cd20e94-64e2-4675-9c2a-a8a1615e2538`, deployment `288a162b-dee9-44fb-b4ea-e67e3bf90c00` (evidencia ya registrada en la conversación del proyecto; el workflow aún no se ha usado para PROD).
+
+**Workflow en dos fases (implementado en local, NO ejecutado):** `.github/workflows/deploy.yml` pasa a `fase = preparar | activar` (detalle en docs/006). `preparar` sube una versión sin tráfico y la verifica con `scripts/verificar-version-prod.js`; `activar` exige el Environment `production-activate`, vuelve a verificar la versión y solo entonces la activa al 100 %. Sin rollback automático.
+
+**Configuración manual de GitHub PENDIENTE (la hace el propietario; ninguna se ha hecho):**
+
+1. Crear el Environment `production-activate` con **revisores requeridos** y **ramas permitidas solo `main`**.
+2. Crear en ese Environment el secreto `CLOUDFLARE_API_TOKEN` (exclusivo del Environment, no de repositorio) y las variables `CLOUDFLARE_ACCOUNT_ID` y `WORKER_URL`.
+3. Verificar que el Environment `production` conserva su secreto y variables para la fase `preparar`.
+
+El workflow **bloquea la fase `activar`** (paso guardia, antes de usar el token) si el Environment no tiene revisores requeridos y restricción de ramas, o si no se puede leer.
+
+**Verificado en F4 con lecturas reales (versión `0cd20e94`):** formato de `versions view --json` (incluido `workers/triggered_by = "version_upload"`), de `deployments status --json` y la línea `Worker Version ID: <uuid>` de `versions upload`.
+
+**NO VERIFICADO:** la ejecución real del workflow; la lectura de la protección del Environment con `GITHUB_TOKEN` y `actions: read`; y que un Environment referenciado e inexistente se cree sin protección (es la razón del paso guardia y del secreto exclusivo del Environment).
+
+**Límites conocidos de los controles:**
+
+- El guardia no verifica que la política de ramas sea solo `main` (acepta cualquier política personalizada o ramas protegidas), ni `can_admins_bypass` ni `prevent_self_review`.
+- El verificador no puede comprobar el contenido del código subido: solo bindings, anotaciones, `compatibility_date` y tráfico.
+- Quien posea un token de Cloudflare con permisos de Workers podría subir una versión con las mismas anotaciones (`prep <SHA> ...`, `version_upload`) y que pase la verificación.
+- La fase `activar` exige `WORKER_URL`; sin ella el job termina en rojo después de activar (sin rollback automático).

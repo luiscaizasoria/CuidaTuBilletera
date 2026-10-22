@@ -1,9 +1,32 @@
 name: Deploy API
 
-# Despliegue manual del Worker a Cloudflare. Ver docs/006-DESPLIEGUE.md.
+# Despliegue manual del Worker de PROD a Cloudflare en DOS FASES. Ver docs/006-DESPLIEGUE.md.
+#
+#   fase=preparar: ejecuta los controles, sube una versión SIN TRÁFICO (`wrangler versions
+#                  upload`) y la verifica. Imprime el ID de la versión en el resumen.
+#   fase=activar:  recibe ese ID, vuelve a verificarlo y solo entonces lo activa al 100 %
+#                  (`wrangler versions deploy`). Exige una aprobación propia (Environment
+#                  `production-activate`) y un paso guardia que aborta si ese Environment no
+#                  tiene revisores requeridos y restricción de ramas.
+#
+# Nunca se usa `wrangler deploy` (activaría el tráfico de inmediato). No hay rollback
+# automático: la recuperación manual está en docs/006.
 # No se dispara con pull_request ni con push: solo workflow_dispatch.
 on:
   workflow_dispatch:
+    inputs:
+      fase:
+        description: 'Fase: preparar (sube una versión sin tráfico) o activar (la activa al 100 %)'
+        type: choice
+        required: true
+        options:
+          - preparar
+          - activar
+      version_id:
+        description: 'Solo para activar: ID (UUID) de la versión preparada. Vacío en preparar.'
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -13,10 +36,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: deploy
-    # Solo se publica desde main. En otra rama el job se omite sin pedir aprobación.
-    if: github.ref == 'refs/heads/main'
+  preparar:
+    name: preparar
+    # Solo se publica desde main y en la fase elegida. En otro caso el job se omite.
+    if: github.ref == 'refs/heads/main' && inputs.fase == 'preparar'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -27,10 +50,19 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           current="$(gh api "repos/${REPO}/commits/refs/heads/main" --jq .sha)"
-          echo "SHA a publicar: ${GITHUB_SHA}"
+          echo "SHA a preparar: ${GITHUB_SHA}"
           echo "SHA vigente de main: ${current}"
           if [ "${GITHUB_SHA}" != "${current}" ]; then
             echo "::error::main avanzó después de iniciar la ejecución. Vuelve a ejecutar el workflow."
+            exit 1
+          fi
+
+      - name: Comprobar que version_id está vacío
+        env:
+          VERSION_ID: ${{ inputs.version_id }}
+        run: |
+          if [ -n "${VERSION_ID}" ]; then
+            echo "::error::En la fase preparar version_id debe estar vacío."
             exit 1
           fi
 
@@ -46,8 +78,7 @@ jobs:
       - run: npm run typecheck --workspace api
       - run: npm test --workspace api
       # Invariantes de api/wrangler.jsonc en modo estricto (docs/011): sin marcadores
-      # REEMPLAZAR_*, ids con formato válido y PROD separado de DEV. Falla mientras queden
-      # marcadores. No usa credenciales.
+      # REEMPLAZAR_*, ids con formato válido y PROD separado de DEV. No usa credenciales.
       - name: Verificar configuración de wrangler (estricto)
         run: node scripts/verificar-config-wrangler.js --estricto
 
@@ -70,8 +101,10 @@ jobs:
             exit 1
           fi
 
-      - name: Publicar Worker
-        id: deploy
+      # Sube una versión SIN TRÁFICO: `versions upload` no cambia el despliegue activo.
+      # Los secretos de la versión se heredan de la versión activa; se comprueban abajo.
+      - name: Subir versión sin tráfico
+        id: subir
         working-directory: api
         shell: bash
         env:
@@ -79,59 +112,258 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           short="${GITHUB_SHA:0:7}"
-          npx --no-install wrangler deploy --env prod \
-            --message "gh-actions ${GITHUB_SHA} run ${GITHUB_RUN_ID}" \
-            --tag "${short}" 2>&1 | tee "${RUNNER_TEMP}/deploy.log"
-
-          # Control posterior: la versión REALMENTE activa (100 %) debe incluir el binding
-          # JWT_SECRET. Solo se leen metadatos (nombre y tipo del binding); nunca el valor.
-          # Distingue «no se pudo verificar» de «binding ausente». Corre en este paso porque
-          # es el único que tiene el token de Cloudflare.
-          npx --no-install wrangler deployments status --env prod --json \
-            > "${RUNNER_TEMP}/deployment.json" 2> "${RUNNER_TEMP}/deployment.err" || {
-            echo "::error::No se pudo verificar JWT_SECRET: falló la lectura del despliegue activo."
-            cat "${RUNNER_TEMP}/deployment.err"
-            exit 1
-          }
-          active="$(node -e '
-            const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-            const v = (d.versions || []).find((x) => x.percentage === 100);
-            process.stdout.write(v ? String(v.version_id || v.id || "") : "");
-          ' "${RUNNER_TEMP}/deployment.json")" || active=""
-          if ! printf '%s' "${active}" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
-            echo "::error::No se pudo verificar JWT_SECRET: no se identificó una versión activa al 100 %."
+          npx --no-install wrangler versions upload --env prod \
+            --message "prep ${GITHUB_SHA} run ${GITHUB_RUN_ID}" \
+            --tag "sha-${short}" 2>&1 | tee "${RUNNER_TEMP}/upload.log"
+          version_id="$(grep -oE 'Worker Version ID: [0-9a-f-]+' "${RUNNER_TEMP}/upload.log" | tail -n 1 | sed 's/^Worker Version ID: //' || true)"
+          if ! printf '%s' "${version_id}" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+            echo "::error::No se pudo extraer un Worker Version ID válido de la salida de wrangler."
             exit 1
           fi
-          echo "Versión activa: ${active}"
-          npx --no-install wrangler versions view "${active}" --env prod --json \
+          echo "version_id=${version_id}" >> "${GITHUB_OUTPUT}"
+
+      # Solo metadatos (nombre y tipo de binding); nunca el valor de un secreto.
+      - name: Leer versión y despliegue activo
+        id: leer
+        working-directory: api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION_ID: ${{ steps.subir.outputs.version_id }}
+        run: |
+          npx --no-install wrangler versions view "${VERSION_ID}" --env prod --json \
             > "${RUNNER_TEMP}/version.json" 2> "${RUNNER_TEMP}/version.err" || {
-            echo "::error::No se pudo verificar JWT_SECRET: falló la lectura de la versión ${active}."
+            echo "::error::No se pudo verificar: falló la lectura de la versión ${VERSION_ID}."
             cat "${RUNNER_TEMP}/version.err"
             exit 1
           }
-          if node -e '
-            const v = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-            const b = (v.resources && v.resources.bindings) || [];
-            const ok = b.some((x) => x.name === "JWT_SECRET" && x.type === "secret_text");
-            process.exit(ok ? 0 : 3);
-          ' "${RUNNER_TEMP}/version.json"; then
-            echo "JWT_SECRET (secret_text) presente en la versión activa ${active}."
-          else
-            echo "::error::La versión activa ${active} NO incluye el binding JWT_SECRET. Crea el secreto con «wrangler versions secret put» y vuelve a desplegar (docs/011)."
+          npx --no-install wrangler deployments status --env prod --json \
+            > "${RUNNER_TEMP}/deployment.json" 2> "${RUNNER_TEMP}/deployment.err" || {
+            echo "::error::No se pudo verificar: falló la lectura del despliegue activo."
+            cat "${RUNNER_TEMP}/deployment.err"
+            exit 1
+          }
+
+      # Sin credenciales: compara los archivos leídos con api/wrangler.jsonc (env.prod).
+      - name: Verificar la versión candidata
+        id: verificar
+        shell: bash
+        env:
+          VERSION_ID: ${{ steps.subir.outputs.version_id }}
+        run: |
+          node scripts/verificar-version-prod.js --modo preparar \
+            --config api/wrangler.jsonc \
+            --version "${RUNNER_TEMP}/version.json" \
+            --deployment "${RUNNER_TEMP}/deployment.json" \
+            --id "${VERSION_ID}" --sha "${GITHUB_SHA}"
+
+      - name: Resumen de la preparación
+        if: always()
+        shell: bash
+        env:
+          VERSION_ID: ${{ steps.subir.outputs.version_id }}
+          RESULTADO: ${{ steps.verificar.outcome }}
+        run: |
+          {
+            echo "## Preparación de controlgastos-api (sin tráfico)"
+            echo ""
+            echo "- Entorno: prod"
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            echo "- Ejecución: ${GITHUB_RUN_ID} (intento ${GITHUB_RUN_ATTEMPT})"
+            echo "- Lanzado por: ${GITHUB_ACTOR}"
+            if [ "${RESULTADO}" = "success" ]; then
+              echo "- Verificación de la versión: APROBADA"
+              echo ""
+              echo "Versión apta para activar (aún sin tráfico):"
+              echo ""
+              echo "\`${VERSION_ID}\`"
+              echo ""
+              echo "Para activarla, ejecuta este workflow desde \`main\` con \`fase = activar\` y \`version_id = ${VERSION_ID}\`. El SHA de \`main\` debe seguir siendo \`${GITHUB_SHA}\`; la activación exige la aprobación del Environment \`production-activate\`."
+            else
+              echo "- Verificación de la versión: NO APROBADA o no ejecutada (revisa los pasos fallidos)."
+              echo ""
+              echo "No actives ninguna versión de esta ejecución."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  activar:
+    name: activar
+    # Solo se publica desde main y en la fase elegida. En otro caso el job se omite.
+    if: github.ref == 'refs/heads/main' && inputs.fase == 'activar'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Environment DISTINTO de `production` para exigir una aprobación específica de activación.
+    # Si no existe, GitHub lo crea SIN protección: por eso el paso guardia de abajo.
+    environment: production-activate
+    permissions:
+      contents: read
+      # Necesario para que el paso guardia lea la configuración del Environment (no verificado).
+      actions: read
+    steps:
+      - name: Comprobar que el SHA es el vigente de main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          current="$(gh api "repos/${REPO}/commits/refs/heads/main" --jq .sha)"
+          echo "SHA a activar: ${GITHUB_SHA}"
+          echo "SHA vigente de main: ${current}"
+          if [ "${GITHUB_SHA}" != "${current}" ]; then
+            echo "::error::main avanzó después de iniciar la ejecución. Vuelve a ejecutar el workflow."
             exit 1
           fi
 
-      - name: Verificar GET /health y GET /me
+      # El input se pasa por variable de entorno; nunca se interpola dentro de `run:`.
+      - name: Validar version_id
+        env:
+          VERSION_ID: ${{ inputs.version_id }}
+        run: |
+          if ! printf '%s' "${VERSION_ID}" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+            echo "::error::version_id debe ser un UUID en minúsculas (el ID que imprimió la fase preparar)."
+            exit 1
+          fi
+
+      # El checkout y Node van antes del guardia porque el guardia usa el script del
+      # repositorio; ninguno usa el token de Cloudflare.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # GUARDIA: antes de cualquier uso del token de Cloudflare, el Environment
+      # `production-activate` debe tener revisores requeridos y restricción de ramas. Si la
+      # protección falta o no se puede leer, se aborta.
+      - name: Guardia de protección del Environment production-activate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/${REPO}/environments/production-activate" \
+            > "${RUNNER_TEMP}/entorno.json" 2> "${RUNNER_TEMP}/entorno.err" || {
+            echo "::error::No se pudo leer el Environment production-activate; la activación queda bloqueada."
+            cat "${RUNNER_TEMP}/entorno.err"
+            exit 1
+          }
+          node scripts/verificar-version-prod.js --entorno "${RUNNER_TEMP}/entorno.json"
+
+      - run: npm ci
+      # Invariantes de api/wrangler.jsonc en modo estricto (docs/011). No usa credenciales.
+      - name: Verificar configuración de wrangler (estricto)
+        run: node scripts/verificar-config-wrangler.js --estricto
+
+      # Falla de forma clara antes de llamar a Cloudflare, sin imprimir el valor.
+      - name: Comprobar que existen las credenciales de Cloudflare
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "::error::Falta el secreto CLOUDFLARE_API_TOKEN en el Environment production-activate."
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            echo "::error::Falta la variable CLOUDFLARE_ACCOUNT_ID."
+            exit 1
+          fi
+
+      - name: Leer versión y despliegue antes de activar
+        working-directory: api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION_ID: ${{ inputs.version_id }}
+        run: |
+          npx --no-install wrangler versions view "${VERSION_ID}" --env prod --json \
+            > "${RUNNER_TEMP}/version.json" 2> "${RUNNER_TEMP}/version.err" || {
+            echo "::error::No se pudo verificar: falló la lectura de la versión ${VERSION_ID}."
+            cat "${RUNNER_TEMP}/version.err"
+            exit 1
+          }
+          npx --no-install wrangler deployments status --env prod --json \
+            > "${RUNNER_TEMP}/deployment.json" 2> "${RUNNER_TEMP}/deployment.err" || {
+            echo "::error::No se pudo verificar: falló la lectura del despliegue activo."
+            cat "${RUNNER_TEMP}/deployment.err"
+            exit 1
+          }
+
+      # Misma versión y mismo SHA que autorizó la fase preparar; sin tráfico y distinta de la activa.
+      - name: Verificar la versión antes de activar
+        shell: bash
+        env:
+          VERSION_ID: ${{ inputs.version_id }}
+        run: |
+          node scripts/verificar-version-prod.js --modo activar \
+            --config api/wrangler.jsonc \
+            --version "${RUNNER_TEMP}/version.json" \
+            --deployment "${RUNNER_TEMP}/deployment.json" \
+            --id "${VERSION_ID}" --sha "${GITHUB_SHA}"
+
+      - name: Activar la versión al 100 %
+        id: activar
+        working-directory: api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION_ID: ${{ inputs.version_id }}
+        run: |
+          npx --no-install wrangler versions deploy "${VERSION_ID}@100" --env prod \
+            --message "activa ${VERSION_ID} sha ${GITHUB_SHA} run ${GITHUB_RUN_ID}" \
+            --yes 2>&1 | tee "${RUNNER_TEMP}/activar.log"
+
+      - name: Releer versión y despliegue tras activar
+        id: releer
+        working-directory: api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION_ID: ${{ inputs.version_id }}
+        run: |
+          npx --no-install wrangler versions view "${VERSION_ID}" --env prod --json \
+            > "${RUNNER_TEMP}/version-post.json" 2> "${RUNNER_TEMP}/version-post.err" || {
+            echo "::error::No se pudo verificar: falló la lectura de la versión ${VERSION_ID} tras activar."
+            cat "${RUNNER_TEMP}/version-post.err"
+            exit 1
+          }
+          npx --no-install wrangler deployments status --env prod --json \
+            > "${RUNNER_TEMP}/deployment-post.json" 2> "${RUNNER_TEMP}/deployment-post.err" || {
+            echo "::error::No se pudo verificar: falló la lectura del despliegue tras activar."
+            cat "${RUNNER_TEMP}/deployment-post.err"
+            exit 1
+          }
+
+      - name: Verificar que la versión quedó activa
+        id: verificar
+        shell: bash
+        env:
+          VERSION_ID: ${{ inputs.version_id }}
+        run: |
+          node scripts/verificar-version-prod.js --modo activa \
+            --config api/wrangler.jsonc \
+            --version "${RUNNER_TEMP}/version-post.json" \
+            --deployment "${RUNNER_TEMP}/deployment-post.json" \
+            --id "${VERSION_ID}" --sha "${GITHUB_SHA}"
+
+      - name: Verificar GET /health, GET /me y POST /auth/google
         id: smoke
-        if: success() && steps.deploy.outcome == 'success'
+        if: success() && steps.verificar.outcome == 'success'
         shell: bash
         env:
           WORKER_URL: ${{ vars.WORKER_URL }}
         run: |
+          # La fase activar exige la verificación HTTP: sin WORKER_URL el job termina en rojo.
           if [ -z "${WORKER_URL}" ]; then
-            echo "::warning::WORKER_URL no está configurada: verificación HTTP pendiente."
-            echo "result=pending" >> "${GITHUB_OUTPUT}"
-            exit 0
+            echo "::error::WORKER_URL no está configurada: la fase activar exige la verificación HTTP."
+            echo "result=failed" >> "${GITHUB_OUTPUT}"
+            exit 1
           fi
           case "${WORKER_URL}" in
             https://*) ;;
@@ -151,8 +383,8 @@ jobs:
             exit 1
           fi
           # Distingue el Worker nuevo (con la ruta /me) del anterior del 2026-10-11; NO
-          # distingue PROD de DEV: WORKER_URL debe ser la URL de PROD (se comprueba además
-          # en la fase F6 del plan). Sin token debe responder 401 con Cache-Control: no-store.
+          # distingue PROD de DEV: WORKER_URL debe ser la URL de PROD. Sin token debe
+          # responder 401 con Cache-Control: no-store.
           status="$(curl --silent --show-error --max-time 10 \
             --retry 5 --retry-delay 3 --retry-all-errors \
             --output "${RUNNER_TEMP}/me.body" --dump-header "${RUNNER_TEMP}/me.headers" \
@@ -169,8 +401,7 @@ jobs:
           # Sonda de configuración sin token de Google: la API valida cliente Web, JWT_SECRET
           # (≥ 32 caracteres), lista Android y existencia del binding DB antes de leer el
           # cuerpo. Un cuerpo vacío da 400 con esa configuración y 500 CONFIG_ERROR si falta
-          # algo. No prueba el contenido de la lista Android (lo cubre el verificador estricto)
-          # ni que D1 sea la base correcta. No llama a Google ni escribe en D1.
+          # algo. No llama a Google ni escribe en D1.
           status="$(curl --silent --show-error --max-time 10 \
             --retry 5 --retry-delay 3 --retry-all-errors \
             --request POST --header 'Content-Type: application/json' --data '{}' \
@@ -182,38 +413,47 @@ jobs:
           fi
           echo "result=passed" >> "${GITHUB_OUTPUT}"
 
-      - name: Resumen del despliegue
+      # Sin rollback automático: si algo falla tras activar, se recupera a mano (docs/006).
+      - name: Resumen de la activación
         if: always()
         shell: bash
         env:
-          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          VERSION_ID: ${{ inputs.version_id }}
+          ACTIVAR_OUTCOME: ${{ steps.activar.outcome }}
+          VERIFICAR_OUTCOME: ${{ steps.verificar.outcome }}
           SMOKE_RESULT: ${{ steps.smoke.outputs.result }}
         run: |
-          version="$(grep -i 'Version ID' "${RUNNER_TEMP}/deploy.log" 2>/dev/null | head -n 1 || true)"
-          case "${DEPLOY_OUTCOME}" in
-            success) publication="exitosa" ;;
-            failure) publication="FALLIDA" ;;
-            *) publication="no ejecutada" ;;
+          if ! printf '%s' "${VERSION_ID}" | grep -qE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+            VERSION_ID="ID no válido"
+          fi
+          case "${ACTIVAR_OUTCOME}" in
+            success) activacion="ejecutada" ;;
+            failure) activacion="FALLIDA" ;;
+            *) activacion="no ejecutada" ;;
+          esac
+          case "${VERIFICAR_OUTCOME}" in
+            success) posterior="aprobada" ;;
+            failure) posterior="FALLIDA" ;;
+            *) posterior="no ejecutada" ;;
           esac
           case "${SMOKE_RESULT}" in
             passed) http="aprobada" ;;
-            pending) http="PENDIENTE (WORKER_URL no configurada; no se ejecutó)" ;;
             failed) http="FALLIDA" ;;
             *) http="no ejecutada" ;;
           esac
           {
-            echo "## Despliegue de controlgastos-api"
+            echo "## Activación de controlgastos-api"
             echo ""
             echo "- Entorno: prod"
-            echo "- Worker: controlgastos-api"
+            echo "- Versión: \`${VERSION_ID}\`"
             echo "- SHA: \`${GITHUB_SHA}\`"
             echo "- Ejecución: ${GITHUB_RUN_ID} (intento ${GITHUB_RUN_ATTEMPT})"
             echo "- Lanzado por: ${GITHUB_ACTOR}"
-            echo "- Publicación: ${publication}"
-            echo "- Verificación HTTP de /health y /me: ${http}"
-            if [ -n "${version}" ]; then echo "- ${version}"; fi
-            if [ "${DEPLOY_OUTCOME}" = "failure" ] || [ "${SMOKE_RESULT}" = "failed" ]; then
+            echo "- Activación al 100 %: ${activacion}"
+            echo "- Verificación posterior de la versión activa: ${posterior}"
+            echo "- Verificación HTTP (/health, /me, /auth/google): ${http}"
+            if [ "${ACTIVAR_OUTCOME}" = "failure" ] || [ "${VERIFICAR_OUTCOME}" = "failure" ] || [ "${SMOKE_RESULT}" = "failed" ]; then
               echo ""
-              echo "Consulta el rollback manual en docs/006-DESPLIEGUE.md."
+              echo "Este workflow NO hace rollback automático. Si la activación se ejecutó, recupera el servicio a mano siguiendo \"Recuperación manual\" en docs/006-DESPLIEGUE.md (volver a la versión anterior con \`wrangler versions deploy <ID anterior>@100 --env prod\` o \`wrangler rollback\`)."
             fi
           } >> "${GITHUB_STEP_SUMMARY}"

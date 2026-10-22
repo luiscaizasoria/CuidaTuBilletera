@@ -10,29 +10,43 @@ Guía operativa del despliegue continuo (CD) del Worker `controlgastos-api`. Com
 
 ## Cómo funciona
 
-1. Se ejecuta a mano desde la pestaña Actions → "Deploy API" → Run workflow, eligiendo la rama `main`.
-2. El job solo se ejecuta si la referencia es `refs/heads/main`. En otra rama se omite.
-3. El job usa el Environment `production`, que exige la aprobación de un revisor antes de empezar y es donde viven el token y las variables.
-4. Comprueba que el SHA de la ejecución sigue siendo el último commit de `main`. Si `main` avanzó, falla y hay que volver a ejecutar.
-5. Instala dependencias con `npm ci` y ejecuta lint, typecheck de la API, pruebas de la API y el build sin despliegue (`wrangler deploy --dry-run --env prod`), la verificación estricta de configuración y un dry-run con comprobación del binding de la D1. Estos pasos no usan credenciales.
-6. Publica con la versión de Wrangler fijada en el lockfile (`npx --no-install wrangler deploy --env prod`), con `--message` (SHA y número de ejecución) y `--tag` (SHA corto).
-7. Si `WORKER_URL` está configurada, comprueba `GET /health` y exige exactamente `{"status":"ok"}`.
-8. Escribe un resumen con SHA, ejecución, actor, resultado de la publicación y resultado de la verificación HTTP.
+El despliegue de PROD es manual y se hace en **dos fases** del mismo workflow `.github/workflows/deploy.yml` ("Deploy API" → Run workflow, rama `main`). Nunca se usa `wrangler deploy` (activaría el tráfico de inmediato).
 
-El resumen distingue entre **publicación exitosa** y **verificación HTTP**. Si `WORKER_URL` no existe, la verificación queda como **PENDIENTE** y no se considera aprobada.
+**Fase `preparar`** (Environment `production`, aprobación de revisor):
+
+1. Solo corre desde `refs/heads/main` y comprueba que el SHA sigue siendo el último commit de `main`. `version_id` debe estar vacío.
+2. `npm ci`, lint, typecheck y pruebas de la API, verificación estricta de `api/wrangler.jsonc`, build (`--dry-run`) y dry-run con comprobación del binding D1 (sin credenciales).
+3. `wrangler versions upload --env prod` con `--message "prep <SHA> run <id>"` y `--tag sha-<corto>`: sube una versión **sin tráfico**.
+4. Extrae el `Worker Version ID`, lee la versión y el despliegue activo (solo metadatos) y ejecuta `node scripts/verificar-version-prod.js --modo preparar`: UUID válido, mismo ID, bindings exactos (`DB` d1 con la D1 de `env.prod`, `JWT_SECRET` secret_text, `GOOGLE_WEB_CLIENT_ID` y `GOOGLE_ANDROID_CLIENT_IDS` iguales a `wrangler.jsonc`), sin binding extra ni marcador `REEMPLAZAR_*`, misma `compatibility_date`, anotaciones del SHA y `version_upload`, y sin tráfico. Si algo falla (incluida una lectura que no se pudo hacer) el job falla y no se declara la versión apta.
+5. El resumen del job imprime el ID completo y la instrucción exacta de ejecutar la fase `activar`.
+
+**Fase `activar`** (Environment **distinto**, `production-activate`, con su propia aprobación; inputs `fase = activar` y `version_id = <ID del resumen>`):
+
+1. Mismas condiciones de rama y SHA vigente; `version_id` se valida con una expresión UUID estricta y se pasa siempre por variable de entorno.
+2. **Paso guardia, antes de cualquier uso del token de Cloudflare:** lee con la API de GitHub la configuración del Environment `production-activate` y ejecuta `verificar-version-prod.js --entorno`. Exige una regla de revisores requeridos con al menos un revisor y restricción de ramas (personalizadas o protegidas). Si falta o no se puede leer, aborta. Existe porque GitHub crea sin protección un Environment que se referencia y no existe.
+3. `npm ci`, verificación estricta de `wrangler.jsonc`, comprobación de que el secreto `CLOUDFLARE_API_TOKEN` y la variable `CLOUDFLARE_ACCOUNT_ID` no están vacíos (sin imprimirlos).
+4. Lee la versión y el despliegue activo y ejecuta `--modo activar --id <input> --sha <SHA>`: debe ser la versión preparada con ese SHA, sin tráfico y distinta de la activa.
+5. Solo entonces `wrangler versions deploy "<ID>@100" --env prod --yes`.
+6. Relee versión y despliegue y ejecuta `--modo activa` (la versión debe tener el 100 %). Después, pruebas HTTP si `WORKER_URL` existe: `GET /health` = `{"status":"ok"}`, `GET /me` sin token = 401 con `Cache-Control: no-store` y `POST /auth/google` con `{}` = 400. Resumen del job.
+
+**No hay rollback automático.** Si algo falla tras activar, ver "Recuperación manual" más abajo.
+
+**Verificado en F4 con lecturas reales (versión `0cd20e94`):** el formato de `wrangler versions view --json` (claves `id`, `number`, `metadata`, `annotations` con `workers/message`, `workers/tag` y `workers/triggered_by = "version_upload"`, y `resources` con `bindings` y `script_runtime`), el de `wrangler deployments status --json` (`id`, `versions[{version_id, percentage}]`) y la línea `Worker Version ID: <uuid>` de `versions upload`.
+
+**NO VERIFICADO:** la ejecución real del workflow, la lectura del Environment con `GITHUB_TOKEN` (se concede `actions: read` al job; si falla, la fase queda bloqueada, que es el lado seguro) y el comportamiento de un Environment inexistente o sin protección.
 
 > **Nota (desde el paso 407):** el despliegue es `wrangler deploy --env prod`. El nivel superior de `api/wrangler.jsonc` es un centinela (`controlgastos-api-sin-entorno`, sin `main`, D1 ni variables) y `wrangler deploy` sin `--env` falla a propósito. `npm run verificar:wrangler` comprueba los invariantes (en CI, modo normal; en el despliegue, `--estricto`, que falla mientras queden marcadores `REEMPLAZAR_*`). Detalle y fases en docs/011.
 
 ## Seguridad del workflow
 
-- `permissions: contents: read`. No se necesita nada más.
+- `permissions: contents: read` en el workflow; el job `activar` añade `actions: read` solo para el paso guardia.
 - Solo `workflow_dispatch`. Ningún evento de `pull_request` puede alcanzar los secretos.
 - `concurrency: deploy-production` sin cancelar, para evitar despliegues simultáneos.
 - `actions/checkout` y `actions/setup-node` fijadas por SHA completo (verificado con la API de GitHub el 11/10/2026):
   - `actions/checkout` v7.0.1: `3d3c42e5aac5ba805825da76410c181273ba90b1`
   - `actions/setup-node` v7.1.0: `949feb2413d6458794dcd2491c4babbbce0c15c1`
 - `ci.yml` sigue usando tags mayores; se deja sin cambios en esta tarea.
-- `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` solo se exponen al paso "Publicar Worker". Los demás pasos no los reciben.
+- `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` se declaran a nivel de paso y solo en los pasos que llaman a Cloudflare (nunca a nivel de job). En `activar` el token debe ser un secreto **del Environment `production-activate`** y no un secreto de repositorio (estos últimos llegarían a cualquier Environment recién creado).
 - No se usa `cloudflare/wrangler-action`: menos terceros con acceso al token.
 - `workers_dev: true` y `preview_urls: false` en `api/wrangler.jsonc`, para que la exposición pública sea explícita y no se publiquen URLs de versiones previas.
 
@@ -51,39 +65,46 @@ Ninguno de estos pasos se ha realizado. Nunca se comparten valores en el reposit
 
 Un token de Cloudflare no se puede limitar a un Worker individual: el mínimo práctico es el alcance de cuenta con permisos de Workers. Cuando existan migraciones de D1 (Fase 2) se evaluará añadir el permiso de D1 al token.
 
-### 2. Environment `production` en GitHub
+### 2. Environments en GitHub (dos, uno por fase)
 
-En el repositorio: Settings → Environments → New environment → `production`.
+Detalle del estado y de lo pendiente en docs/011 §17.
 
-- **Required reviewers:** añadir al revisor.
-- **Prevent self-review:** si el propietario es el único revisor, debe estar **desactivado**; de lo contrario nadie podría aprobar y el despliegue quedaría bloqueado. Con un único colaborador la aprobación es una pausa explícita contra errores, no un control independiente.
-- **Deployment branches and tags:** "Selected branches and tags" y permitir solo `main`.
-- **Environment secrets:** `CLOUDFLARE_API_TOKEN`.
-- **Environment variables:**
-  - `CLOUDFLARE_ACCOUNT_ID` (identificador de cuenta; no es secreto).
-  - `WORKER_URL` (por ejemplo `https://controlgastos-api.<subdominio>.workers.dev`, sin barra final). Se conoce después de la primera publicación. Mientras no exista, la verificación HTTP queda pendiente.
+**`production` (fase `preparar`):** Settings → Environments → `production`.
+
+- **Required reviewers** con el revisor y **Deployment branches and tags** en "Selected branches and tags" solo `main`.
+- **Secreto** `CLOUDFLARE_API_TOKEN` y **variable** `CLOUDFLARE_ACCOUNT_ID`.
+
+**`production-activate` (fase `activar`):** créalo a mano ANTES de ejecutar la fase; si el workflow lo referencia y no existe, GitHub lo crea sin protección (no verificado) y el paso guardia aborta.
+
+- **Required reviewers:** al menos uno.
+- **Deployment branches and tags:** "Selected branches and tags", solo `main`.
+- **Secreto** `CLOUDFLARE_API_TOKEN` **exclusivo de este Environment** (no de repositorio, que llegaría a cualquier Environment).
+- **Variables** `CLOUDFLARE_ACCOUNT_ID` y `WORKER_URL` (sin barra final; obligatoria: sin ella la fase `activar` termina en rojo).
+- **Prevent self-review:** activarlo si hay un segundo revisor. Hoy el propietario es el único revisor y puede autoaprobar, por lo que la aprobación es una pausa explícita y no un control independiente.
 
 ### 3. Primer despliegue
 
-1. Ejecutar el workflow desde `main`.
-2. Aprobar el Environment.
-3. Anotar la URL del Worker, configurar `WORKER_URL` y volver a ejecutar para que la verificación HTTP se ejecute y quede registrada.
-4. Solo con una publicación exitosa y una verificación HTTP aprobada se puede actualizar el Roadmap.
+El primer despliegue de F4 se hizo **manualmente** con `wrangler versions upload` y `wrangler versions deploy`, no con el workflow. Para los siguientes:
 
-## Rollback manual (no automatizado)
+1. Ejecutar el workflow desde `main` con `fase = preparar`, aprobar `production` y copiar el ID del resumen.
+2. Ejecutar de nuevo con `fase = activar` y ese `version_id`, y aprobar `production-activate`.
+3. Solo con la activación verificada y la verificación HTTP aprobada se actualiza el Roadmap.
+
+## Recuperación manual (sin rollback automático)
 
 Opción A, desde la línea de comandos con credenciales del propietario:
 
 1. Listar versiones: `npx wrangler deployments list --env prod` (dentro de `api/`; **sin `--env` apunta al Worker centinela**).
 2. Volver a una versión: `npx wrangler rollback <VERSION_ID> --env prod --message "motivo"`.
 
-Opción B, corregir hacia adelante: el workflow solo publica el SHA vigente de `main`, por lo que no sirve para volver a un commit anterior. La vía es un Pull Request `fix:` o `revert:` hacia `main` y un nuevo despliegue manual.
+Opción B, corregir hacia adelante: el workflow solo prepara el SHA vigente de `main`, por lo que no sirve para volver a un commit anterior. La vía es un Pull Request `fix:` o `revert:` hacia `main` y un nuevo despliegue manual.
 
 Notas:
 
 - El rollback del Worker no deshace cambios en datos. Hoy no hay base de datos; cuando exista D1 (Fase 2), las migraciones deberán ser compatibles hacia atrás.
 - No se asume que `wrangler rollback` acepte `--yes`; no figura en la documentación.
-- Si falla la verificación HTTP, la versión nueva ya está activa: hay que decidir manualmente entre corregir hacia adelante o volver atrás.
+- Alternativa a `rollback`: `npx wrangler versions deploy <ID_ANTERIOR>@100 --env prod --yes` (el ID anterior consta en el resumen de la fase y en `deployments list`; ambos comandos requieren credenciales del propietario).
+- Si falla la verificación posterior o HTTP, la versión nueva ya está activa: hay que decidir manualmente entre corregir hacia adelante o volver atrás.
 
 ## Riesgos operativos
 
