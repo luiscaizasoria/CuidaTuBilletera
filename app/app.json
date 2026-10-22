@@ -27,7 +27,14 @@
         "foregroundImage": "./assets/adaptive-icon-foreground.png",
         "monochromeImage": "./assets/adaptive-icon-monochrome.png",
         "backgroundColor": "#0F5F5A"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.VIBRATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "extra": {
       "eas": {
