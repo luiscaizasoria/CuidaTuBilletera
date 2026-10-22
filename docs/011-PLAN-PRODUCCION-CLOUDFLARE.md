@@ -227,3 +227,9 @@ El workflow **bloquea la fase `activar`** (paso guardia, antes de usar el token)
 - El verificador no puede comprobar el contenido del código subido: solo bindings, anotaciones, `compatibility_date` y tráfico.
 - Quien posea un token de Cloudflare con permisos de Workers podría subir una versión con las mismas anotaciones (`prep <SHA> ...`, `version_upload`) y que pase la verificación.
 - La fase `activar` exige `WORKER_URL`; sin ella el job termina en rojo después de activar (sin rollback automático).
+
+## 18. Estado de F8 y F9 (AAB, 2026-10-22)
+
+- **F8 (EAS):** las cuatro variables `EXPO_PUBLIC_*` existen en el entorno `production` (visibilidad pública); `eas.json` define `environment` en `preview` y `production`. Corrige el §1: `app.json` ya define `blockedPermissions` y `eas.json` ya define `environment`.
+- **F9 (AAB):** build `2655c67d-ba26-4d16-9ea0-c417cf3431ec`, commit `65f11f81cbde5562693068b8524fae670c174777`, versionCode 4, targetSdk 36. Permisos verificados en el manifiesto del AAB: sin `VIBRATE`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `USE_BIOMETRIC`, `USE_FINGERPRINT` ni `SYSTEM_ALERT_WINDOW`; con `INTERNET`. Sin referencias a la API de DEV, solo la API y el cliente Web de producción, URL legales correctas. Firma de subida: SHA-1 `26:E4:…:73:F4` (coincide en inicio y fin con la registrada).
+- **Pendiente:** subida a Play Console (no realizada), prueba en dispositivo y la validación E2E de OAuth con Play App Signing (R8 sigue abierto).
