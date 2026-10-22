@@ -790,3 +790,12 @@ Riesgo principal: un separador decimal ambiguo en montos (1.234 frente a 1,234),
 ### Decisiones pendientes del usuario
 
 1. Confirmar F-A y F-B como capacidades futuras de prioridad 6. 2. Si Google Play entra en el alcance (cambia docs/001 §3). 3. Adoptar EAS Update y `expo-updates`. 4. Política de `runtimeVersion` y nombres de canales. 5. Contrato de compatibilidad app–API. 6. Política de actualización obligatoria y opcional, y su frecuencia. 7. Inglés como segundo idioma. 8. Capa propia o librería, y `expo-localization`. 9. Dónde se guarda el idioma. 10. Categorías predeterminadas y exportación. 11. Formato regional de montos y fechas e `Intl`. 12. Builds nativas junto con R6. 13. Convención de textos durante la Fase 6. 14. Si el bloqueo obligatorio impide también cerrar sesión.
+
+## Decisión G4 — Permisos Android del release (SYSTEM_ALERT_WINDOW solo en development)
+
+- **Contexto:** el primer AAB (build `c19f00be`, versionCode 3) declaró permisos heredados de la plantilla de Expo que la app no usa. `android.blockedPermissions` en `app/app.json` es global, y bloquear `SYSTEM_ALERT_WINDOW` en todos los perfiles quitaría el overlay de depuración de los dev builds.
+- **Decisión:** `app/app.json` bloquea `VIBRATE`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `USE_BIOMETRIC` y `USE_FINGERPRINT` en todos los perfiles. `app/app.config.js` (extiende `app.json`) añade `SYSTEM_ALERT_WINDOW` salvo que el build declare `ALLOW_SYSTEM_ALERT_WINDOW=1`, que solo define el perfil `development` en `app/eas.json`.
+- **Fail closed:** una variable perdida deja el permiso bloqueado (production nunca lo conserva por error); development sin la variable solo pierde el overlay. `app.config.js` falla con error si `EAS_BUILD_PROFILE` no es `development`, `preview` o `production`, o si la variable de permiso se combina con un perfil distinto de development.
+- **Preview:** bloquea `SYSTEM_ALERT_WINDOW` (no es dev client y no lo necesita).
+- **Evidencia:** introspección de `expo config` por escenario y `eas config --platform android --profile <perfil>` (eas-cli 24.14, solo lectura). Pendiente: comprobar el manifiesto de un AAB nuevo (requiere build autorizada).
+- **expo-dev-client:** se conserva; en release sus clases son stubs inertes (`disableInRelease`).
