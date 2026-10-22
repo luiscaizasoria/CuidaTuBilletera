@@ -105,14 +105,23 @@ jobs:
             fi
           done < <(find "${SITE_DIR}" -type f -print0)
 
-          # 3. Textos prohibidos en el contenido publicable.
+          # 3. Textos prohibidos en el contenido publicable. El script debe funcionar bajo
+          #    `bash -e -o pipefail` (shell: bash): el estado de grep se captura de forma
+          #    explicita (0 = coincidencias, 1 = sin coincidencias, >=2 = error de lectura).
           buscar() { # buscar <descripcion> <opciones de grep> <patron>
-            local desc="$1" opts="$2" patron="$3" salida
-            salida="$(grep -rnE ${opts} -e "${patron}" "${SITE_DIR}" 2>/dev/null | cut -c1-160)"
-            if [ -n "${salida}" ]; then
-              falla "Texto prohibido (${desc}):"
-              echo "${salida}"
-            fi
+            local desc="$1" opts="$2" patron="$3" salida estado=0
+            salida="$(grep -rnE ${opts} -e "${patron}" "${SITE_DIR}" 2>&1)" || estado=$?
+            case "${estado}" in
+              0)
+                falla "Texto prohibido (${desc}):"
+                printf '%s\n' "${salida}" | cut -c1-160
+                ;;
+              1) ;;
+              *)
+                falla "Error de lectura al buscar (${desc}) en ${SITE_DIR}/ (grep devolvió ${estado}):"
+                printf '%s\n' "${salida}" | cut -c1-160
+                ;;
+            esac
           }
           buscar "PENDIENTE" "-I" 'PENDIENTE'
           buscar "TODO (marcador)" "-I" '(^|[^A-Za-z])TODO([^A-Za-z]|$)'
@@ -127,17 +136,31 @@ jobs:
           buscar "contenido activo o remoto" "-I -i" '<script|<iframe|<object|<embed|<form|@import|url\([[:space:]]*["'"'"']?https?:'
 
           # 4. Ningun correo distinto del de soporte.
-          while IFS= read -r correo; do
-            if [ "${correo,,}" != "${CORREO_PERMITIDO}" ]; then
-              falla "Correo no permitido: ${correo}"
-            fi
-          done < <(grep -rhoiE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' "${SITE_DIR}" 2>/dev/null | sort -u)
+          estado=0
+          correos="$(grep -rhoiE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' "${SITE_DIR}" 2>&1)" || estado=$?
+          if [ "${estado}" -ge 2 ]; then
+            falla "Error de lectura al buscar correos en ${SITE_DIR}/ (grep devolvió ${estado}):"
+            printf '%s\n' "${correos}" | cut -c1-160
+          elif [ -n "${correos}" ]; then
+            while IFS= read -r correo; do
+              if [ "${correo,,}" != "${CORREO_PERMITIDO}" ]; then
+                falla "Correo no permitido: ${correo}"
+              fi
+            done < <(printf '%s\n' "${correos}" | sort -u)
+          fi
 
           # 5. Cada pagina: lang="es" y un solo <h1>.
           while IFS= read -r -d '' pagina; do
             grep -qE '<html[^>]*[[:space:]]lang="es"' "${pagina}" \
               || falla "${pagina}: falta lang=\"es\" en <html>."
-            h1="$(grep -oiE '<h1([[:space:]>])' "${pagina}" | wc -l)"
+            estado=0
+            etiquetas="$(grep -oiE '<h1([[:space:]>])' "${pagina}" 2>&1)" || estado=$?
+            if [ "${estado}" -ge 2 ]; then
+              falla "${pagina}: error de lectura al contar <h1> (grep devolvió ${estado})."
+              continue
+            fi
+            h1=0
+            [ -z "${etiquetas}" ] || h1="$(printf '%s\n' "${etiquetas}" | wc -l)"
             [ "${h1}" -eq 1 ] || falla "${pagina}: debe tener exactamente un <h1> (tiene ${h1})."
           done < <(find "${SITE_DIR}" -type f -name '*.html' -print0)
 
