@@ -11,6 +11,7 @@ import {
 import { authMiddleware, type AuthEnv } from '../lib/auth-middleware';
 import { ApiError } from '../lib/errors';
 import { readJsonBody } from '../lib/json-body';
+import { reauthDiagnosticsHandler } from '../lib/reauth-diagnostics';
 import {
   GoogleTokenRejectedError,
   googleRemoteKeys,
@@ -35,16 +36,24 @@ const reauthRequired = () =>
     'No se pudo confirmar tu identidad. Usa la cuenta de Google con la que iniciaste sesión.',
   );
 
-// Instrumentación opcional: recibe únicamente el motivo, nunca el token, el sub ni el email.
-export type ReauthRejectedHandler = (reason: ReauthRejectionReason) => void;
+// Instrumentación opcional: recibe únicamente el motivo y la edad del token, nunca el token, el sub ni el email.
+export interface ReauthRejectionMeta {
+  tokenAgeSeconds?: number;
+}
+export type ReauthRejectedHandler = (
+  reason: ReauthRejectionReason,
+  meta?: ReauthRejectionMeta,
+) => void;
 
 // Nunca altera la respuesta: un callback que falla se ignora.
 function notifyRejection(
   handler: ReauthRejectedHandler | undefined,
   reason: ReauthRejectionReason,
+  tokenAgeSeconds?: number,
 ) {
   try {
-    handler?.(reason);
+    if (tokenAgeSeconds === undefined) handler?.(reason);
+    else handler?.(reason, { tokenAgeSeconds });
   } catch {
     // Sin efecto sobre la respuesta.
   }
@@ -76,7 +85,10 @@ export function meRoutes(
     if (!parsed.success) throw new ApiError(400, 'INVALID_REQUEST', 'La solicitud no es válida.');
 
     const requestNow = now?.() ?? new Date();
+    // Lo inyectado (pruebas) tiene prioridad; si no, solo el diagnóstico DEV explícito.
+    const handler = onReauthRejected ?? reauthDiagnosticsHandler(c.env);
     let identitySub: string;
+    let tokenAgeSeconds: number | undefined;
     try {
       const identity = await verifyGoogleIdToken(
         parsed.data.idToken,
@@ -86,18 +98,20 @@ export function meRoutes(
         REAUTH_MAX_AGE_SECONDS,
       );
       identitySub = identity.sub;
+      tokenAgeSeconds = identity.tokenAgeSeconds;
     } catch (error) {
-      notifyRejection(
-        onReauthRejected,
-        error instanceof GoogleTokenRejectedError ? error.reason : 'OTRAS_CONDICIONES',
-      );
+      if (error instanceof GoogleTokenRejectedError) {
+        notifyRejection(handler, error.reason, error.tokenAgeSeconds);
+      } else {
+        notifyRejection(handler, 'OTRAS_CONDICIONES');
+      }
       throw reauthRequired();
     }
 
     const row = await findUserById(db, user.id);
     if (!row) throw new ApiError(401, 'INVALID_TOKEN', 'Token de autenticación inválido');
     if (row.google_sub !== identitySub) {
-      notifyRejection(onReauthRejected, 'GOOGLE_SUB_MISMATCH');
+      notifyRejection(handler, 'GOOGLE_SUB_MISMATCH', tokenAgeSeconds);
       throw reauthRequired();
     }
 

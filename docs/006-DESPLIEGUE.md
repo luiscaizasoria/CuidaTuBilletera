@@ -163,6 +163,50 @@ Decisiones pendientes en docs/003 «Decisión L1». Ruta crítica: verificación
 
 Solo `controlgastos-api-dev` (`--env dev`, con el binding a `controlgastos-db-dev` comprobado en el dry-run), VersionId `afbd3ac3-538a-47d1-b2bd-fd2b4bb47373`. Antes: 0 migraciones pendientes y respaldo con `d1 export` fuera del repositorio, con su suma de verificación y el bookmark de Time Travel anotados fuera de este documento (no se publican hashes ni conteos de respaldos reales). Después: `GET /health` 200 y `DELETE /me` sin credenciales 401. Todos los comandos pasaron por el envoltorio `cwrangler`. No se desplegó producción ni se aplicaron migraciones. Las consultas de solo lectura posteriores a la prueba Android, el E2E corroborado (dos eliminaciones y perfil recreado persistente) y lo no reconstruible están en docs/003.
 
+## Medición temporal de REAUTH_REQUIRED en DEV
+
+Documento elegido por ser el de operación y despliegue; el diseño del evento está en `api/src/lib/reauth-diagnostics.ts`. Es una medición temporal solo de DEV para saber por qué `DELETE /me` rechaza la reautenticación con `REAUTH_REQUIRED`. No cambia la clasificación, las validaciones ni las respuestas públicas.
+
+### Garantías y limitaciones
+
+El diagnóstico se activa solo si se cumplen TRES condiciones: `ENVIRONMENT === 'dev'`, `REAUTH_DIAGNOSTICS === '1'` (ambas por `--var` en el despliegue; ninguna está en `api/wrangler.jsonc`, y una prueba lo verifica) y `GOOGLE_WEB_CLIENT_ID` idéntico (sin recortar espacios) al cliente Web de DEV, constante pública del módulo. PROD usa otro cliente Web, así que activarlo allí exigiría además sobrescribir `GOOGLE_WEB_CLIENT_ID` con el de DEV, lo que rompe la verificación de audiencia del login de PROD (queda inservible y se nota de inmediato).
+
+Limitaciones reales: esto evita una activación ACCIDENTAL, no una deliberada. Quien controle el despliegue o el código puede evitar cualquier variable o editar la constante; no es aislamiento absoluto. Si en PROD se pasaran las tres variables por error, el login de PROD fallaría, pero el diagnóstico solo emitiría motivo y edad del token (sin token, sub, correo ni ids).
+
+Detección en PROD (verificado leyendo `scripts/verificar-version-prod.js`): `BINDINGS_ESPERADOS` rechaza cualquier binding no esperado en la versión, así que `ENVIRONMENT` o `REAUTH_DIAGNOSTICS` en una versión de PROD hacen fallar la verificación de `preparar`/`activar`; y un `GOOGLE_WEB_CLIENT_ID` distinto del de `wrangler.jsonc` también. Ese pipeline usa `wrangler versions upload`, sin `--var`.
+
+### Activación en DEV (no ejecutar sin autorización)
+
+`--var` FUSIONA con los `vars` del entorno: solo añade o reemplaza las claves nombradas. Comprobado con `wrangler 4.149.0` y `--dry-run`: con `--env dev --var ENVIRONMENT:dev --var REAUTH_DIAGNOSTICS:1` los bindings resultantes son `DB` (`controlgastos-db-dev`), `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID`, `ENVIRONMENT` y `REAUTH_DIAGNOSTICS`; no se pierde ninguna variable ni la D1 de DEV. Una clave repetida (por ejemplo `GOOGLE_WEB_CLIENT_ID`) SÍ se sobrescribe. Los secretos (`JWT_SECRET`) viven en Cloudflare y no se tocan.
+
+Verificación previa recomendada (sin red de despliegue):
+
+```bash
+cd api
+npx wrangler deploy --env dev --dry-run --outdir <dir temporal fuera del repositorio> \
+  --var ENVIRONMENT:dev --var REAUTH_DIAGNOSTICS:1
+```
+
+Debe listar `env.DB (controlgastos-db-dev)` y las cinco variables anteriores, y ningún recurso de PROD. Activación (solo DEV, con autorización y con el envoltorio habitual):
+
+```bash
+npx wrangler deploy --env dev --var ENVIRONMENT:dev --var REAUTH_DIAGNOSTICS:1
+```
+
+### Consulta de resultados
+
+Sin habilitar Workers Logs ni observabilidad remota: `npx wrangler tail --env dev --format json` y filtrar los eventos `reauth_rejected` (aparecen como `console.warn` con un JSON en `logs[].message`). Cada línea tiene solo `event` (`reauth_rejected`), `reason` y, si se conoce, `tokenAgeSeconds`. No se registra token, firma, sub, correo ni id de usuario. El tail no guarda histórico: hay que reproducir la prueba con el tail abierto.
+
+Motivos (`reason`): `TOKEN_INVALID` (firma, emisor, audiencia o caducidad inválidas), `TOKEN_TOO_OLD` (el token supera la antigüedad permitida o su `iat` está en el futuro fuera de margen), `GOOGLE_SUB_MISMATCH` (el token es de otra cuenta de Google), `EMAIL_NOT_VERIFIED`, `AZP_INVALID` (cliente emisor no permitido) y `OTRAS_CONDICIONES` (fallo al obtener las claves de Google por red o tiempo de espera, o un error no clasificado; no es un token inválido). `tokenAgeSeconds` es la edad del ID token al llegar a la API; un valor negativo indica `iat` futuro o desfase de reloj del dispositivo.
+
+### Desactivación
+
+Redesplegar DEV SIN las `--var` (`npx wrangler deploy --env dev`): como no están en `wrangler.jsonc`, el despliegue estándar las elimina. Verificar con `wrangler tail --env dev --format json` que, al repetir un rechazo, ya no aparece la línea `reauth_rejected`. Ningún workflow redespliega DEV: `deploy.yml` es manual (`workflow_dispatch`), solo usa `--env prod` y nunca `wrangler deploy`; `ci.yml` y `pages.yml` no despliegan el Worker. Por tanto, el diagnóstico permanece activo hasta que alguien redespliegue DEV a mano, y hay que desactivarlo manualmente al terminar la medición.
+
+### Prohibición
+
+Prohibido activarlo en PROD: no pasar `ENVIRONMENT`, `REAUTH_DIAGNOSTICS` ni ninguna otra `--var` en comandos de `--env prod`.
+
 ## Páginas legales para Google Play: textos, retención y publicación (pasos 399 a 402; PREPARADO, NADA PUBLICADO)
 
 **Estado real (2026-10-21):** los archivos públicos están en `site/` (índice, `privacidad/`, `eliminar-cuenta/`, `estilos.css`, `.nojekyll`) y el workflow `.github/workflows/pages.yml` está **preparado y sin activar** (solo `workflow_dispatch`; no se ha ejecutado). **GitHub Pages no está publicado**, ninguna URL existe y no se afirma que exista hasta comprobarla con `curl -I`. G1 sigue **abierto**. Google Play Console: el usuario informa que la cuenta personal está creada y verificada (no verificado por nosotros) y que la primera aplicación está en fase de configuración. El repositorio es público: lo que contiene ya es legible; por eso el origen de Pages es solo `site/`.

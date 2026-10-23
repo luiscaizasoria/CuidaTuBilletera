@@ -168,7 +168,7 @@ describe('DELETE /me: clasificación interna de REAUTH_REQUIRED', () => {
     expect(withCb).toBe(without);
   });
 
-  it('el callback recibe solo el motivo (un string del conjunto)', async () => {
+  it('el callback recibe solo el motivo y, si se conoce, la edad del token', async () => {
     const calls: unknown[][] = [];
     const app = createApp({
       googleKeys: fx.keys,
@@ -187,8 +187,11 @@ describe('DELETE /me: clasificación interna de REAUTH_REQUIRED', () => {
     ];
     expect(calls).toHaveLength(2);
     for (const args of calls) {
-      expect(args).toHaveLength(1);
+      expect(args.length).toBeLessThanOrEqual(2);
       expect(allowed).toContain(args[0]);
+      if (args[1] !== undefined) {
+        expect(Object.keys(args[1] as object)).toEqual(['tokenAgeSeconds']);
+      }
     }
   });
 
