@@ -10,6 +10,10 @@ export interface AuthBindings {
   JWT_SECRET?: string;
   // Binding D1. Solo existe en los entornos que lo declaran en wrangler.jsonc.
   DB?: D1Database;
+  // Diagnóstico de REAUTH_REQUIRED: se pasan solo en un despliegue DEV explícito (--var) y nunca
+  // se versionan en wrangler.jsonc. En PROD no existen; sin ENVIRONMENT === 'dev' no se emite nada.
+  ENVIRONMENT?: string;
+  REAUTH_DIAGNOSTICS?: string;
 }
 
 // Audiencia del JWT propio. Distinta a propósito de la audiencia de los ID tokens de Google

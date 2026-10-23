@@ -11,6 +11,8 @@ export interface GoogleIdentity {
   sub: string;
   email: string;
   name?: string;
+  // Solo para diagnóstico interno; se define como propiedad no enumerable (no se serializa ni compara).
+  readonly tokenAgeSeconds?: number;
 }
 
 export interface GoogleAudience {
@@ -36,16 +38,19 @@ export type ReauthRejectionReason =
 // Mismo status, código y mensaje públicos que invalidTokenError; el motivo es solo interno.
 export class GoogleTokenRejectedError extends ApiError {
   readonly reason!: ReauthRejectionReason;
+  readonly tokenAgeSeconds?: number;
 
-  constructor(reason: ReauthRejectionReason) {
+  constructor(reason: ReauthRejectionReason, tokenAgeSeconds?: number) {
     super(401, 'INVALID_TOKEN', 'Token de autenticación inválido');
     this.name = 'ApiError';
     // No enumerable: JSON.stringify y los registros genéricos no lo incluyen.
     Object.defineProperty(this, 'reason', { value: reason, enumerable: false });
+    Object.defineProperty(this, 'tokenAgeSeconds', { value: tokenAgeSeconds, enumerable: false });
   }
 }
 
-const rejection = (reason: ReauthRejectionReason) => new GoogleTokenRejectedError(reason);
+const rejection = (reason: ReauthRejectionReason, tokenAgeSeconds?: number) =>
+  new GoogleTokenRejectedError(reason, tokenAgeSeconds);
 
 // Se crea una sola vez por isolate: solo cachea las claves públicas de Google.
 let remoteKeys: JWTVerifyGetKey | undefined;
@@ -76,17 +81,19 @@ export async function verifyGoogleIdToken(
     });
 
     if (typeof payload.sub !== 'string' || payload.sub === '') throw rejection('TOKEN_INVALID');
+    // Edad del token (firma ya verificada) respecto a la misma fecha de la verificación.
+    const nowSeconds = Math.floor((currentDate ?? new Date()).getTime() / 1000);
+    const iat = payload.iat;
+    const age = typeof iat === 'number' && Number.isFinite(iat) ? nowSeconds - iat : undefined;
     if (maxAgeSeconds !== undefined) {
-      const nowSeconds = Math.floor((currentDate ?? new Date()).getTime() / 1000);
-      const iat = payload.iat;
       if (typeof iat !== 'number' || !Number.isFinite(iat)) throw rejection('TOKEN_TOO_OLD');
       if (iat < nowSeconds - maxAgeSeconds || iat > nowSeconds + MAX_IAT_FUTURE_SECONDS) {
-        throw rejection('TOKEN_TOO_OLD');
+        throw rejection('TOKEN_TOO_OLD', age);
       }
     }
-    if (payload.email_verified !== true) throw rejection('EMAIL_NOT_VERIFIED');
+    if (payload.email_verified !== true) throw rejection('EMAIL_NOT_VERIFIED', age);
     if (typeof payload.email !== 'string' || payload.email === '') {
-      throw rejection('EMAIL_NOT_VERIFIED');
+      throw rejection('EMAIL_NOT_VERIFIED', age);
     }
 
     // OpenID Connect: azp identifica al cliente que pidió el token. Si viene y hay un cliente
@@ -94,15 +101,17 @@ export async function verifyGoogleIdToken(
     if (payload.azp !== undefined && audience.androidClientIds.length > 0) {
       const known = [...audience.androidClientIds, audience.webClientId];
       if (typeof payload.azp !== 'string' || !known.includes(payload.azp)) {
-        throw rejection('AZP_INVALID');
+        throw rejection('AZP_INVALID', age);
       }
     }
 
-    return {
+    const identity: GoogleIdentity = {
       sub: payload.sub,
       email: payload.email,
       name: typeof payload.name === 'string' ? payload.name : undefined,
     };
+    Object.defineProperty(identity, 'tokenAgeSeconds', { value: age, enumerable: false });
+    return identity;
   } catch (error) {
     if (error instanceof GoogleTokenRejectedError) throw error;
     // Un fallo de red al obtener las claves no es un token inválido.
