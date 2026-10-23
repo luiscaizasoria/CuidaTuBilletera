@@ -11,7 +11,12 @@ import {
 import { authMiddleware, type AuthEnv } from '../lib/auth-middleware';
 import { ApiError } from '../lib/errors';
 import { readJsonBody } from '../lib/json-body';
-import { googleRemoteKeys, verifyGoogleIdToken } from '../services/google-token-service';
+import {
+  GoogleTokenRejectedError,
+  googleRemoteKeys,
+  verifyGoogleIdToken,
+  type ReauthRejectionReason,
+} from '../services/google-token-service';
 import { deleteUserProfile } from '../services/profile-service';
 
 // Frescura máxima del ID token de Google exigido para eliminar el perfil.
@@ -30,7 +35,26 @@ const reauthRequired = () =>
     'No se pudo confirmar tu identidad. Usa la cuenta de Google con la que iniciaste sesión.',
   );
 
-export function meRoutes(now?: () => Date, googleKeys?: JWTVerifyGetKey) {
+// Instrumentación opcional: recibe únicamente el motivo, nunca el token, el sub ni el email.
+export type ReauthRejectedHandler = (reason: ReauthRejectionReason) => void;
+
+// Nunca altera la respuesta: un callback que falla se ignora.
+function notifyRejection(
+  handler: ReauthRejectedHandler | undefined,
+  reason: ReauthRejectionReason,
+) {
+  try {
+    handler?.(reason);
+  } catch {
+    // Sin efecto sobre la respuesta.
+  }
+}
+
+export function meRoutes(
+  now?: () => Date,
+  googleKeys?: JWTVerifyGetKey,
+  onReauthRejected?: ReauthRejectedHandler,
+) {
   const routes = new Hono<AuthEnv>();
   routes.get('/me', authMiddleware(now), (c) => c.json({ user: c.get('user') }));
 
@@ -62,13 +86,20 @@ export function meRoutes(now?: () => Date, googleKeys?: JWTVerifyGetKey) {
         REAUTH_MAX_AGE_SECONDS,
       );
       identitySub = identity.sub;
-    } catch {
+    } catch (error) {
+      notifyRejection(
+        onReauthRejected,
+        error instanceof GoogleTokenRejectedError ? error.reason : 'OTRAS_CONDICIONES',
+      );
       throw reauthRequired();
     }
 
     const row = await findUserById(db, user.id);
     if (!row) throw new ApiError(401, 'INVALID_TOKEN', 'Token de autenticación inválido');
-    if (row.google_sub !== identitySub) throw reauthRequired();
+    if (row.google_sub !== identitySub) {
+      notifyRejection(onReauthRejected, 'GOOGLE_SUB_MISMATCH');
+      throw reauthRequired();
+    }
 
     await deleteUserProfile(db, user.id);
     return c.body(null, 204);
