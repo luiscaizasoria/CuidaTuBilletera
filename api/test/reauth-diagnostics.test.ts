@@ -2,7 +2,7 @@ import type { JWTPayload } from 'jose';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app';
 import { USER_DATA_TABLES } from '../src/db/profile-repository';
-import { reauthDiagnosticsHandler } from '../src/lib/reauth-diagnostics';
+import { DEV_GOOGLE_WEB_CLIENT_ID, reauthDiagnosticsHandler } from '../src/lib/reauth-diagnostics';
 import { issueAccessToken } from '../src/services/access-token-service';
 import { count, DB_HOOK_TIMEOUT_MS, freshDb, insertAccount, insertUser } from './d1-helpers';
 import { AUTH_ENV, createGoogleFixture, JWT_SECRET, NOW } from './helpers';
@@ -23,12 +23,25 @@ const idClaims = (over: JWTPayload = {}): JWTPayload => ({
   ...fx.validClaims(),
   sub: SUB,
   email: EMAIL,
+  aud: DEV_GOOGLE_WEB_CLIENT_ID,
   ...over,
 });
 
-const DEV = { ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: '1' };
+const DEV_WEB = { GOOGLE_WEB_CLIENT_ID: DEV_GOOGLE_WEB_CLIENT_ID };
+const DEV = { ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: '1', ...DEV_WEB };
+const PROD_WEB = '354384947762-52bi1smmu5kdl19pmg1me8o5iajir3vh.apps.googleusercontent.com';
+// Cliente Web que no es el de DEV: ajeno, de PROD, ausente o con espacios.
+const BAD_WEB: [Record<string, string | undefined>][] = [
+  [{ GOOGLE_WEB_CLIENT_ID: PROD_WEB }],
+  [{ GOOGLE_WEB_CLIENT_ID: 'otro.apps.googleusercontent.com' }],
+  [{ GOOGLE_WEB_CLIENT_ID: undefined }],
+  [{ GOOGLE_WEB_CLIENT_ID: '' }],
+  [{ GOOGLE_WEB_CLIENT_ID: ` ${DEV_GOOGLE_WEB_CLIENT_ID}` }],
+  [{ GOOGLE_WEB_CLIENT_ID: `${DEV_GOOGLE_WEB_CLIENT_ID} ` }],
+  [{ GOOGLE_WEB_CLIENT_ID: DEV_GOOGLE_WEB_CLIENT_ID.toUpperCase() }],
+];
 
-async function del(extraEnv: Record<string, string>, idToken: string) {
+async function del(extraEnv: Record<string, string | undefined>, idToken: string) {
   const app = createApp({ googleKeys: fx.keys, now: () => NOW });
   return app.request(
     '/me',
@@ -37,7 +50,7 @@ async function del(extraEnv: Record<string, string>, idToken: string) {
       headers: { Authorization: `Bearer ${userToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({ confirm: 'ELIMINAR', idToken }),
     },
-    { ...AUTH_ENV, DB: db, ...extraEnv },
+    { ...AUTH_ENV, ...DEV_WEB, DB: db, ...extraEnv },
   );
 }
 
@@ -81,8 +94,17 @@ describe('reauthDiagnosticsHandler', () => {
     [{ ENVIRONMENT: 'DEV', REAUTH_DIAGNOSTICS: '1' }],
     [{ ENVIRONMENT: ' dev', REAUTH_DIAGNOSTICS: '1' }],
     [{ ENVIRONMENT: 'dev ', REAUTH_DIAGNOSTICS: '1' }],
+    // Sin el cliente Web de DEV nada se activa, aunque las otras dos variables estén.
+    [{ ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: '1' }],
+    [{ ...DEV_WEB }],
   ])('sin handler para %j', (env) => {
     expect(reauthDiagnosticsHandler(env)).toBeUndefined();
+  });
+
+  it.each(BAD_WEB)('dev + 1 con cliente Web distinto del de DEV %j: sin handler', (web) => {
+    expect(reauthDiagnosticsHandler({ ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: '1', ...web })).toBe(
+      undefined,
+    );
   });
 
   it('con dev y 1 devuelve handler', () => {
@@ -103,7 +125,8 @@ describe('reauthDiagnosticsHandler', () => {
 
 describe('DELETE /me: diagnóstico REAUTH_REQUIRED', () => {
   it('DEV sin diagnóstico: ningún console.*', async () => {
-    for (const [, build] of REJECTIONS) await del({ ENVIRONMENT: 'dev' }, await build());
+    for (const [, build] of REJECTIONS)
+      await del({ ENVIRONMENT: 'dev', ...DEV_WEB }, await build());
     expect(calls()).toHaveLength(0);
   });
 
@@ -148,16 +171,28 @@ describe('DELETE /me: diagnóstico REAUTH_REQUIRED', () => {
 
   it.each([
     [{}],
-    [{ ENVIRONMENT: 'prod', REAUTH_DIAGNOSTICS: '1' }],
-    [{ REAUTH_DIAGNOSTICS: '1' }],
-    [{ ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: 'true' }],
-    [{ ENVIRONMENT: 'DEV', REAUTH_DIAGNOSTICS: '1' }],
-    [{ ENVIRONMENT: ' dev', REAUTH_DIAGNOSTICS: '1' }],
-    [{ ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: '0' }],
+    [{ ENVIRONMENT: 'prod', REAUTH_DIAGNOSTICS: '1', ...DEV_WEB }],
+    [{ REAUTH_DIAGNOSTICS: '1', ...DEV_WEB }],
+    [{ ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: 'true', ...DEV_WEB }],
+    [{ ENVIRONMENT: 'DEV', REAUTH_DIAGNOSTICS: '1', ...DEV_WEB }],
+    [{ ENVIRONMENT: ' dev', REAUTH_DIAGNOSTICS: '1', ...DEV_WEB }],
+    [{ ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: '0', ...DEV_WEB }],
   ])('PROD o valores erróneos %j: cero registros', async (env) => {
     for (const [, build] of REJECTIONS) await del(env, await build());
     expect(calls()).toHaveLength(0);
   });
+
+  it.each(BAD_WEB)(
+    'dev + 1 con cliente Web de PROD/otro/ausente/con espacios %j: cero registros',
+    async (web) => {
+      const env = { ENVIRONMENT: 'dev', REAUTH_DIAGNOSTICS: '1', ...web };
+      for (const [, build] of REJECTIONS) {
+        const res = await del(env, await build());
+        expect(res.status).toBeGreaterThanOrEqual(400);
+      }
+      expect(calls()).toHaveLength(0);
+    },
+  );
 
   it('respuestas públicas idénticas entre motivos y con/sin diagnóstico; no elimina datos', async () => {
     const tables = [...USER_DATA_TABLES];
