@@ -7,7 +7,7 @@ import { calendarRoutes } from './routes/calendar';
 import { exportRoutes } from './routes/export';
 import { reportRoutes } from './routes/reports';
 import { categoryRoutes } from './routes/categories';
-import { meRoutes } from './routes/me';
+import { meRoutes, type ReauthRejectedHandler } from './routes/me';
 import { transactionRoutes } from './routes/transactions';
 import type { ResourceDeps } from './services/resource-deps';
 import type { AuthBindings } from './lib/auth-config';
@@ -20,7 +20,10 @@ const noStore = createMiddleware(async (c, next) => {
 });
 
 // Las dependencias se inyectan para probar sin llamar a Google ni depender del reloj real.
-export type AppDeps = AuthRouteDeps & Pick<Partial<ResourceDeps>, 'categoryHasTransactions'>;
+export type AppDeps = AuthRouteDeps &
+  Pick<Partial<ResourceDeps>, 'categoryHasTransactions'> & {
+    onReauthRejected?: ReauthRejectedHandler;
+  };
 
 export function createApp(deps: AppDeps = {}) {
   const app = new Hono<{ Bindings: AuthBindings }>();
@@ -39,7 +42,7 @@ export function createApp(deps: AppDeps = {}) {
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
   app.route('/', authRoutes(deps));
-  app.route('/', meRoutes(deps.now, deps.googleKeys));
+  app.route('/', meRoutes(deps.now, deps.googleKeys, deps.onReauthRejected));
   const resourceDeps: Partial<ResourceDeps> = {
     now: deps.now,
     idGenerator: deps.idGenerator,

@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
+import { createRemoteJWKSet, errors, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { ApiError } from '../lib/errors';
 
 export const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
@@ -22,6 +22,30 @@ export interface GoogleAudience {
 export function invalidTokenError(): ApiError {
   return new ApiError(401, 'INVALID_TOKEN', 'Token de autenticación inválido');
 }
+
+// Motivo interno del rechazo de un ID token. Solo sirve para diagnóstico: nunca se serializa ni
+// llega al cliente. GOOGLE_SUB_MISMATCH lo decide el llamador (el token es válido en sí mismo).
+export type ReauthRejectionReason =
+  | 'TOKEN_INVALID'
+  | 'TOKEN_TOO_OLD'
+  | 'GOOGLE_SUB_MISMATCH'
+  | 'EMAIL_NOT_VERIFIED'
+  | 'AZP_INVALID'
+  | 'OTRAS_CONDICIONES';
+
+// Mismo status, código y mensaje públicos que invalidTokenError; el motivo es solo interno.
+export class GoogleTokenRejectedError extends ApiError {
+  readonly reason!: ReauthRejectionReason;
+
+  constructor(reason: ReauthRejectionReason) {
+    super(401, 'INVALID_TOKEN', 'Token de autenticación inválido');
+    this.name = 'ApiError';
+    // No enumerable: JSON.stringify y los registros genéricos no lo incluyen.
+    Object.defineProperty(this, 'reason', { value: reason, enumerable: false });
+  }
+}
+
+const rejection = (reason: ReauthRejectionReason) => new GoogleTokenRejectedError(reason);
 
 // Se crea una sola vez por isolate: solo cachea las claves públicas de Google.
 let remoteKeys: JWTVerifyGetKey | undefined;
@@ -51,24 +75,26 @@ export async function verifyGoogleIdToken(
       requiredClaims: ['exp', 'iat', 'sub'],
     });
 
-    if (typeof payload.sub !== 'string' || payload.sub === '') throw invalidTokenError();
+    if (typeof payload.sub !== 'string' || payload.sub === '') throw rejection('TOKEN_INVALID');
     if (maxAgeSeconds !== undefined) {
       const nowSeconds = Math.floor((currentDate ?? new Date()).getTime() / 1000);
       const iat = payload.iat;
-      if (typeof iat !== 'number' || !Number.isFinite(iat)) throw invalidTokenError();
+      if (typeof iat !== 'number' || !Number.isFinite(iat)) throw rejection('TOKEN_TOO_OLD');
       if (iat < nowSeconds - maxAgeSeconds || iat > nowSeconds + MAX_IAT_FUTURE_SECONDS) {
-        throw invalidTokenError();
+        throw rejection('TOKEN_TOO_OLD');
       }
     }
-    if (payload.email_verified !== true) throw invalidTokenError();
-    if (typeof payload.email !== 'string' || payload.email === '') throw invalidTokenError();
+    if (payload.email_verified !== true) throw rejection('EMAIL_NOT_VERIFIED');
+    if (typeof payload.email !== 'string' || payload.email === '') {
+      throw rejection('EMAIL_NOT_VERIFIED');
+    }
 
     // OpenID Connect: azp identifica al cliente que pidió el token. Si viene y hay un cliente
     // Android configurado, solo se aceptan los clientes conocidos (Android o Web).
     if (payload.azp !== undefined && audience.androidClientIds.length > 0) {
       const known = [...audience.androidClientIds, audience.webClientId];
       if (typeof payload.azp !== 'string' || !known.includes(payload.azp)) {
-        throw invalidTokenError();
+        throw rejection('AZP_INVALID');
       }
     }
 
@@ -77,7 +103,13 @@ export async function verifyGoogleIdToken(
       email: payload.email,
       name: typeof payload.name === 'string' ? payload.name : undefined,
     };
-  } catch {
-    throw invalidTokenError();
+  } catch (error) {
+    if (error instanceof GoogleTokenRejectedError) throw error;
+    // Un fallo de red al obtener las claves no es un token inválido.
+    const reason =
+      error instanceof errors.JWKSTimeout || !(error instanceof errors.JOSEError)
+        ? 'OTRAS_CONDICIONES'
+        : 'TOKEN_INVALID';
+    throw rejection(reason);
   }
 }

@@ -1,7 +1,12 @@
 import type { JWTPayload } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ANDROID_CLIENT_ID, createGoogleFixture, NOW, WEB_CLIENT_ID } from '../../test/helpers';
-import { verifyGoogleIdToken, type GoogleAudience } from './google-token-service';
+import {
+  GoogleTokenRejectedError,
+  verifyGoogleIdToken,
+  type GoogleAudience,
+  type ReauthRejectionReason,
+} from './google-token-service';
 
 let fx: Awaited<ReturnType<typeof createGoogleFixture>>;
 beforeAll(async () => {
@@ -151,6 +156,108 @@ describe('verifyGoogleIdToken', () => {
 
     it('sin maxAgeSeconds el login no cambia: un iat antiguo sigue siendo válido', async () => {
       await verify(await fx.sign({ ...fx.validClaims(), iat: nowSec - 3000 }));
+    });
+  });
+
+  describe('motivo interno del rechazo', () => {
+    const nowSec = Math.floor(NOW.getTime() / 1000);
+    const reasonOf = async (token: string, maxAge: number | null = 300) => {
+      const error = await verifyGoogleIdToken(
+        token,
+        audience,
+        fx.keys,
+        NOW,
+        maxAge ?? undefined,
+      ).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(GoogleTokenRejectedError);
+      return error as GoogleTokenRejectedError;
+    };
+    const claims = () => fx.validClaims();
+
+    it('conserva el error público idéntico y no serializa el motivo', async () => {
+      const error = await reasonOf(await fx.sign({ ...claims(), email_verified: false }));
+      expect(error).toMatchObject({
+        status: 401,
+        code: 'INVALID_TOKEN',
+        message: 'Token de autenticación inválido',
+      });
+      expect(Object.keys(error)).not.toContain('reason');
+      expect(JSON.stringify(error)).not.toContain('EMAIL_NOT_VERIFIED');
+    });
+
+    const cases: [string, () => Promise<string>, ReauthRejectionReason][] = [
+      ['firma de otra clave', async () => fx.signWithOtherKey(claims()), 'TOKEN_INVALID'],
+      ['sin firma', async () => fx.unsigned(claims()), 'TOKEN_INVALID'],
+      ['HS256', async () => fx.signHs256(claims()), 'TOKEN_INVALID'],
+      ['no es un JWT', async () => 'no-es-un-jwt', 'TOKEN_INVALID'],
+      ['aud erróneo', async () => fx.sign({ ...claims(), aud: 'otro' }), 'TOKEN_INVALID'],
+      [
+        'iss erróneo',
+        async () => fx.sign({ ...claims(), iss: 'https://evil.example' }),
+        'TOKEN_INVALID',
+      ],
+      ['exp vencido', async () => fx.sign({ ...claims(), exp: nowSec - 3600 }), 'TOKEN_INVALID'],
+      ['sin sub', async () => fx.sign(without(claims(), 'sub')), 'TOKEN_INVALID'],
+      ['sub vacío', async () => fx.sign({ ...claims(), sub: '' }), 'TOKEN_INVALID'],
+      ['sin iat', async () => fx.sign(without(claims(), 'iat')), 'TOKEN_INVALID'],
+      [
+        'iat no numérico (lo rechaza jose)',
+        async () => fx.sign({ ...claims(), iat: 'x' as never }),
+        'TOKEN_INVALID',
+      ],
+      [
+        'iat de hace 301 s',
+        async () => fx.sign({ ...claims(), iat: nowSec - 301 }),
+        'TOKEN_TOO_OLD',
+      ],
+      [
+        'iat futuro de más de 60 s',
+        async () => fx.sign({ ...claims(), iat: nowSec + 61 }),
+        'TOKEN_TOO_OLD',
+      ],
+      [
+        'email_verified false',
+        async () => fx.sign({ ...claims(), email_verified: false }),
+        'EMAIL_NOT_VERIFIED',
+      ],
+      [
+        'email_verified ausente',
+        async () => fx.sign(without(claims(), 'email_verified')),
+        'EMAIL_NOT_VERIFIED',
+      ],
+      ['email ausente', async () => fx.sign(without(claims(), 'email')), 'EMAIL_NOT_VERIFIED'],
+      ['email vacío', async () => fx.sign({ ...claims(), email: '' }), 'EMAIL_NOT_VERIFIED'],
+      ['azp desconocido', async () => fx.sign({ ...claims(), azp: 'ajeno' }), 'AZP_INVALID'],
+      ['azp no string', async () => fx.sign({ ...claims(), azp: 123 }), 'AZP_INVALID'],
+    ];
+    it.each(cases)('%s', async (_name, build, expected) => {
+      expect((await reasonOf(await build())).reason).toBe(expected);
+    });
+
+    it('orden real: iat viejo antes que email sin verificar antes que azp ajeno', async () => {
+      const old = { iat: nowSec - 301, email_verified: false, azp: 'ajeno' };
+      expect((await reasonOf(await fx.sign({ ...claims(), ...old }))).reason).toBe('TOKEN_TOO_OLD');
+      const noEmail = { email_verified: false, azp: 'ajeno' };
+      expect((await reasonOf(await fx.sign({ ...claims(), ...noEmail }))).reason).toBe(
+        'EMAIL_NOT_VERIFIED',
+      );
+    });
+
+    it('sin maxAge el iat antiguo no se rechaza y los demás motivos se conservan', async () => {
+      const token = await fx.sign({ ...claims(), iat: nowSec - 3000, azp: 'ajeno' });
+      expect((await reasonOf(token, null)).reason).toBe('AZP_INVALID');
+    });
+
+    it('un fallo inesperado al obtener claves es OTRAS_CONDICIONES', async () => {
+      const broken = (() => Promise.reject(new TypeError('red'))) as unknown as typeof fx.keys;
+      const error = await verifyGoogleIdToken(
+        await fx.sign(claims()),
+        audience,
+        broken,
+        NOW,
+        300,
+      ).catch((e: unknown) => e);
+      expect((error as GoogleTokenRejectedError).reason).toBe('OTRAS_CONDICIONES');
     });
   });
 });
