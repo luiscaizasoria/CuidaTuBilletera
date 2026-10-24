@@ -1,5 +1,5 @@
 // Dev Container de ControlGastos. Ver docs/005-DEVCONTAINER.md.
-// ESTADO: preparado pero NO probado (Docker no esta disponible en la maquina de desarrollo).
+// ESTADO: probado en Windows 11 + WSL2 + Docker Desktop. El contenedor no se ha reconstruido con la instalacion de EAS CLI (ver docs/005).
 {
   "name": "ControlGastos",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
@@ -17,8 +17,10 @@
   ],
 
   // Solo al crear el contenedor. Los volumenes nuevos nacen root:root: chown NO recursivo
-  // sobre los 3 puntos de montaje y luego npm ci. No probado.
-  "postCreateCommand": "sudo chown node:node /workspaces/ControlGastos/node_modules /workspaces/ControlGastos/api/node_modules /workspaces/ControlGastos/app/node_modules && npm ci",
+  // sobre los 3 puntos de montaje, npm ci y EAS CLI fijado en el prefijo npm global de node
+  // (sin sudo, desde $HOME para no depender del workspace). Si algun paso falla, la creacion
+  // informa el error; la ultima comprobacion exige la version exacta de EAS CLI.
+  "postCreateCommand": "sudo chown node:node /workspaces/ControlGastos/node_modules /workspaces/ControlGastos/api/node_modules /workspaces/ControlGastos/app/node_modules && npm ci && (cd \"$HOME\" && npm install -g --no-fund --no-audit eas-cli@25.3.0) && eas --version | grep -F 'eas-cli/25.3.0'",
 
   "forwardPorts": [8787, 8081],
   "portsAttributes": {
