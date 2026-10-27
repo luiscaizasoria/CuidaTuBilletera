@@ -1,8 +1,9 @@
 // Selector «Elegir ícono» compartido (R5.1b; docs/007 §5.15 A, docs/008 §6.17.3).
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import {
   AccessibilityInfo,
   Keyboard,
+  Platform,
   ScrollView,
   StyleSheet,
   type StyleProp,
@@ -10,15 +11,9 @@ import {
 } from 'react-native';
 import { ICON_GROUPS, iconsForScope, entriesOfGroup } from '../lib/icon-catalog';
 import { colors } from '../theme/tokens';
+import { useSystemInsets } from '../theme/useSystemInsets';
 import { mockWindow, relaxTimeoutsForColdCache } from '../test-utils';
-import {
-  FIXED_CONTROLS_DP,
-  GRID_MIN_DP,
-  IconField,
-  IconPickerSheet,
-  NEEDED_DP,
-  iconSheetLayout,
-} from './icon-picker-sheet';
+import { IconField, IconPickerSheet, scrollViewport } from './icon-picker-sheet';
 
 relaxTimeoutsForColdCache();
 
@@ -52,51 +47,58 @@ afterEach(() => jest.restoreAllMocks());
 
 // El layout real (medidas, desplazamiento y teclado) NO se valida en Jest: solo estructura, estilos y el
 // cálculo de presupuesto. La medición de alturas se valida en el teléfono (Android 360x640 y 412x915).
+// Teclado simulado: captura los manejadores de `Keyboard.addListener` y los dispara a mano.
+function mockKeyboard() {
+  const handlers: Record<string, (event: unknown) => void> = {};
+  jest.spyOn(Keyboard, 'addListener').mockImplementation(((
+    event: string,
+    handler: (event: unknown) => void,
+  ) => {
+    handlers[event] = handler;
+    return { remove: jest.fn() };
+  }) as never);
+  return {
+    show: (height: number) =>
+      act(async () => handlers.keyboardDidShow?.({ endCoordinates: { height } })),
+    hide: () => act(async () => handlers.keyboardDidHide?.({})),
+  };
+}
+
 describe('hoja: presupuesto de alturas (cálculo, no layout real)', () => {
   const base = { insetTop: 32, insetBottom: 24, fontScale: 1 };
 
-  it('controles fijos + rejilla mínima de 2 filas caben en 360x640 con el inset de 32 dp', () => {
-    expect(GRID_MIN_DP).toBe(2 * 48 + 8);
-    expect(NEEDED_DP).toBe(FIXED_CONTROLS_DP + GRID_MIN_DP);
-    // La hoja abre casi a pantalla completa: 640 - 32 - 8 = 600 >= 429 + 24.
-    const layout = iconSheetLayout({ ...base, height: 640 });
-    expect(layout.maxHeight).toBe(640 - 32 - 8);
-    expect(layout.bodyScrolls).toBe(false);
-    expect(layout.gridHeight).toBeGreaterThanOrEqual(GRID_MIN_DP);
-  });
+  it.each([
+    [360, 640],
+    [411, 891],
+  ])(
+    '%i x %i: con el teclado abierto de 290 dp el buscador cabe en la zona desplazable',
+    (_w, h) => {
+      const closed = scrollViewport({ ...base, height: h, keyboard: 0 });
+      const open = scrollViewport({ ...base, height: h, keyboard: 290 });
+      expect(open).toBeGreaterThanOrEqual(48);
+      expect(open).toBeLessThan(closed);
+    },
+  );
 
-  it('412x915 deja la hoja con rejilla holgada', () => {
-    const layout = iconSheetLayout({ ...base, height: 915 });
-    expect(layout.maxHeight).toBe(915 - 32 - 8);
-    expect(layout.bodyScrolls).toBe(false);
-    expect(layout.gridHeight).toBeGreaterThan(GRID_MIN_DP);
-  });
-
-  it('con ventana muy baja el cuerpo completo se desplaza', () => {
-    expect(iconSheetLayout({ ...base, height: 400 }).bodyScrolls).toBe(true);
+  it('360x640 con teclado: 77 dp para la zona desplazable; 411x891: 328 dp', () => {
+    expect(scrollViewport({ ...base, height: 640, keyboard: 290 })).toBe(77);
+    expect(scrollViewport({ ...base, height: 891, keyboard: 290 })).toBe(328);
   });
 
   it('la fuente grande reserva más espacio', () => {
-    const normal = iconSheetLayout({ ...base, height: 800 });
-    const large = iconSheetLayout({ ...base, height: 800, fontScale: 2 });
-    expect(large.gridHeight).toBeLessThan(normal.gridHeight);
+    const normal = scrollViewport({ ...base, height: 800, keyboard: 0 });
+    const large = scrollViewport({ ...base, height: 800, keyboard: 0, fontScale: 2 });
+    expect(large).toBeLessThan(normal);
   });
 
-  it('con alto suficiente, buscador y chips quedan fuera de la zona desplazable', async () => {
-    mockWindow(360, 1, 800);
-    await renderSheet(null);
-    const scroll = screen.getByTestId('icon-picker-scroll');
-    expect(within(scroll).queryByLabelText('Buscar ícono')).toBeNull();
-    expect(flat(scroll).minHeight).toBe(GRID_MIN_DP);
-  });
-
-  it('con alto insuficiente buscador, chips y rejilla se desplazan juntos y el pie queda fijo', async () => {
-    mockWindow(360, 1, 400);
+  it('buscador, chips y rejilla están siempre en la misma zona desplazable y el pie queda fijo', async () => {
+    mockWindow(360, 1, 640);
     await renderSheet(null);
     const scroll = screen.getByTestId('icon-picker-scroll');
     expect(within(scroll).getByLabelText('Buscar ícono')).toBeTruthy();
     expect(within(scroll).getByLabelText('Grupos de íconos')).toBeTruthy();
     expect(within(scroll).getByTestId('icon-picker-grid')).toBeTruthy();
+    expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
     expect(within(screen.getByTestId('icon-picker-footer')).getByText('Cancelar')).toBeTruthy();
     expect(within(scroll).queryByText('Cancelar')).toBeNull();
   });
@@ -323,18 +325,60 @@ describe('hoja: búsqueda', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('el buscador no se remonta al escribir ni al abrir el teclado (mismo nodo, con y sin alto bajo)', async () => {
-    mockWindow(360, 1, 400);
+  it.each([
+    [360, 640],
+    [411, 891],
+  ])('%i x %i: el árbol es el mismo con teclado cerrado y abierto de 290 dp', async (w, h) => {
+    mockWindow(w, 1, h);
+    const keyboard = mockKeyboard();
     await renderSheet(null);
     const input = screen.getByLabelText('Buscar ícono');
+    const scroll = screen.getByTestId('icon-picker-scroll');
+    const shape = () => JSON.stringify(screen.toJSON(), (k, v) => (k === 'style' ? undefined : v));
+    const closed = shape();
     await fireEvent(input, 'focus');
+    await keyboard.show(290);
+    expect(shape()).toBe(closed);
     await fireEvent.changeText(input, 'bus');
     expect(screen.getByLabelText('Buscar ícono')).toBe(input);
-    // El teclado reduce la ventana: la estructura (y por tanto el TextInput) no cambia.
-    mockWindow(360, 1, 200);
-    await fireEvent.changeText(input, 'buse');
+    expect(screen.getByTestId('icon-picker-scroll')).toBe(scroll);
+    await keyboard.hide();
     expect(screen.getByLabelText('Buscar ícono')).toBe(input);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('con teclado abierto la hoja se eleva y su máximo baja una sola vez', async () => {
+    mockWindow(360, 1, 640);
+    // Con Android el inset inferior es el respaldo de 48 dp (sin SafeAreaProvider): la cuenta no es trivial.
+    jest.replaceProperty(Platform, 'OS', 'android');
+    let bottom = -1;
+    function Inset() {
+      bottom = useSystemInsets().bottom;
+      return null;
+    }
+    await render(<Inset />);
+    expect(bottom).toBeGreaterThan(0);
+    const keyboard = mockKeyboard();
+    await renderSheet(null);
+    const root = () => flat(screen.getByTestId('sheet-root'));
+    const sheet = () => flat(screen.getByLabelText('Elegir ícono'));
+    const closedMax = sheet().maxHeight as number;
+    expect(root().paddingBottom).toBeUndefined();
+    await keyboard.show(290);
+    expect(root().paddingBottom).toBe(290 + bottom);
+    expect(closedMax - (sheet().maxHeight as number)).toBe(290 + bottom);
+    expect(sheet().paddingBottom).toBe(24);
+  });
+
+  it('si el diálogo ya se redimensionó con el teclado no se eleva (no cuenta el teclado dos veces)', async () => {
+    mockWindow(360, 1, 640);
+    const keyboard = mockKeyboard();
+    await renderSheet(null);
+    await keyboard.show(290);
+    await fireEvent(screen.getByTestId('sheet-root'), 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width: 360, height: 640 - 290 } },
+    });
+    expect(flat(screen.getByTestId('sheet-root')).paddingBottom).toBeUndefined();
   });
 });
 
