@@ -53,38 +53,26 @@ afterEach(() => jest.restoreAllMocks());
 // El layout real (medidas, desplazamiento y teclado) NO se valida en Jest: solo estructura, estilos y el
 // cálculo de presupuesto. La medición de alturas se valida en el teléfono (Android 360x640 y 412x915).
 describe('hoja: presupuesto de alturas (cálculo, no layout real)', () => {
-  const base = { insetTop: 32, insetBottom: 24, keyboard: 0, fontScale: 1, searchFocused: false };
+  const base = { insetTop: 32, insetBottom: 24, fontScale: 1 };
 
   it('controles fijos + rejilla mínima de 2 filas caben en 360x640 con el inset de 32 dp', () => {
     expect(GRID_MIN_DP).toBe(2 * 48 + 8);
     expect(NEEDED_DP).toBe(FIXED_CONTROLS_DP + GRID_MIN_DP);
-    // Sin inset inferior: 0.75 * 640 - 32 = 448 >= 429, la hoja alta cabe sin compactar.
-    expect(NEEDED_DP).toBeLessThanOrEqual(0.75 * 640 - 32);
-    const layout = iconSheetLayout({ ...base, height: 640, insetBottom: 0 });
-    expect(layout.compact).toBe(false);
-    expect(layout.bodyScrolls).toBe(false);
-    expect(layout.gridHeight).toBeGreaterThanOrEqual(GRID_MIN_DP);
-  });
-
-  it('412x915 deja la hoja alta con rejilla holgada', () => {
-    const layout = iconSheetLayout({ ...base, height: 915 });
-    expect(layout.compact).toBe(false);
-    expect(layout.bodyScrolls).toBe(false);
-    expect(layout.maxHeight).toBeCloseTo(0.75 * 915 - 32);
-    expect(layout.gridHeight).toBeGreaterThan(GRID_MIN_DP);
-  });
-
-  it('si la hoja alta no alcanza pasa a compacta y garantiza la rejilla mínima', () => {
-    // Con 24 dp de barra de navegación la alta (448) ya no alcanza (429 + 24): usa la compacta (600).
+    // La hoja abre casi a pantalla completa: 640 - 32 - 8 = 600 >= 429 + 24.
     const layout = iconSheetLayout({ ...base, height: 640 });
-    expect(layout.compact).toBe(true);
     expect(layout.maxHeight).toBe(640 - 32 - 8);
     expect(layout.bodyScrolls).toBe(false);
     expect(layout.gridHeight).toBeGreaterThanOrEqual(GRID_MIN_DP);
   });
 
-  it('con teclado abierto o ventana muy baja el cuerpo completo se desplaza', () => {
-    expect(iconSheetLayout({ ...base, height: 640, keyboard: 300 }).bodyScrolls).toBe(true);
+  it('412x915 deja la hoja con rejilla holgada', () => {
+    const layout = iconSheetLayout({ ...base, height: 915 });
+    expect(layout.maxHeight).toBe(915 - 32 - 8);
+    expect(layout.bodyScrolls).toBe(false);
+    expect(layout.gridHeight).toBeGreaterThan(GRID_MIN_DP);
+  });
+
+  it('con ventana muy baja el cuerpo completo se desplaza', () => {
     expect(iconSheetLayout({ ...base, height: 400 }).bodyScrolls).toBe(true);
   });
 
@@ -320,12 +308,33 @@ describe('hoja: búsqueda', () => {
     expect(onConfirm).toHaveBeenCalledWith('pizza');
   });
 
-  it('enfocar el buscador pasa la hoja a modo compacto (más alta)', async () => {
+  it('enfocar, desenfocar y escribir no cambian la altura ni cierran la hoja', async () => {
     await renderSheet(null);
-    const before = flat(screen.getByLabelText('Elegir ícono')).maxHeight as number;
-    await fireEvent(screen.getByLabelText('Buscar ícono'), 'focus');
-    const after = flat(screen.getByLabelText('Elegir ícono')).maxHeight as number;
-    expect(after).toBeGreaterThan(before);
+    const sheet = () => flat(screen.getByLabelText('Elegir ícono')).maxHeight;
+    const before = sheet();
+    const input = screen.getByLabelText('Buscar ícono');
+    await fireEvent(input, 'focus');
+    expect(sheet()).toBe(before);
+    await fireEvent.changeText(input, 'pizza');
+    await fireEvent.changeText(input, 'pizz');
+    expect(sheet()).toBe(before);
+    await fireEvent(input, 'blur');
+    expect(sheet()).toBe(before);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('el buscador no se remonta al escribir ni al abrir el teclado (mismo nodo, con y sin alto bajo)', async () => {
+    mockWindow(360, 1, 400);
+    await renderSheet(null);
+    const input = screen.getByLabelText('Buscar ícono');
+    await fireEvent(input, 'focus');
+    await fireEvent.changeText(input, 'bus');
+    expect(screen.getByLabelText('Buscar ícono')).toBe(input);
+    // El teclado reduce la ventana: la estructura (y por tanto el TextInput) no cambia.
+    mockWindow(360, 1, 200);
+    await fireEvent.changeText(input, 'buse');
+    expect(screen.getByLabelText('Buscar ícono')).toBe(input);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 
