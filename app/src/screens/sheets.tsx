@@ -39,6 +39,7 @@ export function Sheet({
   testID,
   tall = false,
   compact = false,
+  keyboardHeight = 0,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -50,12 +51,22 @@ export function Sheet({
   // la sube a toda la ventana menos ese margen y 8 dp. Sin `tall` la hoja no cambia.
   tall?: boolean;
   compact?: boolean;
+  // Altura del teclado (`keyboardDidShow`, 0 si está cerrado). Solo cambia estilos, nunca el árbol. El
+  // diálogo del `Modal` usa edge-to-edge (`navigationBarTranslucent`) y no se redimensiona con el
+  // teclado, que se dibuja encima: la hoja se eleva `keyboardHeight + inset inferior` y su máximo se
+  // reduce lo mismo. Si aun así el diálogo se redimensionó (la raíz mide menos que la ventana) no se
+  // eleva, para no contar el teclado dos veces.
+  keyboardHeight?: number;
 }) {
   const insets = useSystemInsets();
   const { height } = useWindowDimensions();
+  const overlap = keyboardHeight > 0 ? keyboardHeight + insets.bottom : 0;
+  const [rootHeight, setRootHeight] = useState<number | null>(null);
+  const resized = overlap > 0 && rootHeight !== null && rootHeight < height - overlap / 2;
+  const lift = overlap > 0 && !resized ? overlap : 0;
   const maxHeight = tall
     ? compact
-      ? height - insets.top - 8
+      ? height - overlap - insets.top - 8
       : 0.75 * height - insets.top
     : undefined;
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -81,7 +92,11 @@ export function Sheet({
       onRequestClose={onClose}
       testID={testID}
     >
-      <View style={styles.root}>
+      <View
+        testID="sheet-root"
+        style={[styles.root, lift > 0 && { paddingBottom: lift }]}
+        onLayout={(event) => setRootHeight(event.nativeEvent.layout.height)}
+      >
         <Pressable
           testID="sheet-scrim"
           importantForAccessibility="no"
@@ -95,7 +110,7 @@ export function Sheet({
           style={[
             styles.sheet,
             shadows.raised,
-            { paddingBottom: 24 + insets.bottom },
+            { paddingBottom: 24 + (overlap > 0 ? 0 : insets.bottom) },
             maxHeight !== undefined && { maxHeight },
           ]}
         >

@@ -33,7 +33,6 @@ import {
   type ChipArrows,
 } from '../lib/chip-scroll';
 import { colors, radii, sizes, typography } from '../theme/tokens';
-import { useSystemInsets } from '../theme/useSystemInsets';
 import { Sheet } from './sheets';
 import { Button } from './ui';
 
@@ -43,66 +42,39 @@ const GAP = 8;
 // Relleno horizontal de la hoja (`Sheet`): ancho útil de la rejilla = ventana - 2 * 24.
 const SHEET_PADDING_X = 24;
 
-// Presupuesto de alturas (dp) de la hoja, a fuente 1x. El layout real no se calcula aquí: estas constantes
-// solo deciden si la hoja alta cabe (`iconSheetLayout`) y una prueba verifica que la suma no se pase.
-export const SHEET_CHROME_DP = 12 + 4 + 24; // relleno superior + asa + relleno inferior (sin inset del sistema)
-export const SHEET_GAP_DP = 12; // separación entre hijos directos de `Sheet`
-export const HEAD_DP = sizes.touchMin; // encabezado: título y ✕
-export const CONTROLS_DP = sizes.touchMin + GAP + sizes.touchMin; // buscador + chips
-export const GRID_MIN_DP = 2 * sizes.touchMin + GAP; // dos filas completas de celdas
-export const FOOTER_DP = 1 + 8 + 20 + 8 + sizes.touchMin; // borde, relleno, «Seleccionado», separación, botones
-// Hijos directos de la hoja con controles fijos: asa, encabezado, controles, rejilla y pie (4 separaciones).
-export const FIXED_CONTROLS_DP =
-  SHEET_CHROME_DP + 4 * SHEET_GAP_DP + HEAD_DP + CONTROLS_DP + FOOTER_DP;
-export const NEEDED_DP = FIXED_CONTROLS_DP + GRID_MIN_DP;
 // Texto que crece con la fuente (título, «Seleccionado», etiquetas): margen por unidad de escala sobre 1.
 const TEXT_GROWTH_DP = 40;
 // Con fuente >= 1.5 el pie apila los botones (uno sobre otro).
 const STACK_FONT_SCALE = 1.5;
 
-export interface IconSheetLayout {
-  // Hoja casi a pantalla completa (la alta de 75 % no deja la rejilla mínima, o el buscador tiene foco).
-  compact: boolean;
-  // Ni así caben controles fijos + rejilla mínima: buscador, chips y rejilla se desplazan juntos y solo
-  // encabezado y pie quedan fijos.
-  bodyScrolls: boolean;
-  // Alto máximo de la hoja en esta variante y alto que quedaría a la rejilla con controles fijos.
-  maxHeight: number;
-  gridHeight: number;
-}
+// Presupuesto de alturas (dp) de la hoja, a fuente 1x. El layout real no se calcula aquí: estas constantes
+// solo sirven para comprobar que, con el teclado abierto, buscador y pie caben en el espacio libre.
+export const HEAD_DP = sizes.touchMin; // encabezado: título y ✕
+export const FOOTER_DP = 1 + 8 + 20 + 8 + sizes.touchMin; // borde, relleno, «Seleccionado», separación, botones
+// Fuera de la zona desplazable: relleno superior, asa, encabezado, pie, 3 separaciones y relleno inferior
+// (24 dp; el inset del sistema solo se suma con el teclado cerrado).
+export const FIXED_DP = 12 + 4 + HEAD_DP + FOOTER_DP + 3 * 12 + 24;
 
-// Decide `compact` y `bodyScrolls` por el espacio disponible (ventana, insets y teclado), sin constantes
-// por modelo de teléfono. `Sheet` aplica el mismo cálculo de altura máxima (0.75 * alto - inset superior;
-// compacta: alto - inset superior - 8).
-export function iconSheetLayout({
+// Altura que queda a la zona desplazable (buscador, chips y rejilla) en `Sheet` compacta. El buscador es
+// el primer elemento de esa zona, así que está visible mientras `viewport >= sizes.touchMin`.
+export function scrollViewport({
   height,
   insetTop,
   insetBottom,
   keyboard,
   fontScale,
-  searchFocused,
 }: {
   height: number;
   insetTop: number;
   insetBottom: number;
   keyboard: number;
   fontScale: number;
-  searchFocused: boolean;
-}): IconSheetLayout {
-  const usable = height - keyboard;
+}): number {
+  const overlap = keyboard > 0 ? keyboard + insetBottom : 0;
   const growth = (Math.min(Math.max(fontScale, 1), 2) - 1) * TEXT_GROWTH_DP;
   const stack = fontScale >= STACK_FONT_SCALE ? sizes.touchMin + GAP : 0;
-  const needed = NEEDED_DP + insetBottom + growth + stack;
-  const tallMax = 0.75 * usable - insetTop;
-  const compactMax = usable - insetTop - 8;
-  const compact = searchFocused || tallMax < needed;
-  const maxHeight = compact ? compactMax : tallMax;
-  return {
-    compact,
-    bodyScrolls: maxHeight < needed,
-    maxHeight,
-    gridHeight: maxHeight - (needed - GRID_MIN_DP),
-  };
+  const maxHeight = height - overlap - insetTop - 8;
+  return maxHeight - (FIXED_DP + (overlap > 0 ? 0 : insetBottom) + growth + stack);
 }
 
 // Altura del teclado abierto (0 si está cerrado).
@@ -244,14 +216,11 @@ interface SheetProps {
 }
 
 function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps) {
-  const { width, height, fontScale } = useWindowDimensions();
-  const insets = useSystemInsets();
-  const keyboard = useKeyboardHeight();
+  const { width, fontScale } = useWindowDimensions();
   const groups = groupsOf(entries);
   const [draft, setDraft] = useState<string | null>(findIcon(entries, value)?.key ?? null);
   const [group, setGroup] = useState(() => initialGroup(entries, value));
   const [query, setQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
   const confirmed = useRef(false);
   const initialKey = useRef(findIcon(entries, value)?.key ?? null);
   const titleRef = useRef<Text>(null);
@@ -265,15 +234,7 @@ function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps)
   const results = searching ? searchIcons(entries, query) : [];
   const shown = searching ? results : entriesOfGroup(entries, group);
   const selected = findIcon(entries, draft);
-  const layout = iconSheetLayout({
-    height,
-    insetTop: insets.top,
-    insetBottom: insets.bottom,
-    keyboard,
-    fontScale,
-    searchFocused,
-  });
-  const { compact, bodyScrolls } = layout;
+  const keyboard = useKeyboardHeight();
   const columns = iconColumns(width - 2 * SHEET_PADDING_X, fontScale);
   const cell = Math.floor((width - 2 * SHEET_PADDING_X - GAP * (columns - 1)) / columns);
   const canConfirm = draft !== null && draft !== (findIcon(entries, value)?.key ?? null);
@@ -326,8 +287,6 @@ function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps)
             pendingScroll.current = false;
             setQuery(text);
           }}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
           onSubmitEditing={() => Keyboard.dismiss()}
           returnKeyType="search"
           autoCorrect={false}
@@ -399,7 +358,8 @@ function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps)
       accessibilityLabel="Elegir ícono"
       testID="icon-picker-sheet"
       tall
-      compact={compact}
+      compact
+      keyboardHeight={keyboard}
     >
       <View style={styles.head}>
         <Text ref={titleRef} accessibilityRole="header" style={styles.title}>
@@ -417,33 +377,17 @@ function OpenIconPickerSheet({ entries, value, onClose, onConfirm }: SheetProps)
         </Pressable>
       </View>
 
-      {bodyScrolls ? (
-        <ScrollView
-          ref={scrollRef}
-          testID="icon-picker-scroll"
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator
-          style={styles.grid}
-          contentContainerStyle={styles.bodyContent}
-        >
-          {controls}
-          {gridContent}
-        </ScrollView>
-      ) : (
-        <>
-          {controls}
-          <ScrollView
-            ref={scrollRef}
-            testID="icon-picker-scroll"
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator
-            style={[styles.grid, { minHeight: GRID_MIN_DP }]}
-            contentContainerStyle={styles.gridContent}
-          >
-            {gridContent}
-          </ScrollView>
-        </>
-      )}
+      <ScrollView
+        ref={scrollRef}
+        testID="icon-picker-scroll"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator
+        style={styles.grid}
+        contentContainerStyle={styles.bodyContent}
+      >
+        {controls}
+        {gridContent}
+      </ScrollView>
 
       <View testID="icon-picker-footer" style={styles.footer}>
         {selected ? (
