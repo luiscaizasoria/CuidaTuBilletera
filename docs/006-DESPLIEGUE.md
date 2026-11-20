@@ -8,6 +8,7 @@ Guía operativa del despliegue continuo (CD) del Worker `controlgastos-api`. Com
 - **API de producción:** Worker `controlgastos-api` (`--env prod`) con D1 propia. El primer despliegue se hizo a mano con `wrangler versions upload` y `wrangler versions deploy` (docs/011 §17). El workflow en dos fases (`preparar` y `activar`) está en `main` (PR #23); **si se usó para despliegues posteriores es pendiente de confirmar** (no consta en el repositorio).
 - **Páginas legales:** publicadas con GitHub Pages desde `site/` mediante `pages.yml` (responsable). Las secciones «Estado» e «Integración futura» de más abajo conservan el estado anterior a la publicación y son históricas.
 - **Android:** el AAB de producción se compila con EAS Build (perfil `production`, `autoIncrement` de versionCode, `appVersionSource: remote`) y se sube a Play Console. El AAB de G4 (versionCode 4) se inspeccionó el 2026-10-22 (docs/004); el de versionCode 5 es posterior y no tiene registro de inspección en el repositorio.
+- **Pendiente para una versión futura (R8):** minificación y ofuscación de código Android. Play Console marca «optimización de código DEX por debajo del umbral, ofuscación 1 %» con fecha límite en febrero de 2027. No es el riesgo «R8» de login de docs/011.
 
 ### Proceso real de despliegue y publicación
 

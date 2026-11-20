@@ -48,15 +48,13 @@ Archivos que definen el flujo:
 
 ## 2. Qué ocurre fuera del repositorio (completar por el responsable)
 
-El flujo descrito por el responsable incluye un **orquestador conversacional** (Claude en una conversación, fuera de este repositorio) que prepara prompts acotados que Claude Code ejecuta. Nada de esto consta en archivos del repositorio, salvo el agente `orchestrator` de `.claude/agents/orchestrator.md`, que es una definición distinta (un agente dentro de Claude Code).
+El trabajo se organizó en dos niveles.
 
-> **PENDIENTE DE COMPLETAR POR EL RESPONSABLE**
->
-> - Herramienta y modelo usados para el orquestador conversacional.
-> - Cómo se redactaban y acotaban los prompts (plantilla, alcance autorizado, límites).
-> - Cómo se devolvía la evidencia al orquestador y cómo se decidían las aprobaciones.
-> - Relación entre el agente `orchestrator` de `.claude/agents/` y el orquestador conversacional (si se usó el primero, cuándo y para qué).
-> - Cualquier otra práctica que no deje rastro en Git (revisiones manuales, pruebas en teléfono, etc.).
+- **Fuera del repositorio:** un orquestador conversacional (Claude en la web) mantenía el contexto del proyecto, interpretaba capturas e informes, detectaba contradicciones y preparaba prompts acotados con alcance, permisos y entregable.
+- **Dentro del repositorio:** Claude Code ejecutaba esas tareas y podía delegar en los agentes definidos en `.claude/agents` (incluido el agente `orchestrator`, que coordina dentro de la sesión de Claude Code).
+- **Autorizaciones:** las operaciones con efectos remotos, como merges, builds de EAS, despliegues y cambios en Google Play, requerían autorización explícita del responsable, y los merges los hacía el responsable en GitHub.
+
+Nada de esto deja rastro en archivos del repositorio, salvo las definiciones de `.claude/agents/`.
 
 ## 3. Dónde comprobarlo
 

@@ -11,6 +11,7 @@ App móvil Android de control de gastos e ingresos, con API propia en Cloudflare
 - **Disponible en Google Play, solo para Ecuador**, versión 1.0.0 (versionCode 5): [ficha pública](https://play.google.com/store/apps/details?id=com.cuidatubilletera.app).
 - Páginas legales (publicadas con GitHub Pages desde `site/`): [Política de privacidad](https://luiscaizasoria.github.io/CuidaTuBilletera/privacidad/) y [Eliminar cuenta y datos](https://luiscaizasoria.github.io/CuidaTuBilletera/eliminar-cuenta/).
 - La publicación en producción, la versión 5 y las fechas posteriores al 22 de octubre de 2026 las informa el responsable del proyecto; el repositorio documenta con evidencia hasta el AAB de la puerta G4 (docs/004). Ver [docs/004](docs/004-ROADMAP-PROYECTO.md).
+- Pendiente para una versión futura: minificación y ofuscación de código Android (R8); Play Console lo marca con fecha límite en febrero de 2027.
 
 ## Funciones principales
 

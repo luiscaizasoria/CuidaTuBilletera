@@ -89,6 +89,7 @@ Las restricciones están en el propio esquema con `CHECK`: formato de identifica
 - **Sin pantalla de conciliación:** se resuelve con una categoría predeterminada (docs/003, Decisión 6.1).
 - **Navegación por estado local** en vez de React Navigation: menos dependencias nativas (docs/003, Decisiones 2B.1, 3.1 y 4.1).
 - **Despliegue manual y en dos fases** de la API: más pasos, pero ningún merge puede cambiar producción por accidente.
+- **R8 (minificación y ofuscación de código Android) pendiente:** Play Console marca «optimización de código DEX por debajo del umbral, ofuscación 1 %» con fecha límite en febrero de 2027; queda para una versión futura. No es el riesgo «R8» de login de docs/011.
 - **Riesgos conocidos y aceptados** (docs/011 §4 y §13): sin limitación de frecuencia en `POST /auth/google`; `refresh_tokens` sin purga automática; exportación limitada a 2000 filas.
 
 ## 2. Integración y entrega continua
