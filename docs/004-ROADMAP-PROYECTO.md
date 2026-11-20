@@ -1,6 +1,33 @@
 # Roadmap del Proyecto ControlGastos
 
-## Estado actual
+## Estado vigente (2026-11-20)
+
+**CuidaTuBilletera está en producción en Google Play, solo para Ecuador, versión 1.0.0 (versionCode 5), desde mediados de noviembre de 2026.** Ficha pública: https://play.google.com/store/apps/details?id=com.cuidatubilletera.app.
+
+Origen de la evidencia: lo marcado «(responsable)» lo informa el responsable del proyecto y se comprobó en Play Console, que no forma parte del repositorio; lo demás consta en el repositorio (archivo o commit indicado). Si algo no se pudo comprobar, figura como «pendiente de confirmar».
+
+| Hito | Estado | Evidencia |
+| --- | --- | --- |
+| AAB de producción versionCode 4 (G4) | Generado e inspeccionado el 2026-10-22 | Sección «Alcance de la versión 1.0», G4, y docs/011 §18 |
+| Prueba interna en Play | Realizada | (responsable) |
+| Prueba cerrada: 12 testers durante 14 días | Cumplida | (responsable); la regla consta en docs/003 |
+| Acceso a producción | Concedido por Google | (responsable) |
+| Publicación, versión 1.0.0 (versionCode 5), solo Ecuador | Disponible desde mediados de noviembre de 2026 | (responsable) y ficha pública |
+| Páginas legales en GitHub Pages | Publicadas y usadas en la ficha | URL en README.md (responsable; el estado «preparado, sin activar» de docs/006 y del comentario de `pages.yml` es histórico) |
+
+Cambios posteriores a G4 consignados en el historial de Git (`main`): #27 registro de la validación del AAB, #28 clasificación interna de los rechazos `REAUTH_REQUIRED` (API), #29 observabilidad temporal en DEV, #30 EAS CLI fijado en el Dev Container y #31 geometría estable de la hoja «Elegir ícono».
+
+Pendientes conocidos:
+
+- **R8 (pendiente de confirmar a qué se refiere):** en el repositorio «R8» es el riesgo «Login rechazado por `azp` o `DEVELOPER_ERROR` con Play App Signing» (docs/011 §7 y §18, donde queda abierto). El responsable lo lista como pendiente; si se refiere a la minificación R8 de Android, no consta en el repositorio y debe documentarse aparte.
+- **Avisos de Android 15 y 16 con fecha límite en febrero de 2027 (responsable):** no constan en el repositorio y el texto exacto de los avisos está pendiente de confirmar. Contexto verificado: la app declara `targetSdk` 36 en el AAB de G4 (docs/011 §18) y docs/003 registra la exigencia de Android 16 (API 36) para apps nuevas y actualizaciones.
+- Reconciliar la lista de puertas de docs/004 («Alcance de la versión 1.0»): G1, G2, G3 y G5 a G7 siguen sin marcar aunque el servicio está en producción; se marcarán cuando se registre su evidencia.
+- Validación en teléfono real de varias pruebas de docs/010 (niveles A y D), TalkBack, fuente ampliada y otros dispositivos: pendiente según las secciones anteriores.
+- Riesgos de seguridad y abuso de docs/011 §4 y §13, y la excepción de Dependabot de docs/003 «Decisión S1» (revisión fijada para el 2026-11-19; **pendiente de confirmar** si se revisó).
+- `CLAUDE.md` conserva en «Fase actual» un estado anterior (R0 completada y R1 siguiente; Fase 6 pendiente de PR): hay que actualizarlo.
+- Versión de pruebas del 2026-11-20: app 64 suites y 2074 pruebas, API 37 archivos y 1497 pruebas, scripts 166 pruebas; todas aprobadas (Dev Container, concurrencia reducida).
+
+## Estado histórico (hasta el 2026-10-22)
 
 Fase actual:
 Fases 3, 4 y 5 integradas en main (PR #13, #14 y #15). Rediseño UX/UI R0 a R6 integrado en main (PR #16, cerrado funcionalmente; sección al final). Fase 6 (conciliación manual con categorías, docs/003 Decisión 6.1) cerrada funcionalmente en el paso 384 (rama `feat/categoria-conciliacion` pendiente de push y PR). La Fase 2A conserva pendientes de validación: la subfase 2A.1 (API) tiene su evidencia registrada con un pendiente de pruebas remotas; la subfase 2A.2 (Android) está validada en dispositivo con pendientes (cambio de cuenta, 409 en dispositivo y PR). Detalle y evidencia en «Plan de ejecución de Fase 2».
