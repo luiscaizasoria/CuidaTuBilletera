@@ -2,7 +2,24 @@
 
 Guía operativa del despliegue continuo (CD) del Worker `controlgastos-api`. Complementa docs/001-CONSTITUCION.md (sección 10) y las decisiones registradas en docs/003-DECISIONES-FASE0.md.
 
-## Estado
+## Estado vigente (2026-11-20)
+
+- **Producción:** la app está publicada en Google Play (solo Ecuador), versión 1.0.0 (versionCode 5), desde mediados de noviembre de 2026 (informado por el responsable; la evidencia está en Play Console, fuera del repositorio). Ficha: https://play.google.com/store/apps/details?id=com.cuidatubilletera.app.
+- **API de producción:** Worker `controlgastos-api` (`--env prod`) con D1 propia. El primer despliegue se hizo a mano con `wrangler versions upload` y `wrangler versions deploy` (docs/011 §17). El workflow en dos fases (`preparar` y `activar`) está en `main` (PR #23); **si se usó para despliegues posteriores es pendiente de confirmar** (no consta en el repositorio).
+- **Páginas legales:** publicadas con GitHub Pages desde `site/` mediante `pages.yml` (responsable). Las secciones «Estado» e «Integración futura» de más abajo conservan el estado anterior a la publicación y son históricas.
+- **Android:** el AAB de producción se compila con EAS Build (perfil `production`, `autoIncrement` de versionCode, `appVersionSource: remote`) y se sube a Play Console. El AAB de G4 (versionCode 4) se inspeccionó el 2026-10-22 (docs/004); el de versionCode 5 es posterior y no tiene registro de inspección en el repositorio.
+
+### Proceso real de despliegue y publicación
+
+1. **Código:** rama corta → commits → PR → CI (`ci.yml`) en verde → revisión → merge a `main`. El merge no despliega nada.
+2. **API:** ejecutar manualmente «Deploy API» desde `main`: fase `preparar` (entorno `production`, aprobación), copiar el ID de versión del resumen y ejecutar la fase `activar` (entorno `production-activate`, aprobación). Las migraciones de D1 no pasan por el workflow: las aplica el propietario con su sesión de Wrangler, con respaldo previo.
+3. **App:** `eas build --platform android --profile production` (nube de EAS; variables `EXPO_PUBLIC_*` del entorno `production` de EAS) produce el AAB.
+4. **Play Console:** subida del AAB, prueba interna → prueba cerrada (12 testers, 14 días) → acceso a producción → publicación. El primer upload es manual; si las subidas posteriores usan `eas submit` (`app/eas.json` declara `submit.production`) es pendiente de confirmar.
+5. **Páginas legales:** «Pages legales» manual desde `main`, con aprobación del entorno `github-pages`.
+
+Visión de conjunto, con diagramas y tabla de workflows: docs/012.
+
+## Estado histórico (2026-10-19)
 
 - El workflow `.github/workflows/deploy.yml` **se ejecutó dos veces con `workflow_dispatch` el 2026-10-11 (SHA `90ac2dd`, conclusión `success`)** y publicó el Worker `controlgastos-api` con el código de esa fecha: sin D1, sin variables y sin `JWT_SECRET`, por lo que solo `/health` es funcional. Verificado en solo lectura el 2026-10-19 (API pública de GitHub y `cwrangler deployments list`). El Environment `production` de GitHub existe (revisor requerido y solo `main`); sus secretos y variables no se pudieron comprobar sin sesión.
 - El despliegue es **exclusivamente manual** (`workflow_dispatch`). La activación automática desde `main` requiere una autorización futura y un registro en docs/003.
@@ -208,6 +225,8 @@ Redesplegar DEV SIN las `--var` (`npx wrangler deploy --env dev`): como no está
 Prohibido activarlo en PROD: no pasar `ENVIRONMENT`, `REAUTH_DIAGNOSTICS` ni ninguna otra `--var` en comandos de `--env prod`.
 
 ## Páginas legales para Google Play: textos, retención y publicación (pasos 399 a 402; PREPARADO, NADA PUBLICADO)
+
+**Nota (2026-11-20):** el estado de abajo es histórico. Las páginas están publicadas y son las que usa la ficha de Google Play (privacidad: https://luiscaizasoria.github.io/CuidaTuBilletera/privacidad/ y eliminación de cuenta: https://luiscaizasoria.github.io/CuidaTuBilletera/eliminar-cuenta/). El comentario «PREPARADO, NO ACTIVADO» de `pages.yml` no se ha actualizado (no se tocan los workflows en esta tarea).
 
 **Estado real (2026-10-21):** los archivos públicos están en `site/` (índice, `privacidad/`, `eliminar-cuenta/`, `estilos.css`, `.nojekyll`) y el workflow `.github/workflows/pages.yml` está **preparado y sin activar** (solo `workflow_dispatch`; no se ha ejecutado). **GitHub Pages no está publicado**, ninguna URL existe y no se afirma que exista hasta comprobarla con `curl -I`. G1 sigue **abierto**. Google Play Console: el usuario informa que la cuenta personal está creada y verificada (no verificado por nosotros) y que la primera aplicación está en fase de configuración. El repositorio es público: lo que contiene ya es legible; por eso el origen de Pages es solo `site/`.
 
